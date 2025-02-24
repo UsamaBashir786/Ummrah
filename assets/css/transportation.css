@@ -1,0 +1,130 @@
+.hero {
+  background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/assets/images/hero/hero.jpg');
+  background-size: cover;
+  background-position: center;
+  color: white;
+  text-align: center;
+  padding: 80px 20px;
+  /* Ensure the text is readable on smaller devices */
+}
+
+@media (max-width: 768px) {
+  .hero {
+    padding: 60px 15px; /* Reduce padding for smaller screens */
+    background-position: top; /* Adjust background position for mobile */
+  }
+
+  .hero h1 {
+    font-size: 2rem; /* Adjust font size for headings */
+  }
+
+  .hero p {
+    font-size: 1rem; /* Adjust font size for paragraphs */
+    padding: 0 10px; /* Add some padding for better text alignment */
+  }
+}
+
+@media (max-width: 480px) {
+  .hero {
+    padding: 50px 10px; /* Further reduce padding for very small screens */
+    background-position: top; /* Keep the background position adjusted */
+  }
+
+  .hero h1 {
+    font-size: 1.8rem; /* Further reduce the font size for smaller screens */
+  }
+
+  .hero p {
+    font-size: 0.9rem; /* Further adjust font size for smaller screens */
+  }
+}
+
+.card {
+  transition: transform 0.3s ease-in-out;
+  border: 1px solid #e2e8f0;
+  padding: 20px;
+  border-radius: 8px;
+  position: relative;
+}
+.card:hover {
+  transform: translateY(-10px);
+  animation: hover-effect 0.3s ease-in-out;
+}
+@keyframes hover-effect {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.05); }
+}
+.btn-primary {
+  padding: 12px 24px;
+  border-radius: 8px;
+  transition: background 0.3s;
+}
+.btn-primary:hover {
+  background: #065f46;
+}
+.filter-btns {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 30px;
+  flex-wrap: wrap; /* Allows wrapping of buttons on smaller screens */
+}
+
+.filter-btn {
+  cursor: pointer;
+  padding: 14px 26px;
+  border: 2px solid #047857;
+  background: transparent;
+  color: #047857;
+  border-radius: 50px;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.filter-btn:hover, .filter-btn.active {
+  background: #1e5d5d;
+  color: white;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .filter-btns {
+    flex-direction: column; /* Stack the buttons vertically */
+    align-items: center; /* Center the buttons */
+  }
+
+  .filter-btn {
+    width: 100%; /* Make the buttons take full width */
+    margin-bottom: 10px; /* Space between stacked buttons */
+    padding: 14px 0; /* Adjust padding for full-width buttons */
+    font-size: 1.1rem; /* Slightly larger text on mobile */
+  }
+}
+
+
+.status {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: bold;
+  display: inline-block;
+  margin-bottom: 10px;
+}
+.available { background-color: #4CAF50; color: white; }
+.booked { background-color: #f44336; color: white; }
+.open-to-book { background-color: #ff9800; color: white; }
+.badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #047857;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-weight: bold;
+}
+.timing {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #6b7280;
+}

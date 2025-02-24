@@ -1,0 +1,402 @@
+/*! ------------------------------------------------
+ * ------------------------------------------------
+ * Table of Contents
+ * ------------------------------------------------
+ *  1. Template Backgrounds
+ *  2. Fonts
+ *  3. Base CSS Styles
+ *  4. Loading Animation
+ *  5. Typography
+ *  6. Buttons & Controls
+ *  7. Forms and Forms Reply Groups
+ *  8. Animated Backgrounds
+ *  9. Header
+ *  10. Main Section
+ *  11. Menu
+ *  12. Socials
+ *  13. Countdown
+ *  14. Swiper Slider
+ *  15. Popup Dialogs
+ *  16. Inner Sections
+ *  17. Skillbars
+ *  18. Features
+ *  19. Partners
+ *  20. Inner Video
+ *  21. Contact Data
+ *  22. Footer
+ *  23. Gallery
+ * ------------------------------------------------
+ * Table of Contents End
+ * ------------------------------------------------ */
+
+/* ------------------------------------------------*/
+/* Fonts Start */
+/* ------------------------------------------------*/
+@font-face {
+  font-family: "OpenSans";
+  font-style: normal;
+  font-weight: 300;
+  src: url("../fonts/OpenSans-Light/OpenSans-Lightd41d.eot?#iefix")
+      format("embedded-opentype"),
+    url("../fonts/OpenSans-Light/OpenSans-Light.woff") format("woff"),
+    url("../fonts/OpenSans-Light/OpenSans-Light.ttf") format("truetype"),
+    url("../fonts/OpenSans-Light/OpenSans-Light.svg#OpenSans") format("svg");
+}
+@font-face {
+  font-family: "OpenSans";
+  font-style: italic;
+  font-weight: 300;
+  src: url("../fonts/OpenSans-LightItalic/OpenSans-LightItalicd41d.eot?#iefix")
+      format("embedded-opentype"),
+    url("../fonts/OpenSans-LightItalic/OpenSans-LightItalic.woff")
+      format("woff"),
+    url("../fonts/OpenSans-LightItalic/OpenSans-LightItalic.ttf")
+      format("truetype"),
+    url("../fonts/OpenSans-LightItalic/OpenSans-LightItalic.svg#OpenSans")
+      format("svg");
+}
+@font-face {
+  font-family: "OpenSans";
+  font-style: normal;
+  font-weight: 400;
+  src: url("../fonts/OpenSans-Regular/OpenSans-Regulard41d.eot?#iefix")
+      format("embedded-opentype"),
+    url("../fonts/OpenSans-Regular/OpenSans-Regular.woff") format("woff"),
+    url("../fonts/OpenSans-Regular/OpenSans-Regular.ttf") format("truetype"),
+    url("../fonts/OpenSans-Regular/OpenSans-Regular.svg#OpenSans") format("svg");
+}
+@font-face {
+  font-family: "OpenSans";
+  font-style: italic;
+  font-weight: 400;
+  src: url("../fonts/OpenSans-Italic/OpenSans-Italicd41d.eot?#iefix")
+      format("embedded-opentype"),
+    url("../fonts/OpenSans-Italic/OpenSans-Italic.woff") format("woff"),
+    url("../fonts/OpenSans-Italic/OpenSans-Italic.ttf") format("truetype"),
+    url("../fonts/OpenSans-Italic/OpenSans-Italic.svg#OpenSans") format("svg");
+}
+@font-face {
+  font-family: "OpenSans";
+  font-style: normal;
+  font-weight: 600;
+  src: url("../fonts/OpenSans-SemiBold/OpenSans-SemiBoldd41d.eot?#iefix")
+      format("embedded-opentype"),
+    url("../fonts/OpenSans-SemiBold/OpenSans-SemiBold.woff") format("woff"),
+    url("../fonts/OpenSans-SemiBold/OpenSans-SemiBold.ttf") format("truetype"),
+    url("../fonts/OpenSans-SemiBold/OpenSans-SemiBold.svg#OpenSans")
+      format("svg");
+}
+@font-face {
+  font-family: "OldStandardTT";
+  font-style: normal;
+  font-weight: 400;
+  src: url("../fonts/OldStandardTT-Regular/OldStandardTT-Regulard41d.eot?#iefix")
+      format("embedded-opentype"),
+    url("../fonts/OldStandardTT-Regular/OldStandardTT-Regular.woff")
+      format("woff"),
+    url("../fonts/OldStandardTT-Regular/OldStandardTT-Regular.ttf")
+      format("truetype"),
+    url("../fonts/OldStandardTT-Regular/OldStandardTT-Regular.svg#OldStandardTT")
+      format("svg");
+}
+/* ------------------------------------------------*/
+/* Fonts End */
+/* ------------------------------------------------*/
+
+/* ------------------------------------------------*/
+/* Base CSS Styles Start */
+/* ------------------------------------------------*/
+*,
+*::before,
+*::after {
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+button:active,
+button:focus {
+  outline: none !important;
+}
+
+button::-moz-focus-inner {
+  border: 0 !important;
+}
+
+input::-moz-focus-inner {
+  border: 0 !important;
+}
+
+::-moz-selection {
+  background-color: #292929;
+  color: #ffffff;
+  text-shadow: none;
+}
+
+::selection {
+  background-color: #292929;
+  color: #ffffff;
+  text-shadow: none;
+}
+
+::-webkit-scrollbar {
+  display: none;
+  width: 5px;
+  background: #000000;
+}
+@media only screen and (min-width: 768px) {
+  ::-webkit-scrollbar {
+    display: block;
+  }
+}
+
+::-webkit-scrollbar-track {
+  border-radius: 20px;
+  background-color: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #1f1f1f;
+  border-radius: 10px;
+}
+
+html {
+  font-family: sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  position: relative;
+  min-width: 320px;
+  overflow-x: hidden !important;
+  overflow-y: auto;
+  font-family: "OpenSans", sans-serif;
+  color: #444444;
+}
+
+a {
+  text-decoration: none;
+  outline: none;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  -webkit-transition: all 0.5s ease-in-out;
+  -o-transition: all 0.5s ease-in-out;
+  -moz-transition: all 0.5s ease-in-out;
+  transition: all 0.5s ease-in-out;
+}
+
+.dropdown-menu {
+  display: none;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.dropdown:hover .dropdown-menu {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ------------------------------------------------*/
+/* Base CSS Styles End */
+/* ------------------------------------------------*/
+
+/* ------------------------------------------------*/
+/* About CSS Styles */
+/* ------------------------------------------------*/
+p.first-letter-uppercase::first-letter {
+  text-transform: uppercase;
+  font-size: 3rem;
+  font-weight: bold;
+  display: block;
+  line-height: 1.1;
+}
+
+/* ------------------------------------------------*/
+/* Packages CSS Styles Start */
+/* ------------------------------------------------*/
+#packages h2 {
+  font-size: 50px;
+}
+@media screen and (max-width: 768px) {
+  .left-8 {
+    left: 0 !important;
+  }
+}
+
+/* ------------------------------------------------*/
+/* Login CSS Styles */
+/* ------------------------------------------------*/
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.glassmorphism {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.2);
+  max-width: 400px;
+  width: 90%;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 16px;
+  transition: all 0.3s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #14b8a6;
+  box-shadow: 0px 0px 8px rgba(20, 184, 166, 0.6);
+}
+
+.login-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  background: #14b8a6;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+
+.login-btn:hover {
+  background: #0d9488;
+}
+/* ------------------------------------------------*/
+/* Features CSS Styles Start */
+/* ------------------------------------------------*/
+.features h2 {
+  font-size: 50px;
+}
+
+.features .f-fix {
+  width: 70px;
+}
+/* ------------------------------------------------*/
+/* Features CSS Styles End */
+/* ------------------------------------------------*/
+
+/* ------------------------------------------------*/
+/* Media Query Start */
+/* ------------------------------------------------*/
+@media screen and (max-width: 425px) {
+  .hero-h1-media-query {
+    margin-top: 50px;
+    font-size: 25px;
+    text-align: start;
+  }
+  .hero-p-media-query {
+    font-size: 15px;
+    margin: left !important;
+    text-align: start;
+  }
+  .hero-a-media-query {
+    display: none;
+  }
+  .packages-heading-media-query {
+    font-size: 20px;
+  }
+}
+
+/* ------------------------------------------------*/
+/* Flight CSS Styles */
+/* ------------------------------------------------*/
+
+nav {
+  background-color: white;
+}
+
+/* Ensuring the table can scroll horizontally on small screens */
+.overflow-x-auto {
+  overflow-x: auto;
+}
+
+/* Make the table headers and content more responsive */
+@media (max-width: 768px) {
+  table {
+    width: 100%;
+  }
+
+  th,
+  td {
+    padding: 8px 10px;
+    /* Adjust padding for smaller screens */
+    font-size: 0.9rem;
+    /* Adjust font size */
+  }
+
+  button {
+    padding: 8px 16px;
+    /* Make the button size smaller on mobile */
+  }
+}
+
+@media (max-width: 480px) {
+  th,
+  td {
+    padding: 6px 8px;
+    /* Further adjust padding for very small screens */
+    font-size: 0.85rem;
+    /* Further adjust font size */
+  }
+
+  button {
+    padding: 6px 12px;
+    /* Adjust button padding */
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .bg-teal-100 {
+    padding: 40px 20px;
+  }
+
+  .flex-wrap {
+    flex-wrap: wrap;
+  }
+
+  .w-full {
+    width: 100%;
+  }
+
+  .sm\:w-1\/3 {
+    width: 100%;
+    /* Make columns full-width on mobile */
+  }
+
+  .px-4 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .mb-6 {
+    margin-bottom: 1.5rem;
+  }
+
+  #search-btn {
+    width: 100%;
+    /* Make the search button full-width on mobile */
+  }
+}
