@@ -15,6 +15,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $time_from = $_POST['time_from'];
   $time_to = $_POST['time_to'];
   $status = $_POST['status'];
+  $price = $_POST['price']; // New price field
+  // Get the booking limit from POST data
+  $booking_limit = $_POST['booking_limit'];
 
   // File upload handling
   $target_dir = "uploads/vehicles/";
@@ -41,11 +44,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
   if ($uploadOk == 1) {
     if (move_uploaded_file($_FILES["transport_image"]["tmp_name"], $target_file)) {
-      // Insert data into the transportation table
+      // Modify the SQL INSERT query to include booking_limit
       $sql = "INSERT INTO transportation 
-                        (category, transport_name, transport_id, location, latitude, longitude, details, seats, time_from, time_to, status, transport_image) 
-                        VALUES 
-                        ('$category', '$transport_name', '$transport_id', '$location', '$latitude', '$longitude', '$details', '$seats', '$time_from', '$time_to', '$status', '$target_file')";
+        (category, transport_name, transport_id, location, latitude, longitude, 
+         details, seats, time_from, time_to, status, price, transport_image, booking_limit) 
+        VALUES 
+        ('$category', '$transport_name', '$transport_id', '$location', '$latitude', 
+         '$longitude', '$details', '$seats', '$time_from', '$time_to', '$status', 
+         '$price', '$target_file', '$booking_limit')";
 
       if (mysqli_query($conn, $sql)) {
         echo "<script>
@@ -83,7 +89,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   }
 }
 ?>
-
 <!-- Include SweetAlert -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
@@ -127,8 +132,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               <select id="category" name="category" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">Select Category</option>
                 <option value="luxury">Luxury</option>
-                <option value="standard">Standard</option>
-                <option value="economy">Economy</option>
+                <option value="vip">vip</option>
+                <option value="shared">shared</option>
               </select>
             </div>
 
@@ -151,7 +156,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="e.g., LX-2023">
             </div>
-
+            <!-- Price Input -->
+            <div class="mb-6">
+              <label class="block text-gray-700 text-sm font-bold mb-2" for="price">
+                Price ($)
+              </label>
+              <input type="number" id="price" name="price" min="0" step="0.01"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter vehicle price">
+            </div>
             <!-- Location (City) Input with Map -->
             <div class="mb-6">
               <label class="block text-gray-700 text-sm font-bold mb-2" for="location">
@@ -187,6 +200,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               <input type="number" id="seats" name="seats" min="1"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter number of seats">
+            </div>
+            <!-- Booking Limit -->
+            <div class="mb-6">
+              <label class="block text-gray-700 text-sm font-bold mb-2" for="booking_limit">
+                Booking Limit
+              </label>
+              <input type="number"
+                id="booking_limit"
+                name="booking_limit"
+                min="1"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter maximum number of bookings allowed">
             </div>
 
             <!-- Available Time -->

@@ -4,6 +4,16 @@ if (!isset($_SESSION['admin_email'])) {
   header("Location: admin/login.php");
   exit();
 }
+
+// Database connection
+include 'connection/connection.php'; // Ensure this file exists and contains the correct connection details
+
+// Fetch totals from the database
+$totalUsers = $conn->query("SELECT COUNT(*) as count FROM users")->fetch_assoc()['count'];
+$totalPackages = $conn->query("SELECT COUNT(*) as count FROM packages")->fetch_assoc()['count'];
+$totalTransportation = $conn->query("SELECT COUNT(*) as count FROM Transportation")->fetch_assoc()['count'];
+$totalFlights = $conn->query("SELECT COUNT(*) as count FROM flights")->fetch_assoc()['count'];
+$totalHotels = $conn->query("SELECT COUNT(*) as count FROM hotels")->fetch_assoc()['count'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -43,35 +53,35 @@ if (!isset($_SESSION['admin_email'])) {
           <div class="bg-gray-100 text-gray-800 p-6 rounded-lg shadow-md">
             <i class="fas fa-users text-3xl text-blue-500"></i>
             <h3 class="text-lg font-semibold mt-2">Total Users</h3>
-            <p class="text-2xl font-bold">1,250</p>
+            <p class="text-2xl font-bold"><?php echo $totalUsers; ?></p>
           </div>
 
           <!-- Total Packages -->
           <div class="bg-gray-100 text-gray-800 p-6 rounded-lg shadow-md">
             <i class="fas fa-box text-3xl text-green-500"></i>
             <h3 class="text-lg font-semibold mt-2">Total Packages</h3>
-            <p class="text-2xl font-bold">320</p>
+            <p class="text-2xl font-bold"><?php echo $totalPackages; ?></p>
           </div>
 
           <!-- Total Transportation -->
           <div class="bg-gray-100 text-gray-800 p-6 rounded-lg shadow-md">
             <i class="fas fa-bus text-3xl text-yellow-500"></i>
-            <h3 class="text-lg font-semibold mt-2">Total Transportations</h3>
-            <p class="text-2xl font-bold">85</p>
+            <h3 class="text-lg font-semibold mt-2">Total Transportation</h3>
+            <p class="text-2xl font-bold"><?php echo $totalTransportation; ?></p>
           </div>
 
           <!-- Total Flights -->
           <div class="bg-gray-100 text-gray-800 p-6 rounded-lg shadow-md">
             <i class="fas fa-plane text-3xl text-red-500"></i>
             <h3 class="text-lg font-semibold mt-2">Total Flights</h3>
-            <p class="text-2xl font-bold">45</p>
+            <p class="text-2xl font-bold"><?php echo $totalFlights; ?></p>
           </div>
 
           <!-- Total Hotels -->
           <div class="bg-gray-100 text-gray-800 p-6 rounded-lg shadow-md">
             <i class="fas fa-hotel text-3xl text-purple-500"></i>
             <h3 class="text-lg font-semibold mt-2">Total Hotels</h3>
-            <p class="text-2xl font-bold">60</p>
+            <p class="text-2xl font-bold"><?php echo $totalHotels; ?></p>
           </div>
         </div>
       </div>

@@ -1,180 +1,143 @@
 <?php
-// Include the Stripe PHP library
+session_start();
+include 'connection/connection.php';
 require_once('vendor/autoload.php');
 
-// Set your Stripe Secret Key
-\Stripe\Stripe::setApiKey('sk_test_4eC39HqLyjWDarjtT1zdp7dc');  // Replace with your secret key
+\Stripe\Stripe::setApiKey('sk_test_4eC39HqLyjWDarjtT1zdp7dc'); 
+// Check if flight_id is provided
+if (!isset($_GET['flight_id']) || empty($_GET['flight_id'])) {
+  header('Location: index.php');
+  exit;
+}
 
-// Handle payment processing
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-  // Get data from the frontend
-  $name = $_POST['name'];
-  $email = $_POST['email'];
-  $phone = $_POST['phone'];
-  $passport_number = $_POST['passport-number'];
-  $nationality = $_POST['nationality'];
-  $meal_preference = $_POST['meal-preference'];
-  $special_requests = $_POST['special-requests'];
-  $emergency_contact = $_POST['emergency-contact'];
-  $emergency_phone = $_POST['emergency-phone'];
+$flight_id = mysqli_real_escape_string($conn, $_GET['flight_id']);
 
-  $amount = 85000;  // The amount in cents (e.g., $850 = 85000 cents)
+// Get flight details
+$query = "SELECT * FROM flights WHERE id = '$flight_id'";
+$result = mysqli_query($conn, $query);
 
-  try {
-    // Create a Checkout Session
-    $session = \Stripe\Checkout\Session::create([
-      'payment_method_types' => ['card'],
-      'line_items' => [
-        [
-          'price_data' => [
-            'currency' => 'usd',
-            'product_data' => [
-              'name' => 'Umrah Flight Booking',
-            ],
-            'unit_amount' => $amount,
-          ],
-          'quantity' => 1,
-        ],
-      ],
-      'mode' => 'payment',
-      // 'success_url' => 'success.php?session_id={CHECKOUT_SESSION_ID}',
-      'success_url' => 'http://localhost:8000/success.php',
-      'cancel_url' => 'http://localhost:8000/fail.php',
+if (!$result || mysqli_num_rows($result) == 0) {
+  header('Location: index.php');
+  exit;
+}
 
-      'metadata' => [
-        'name' => $name,
-        'email' => $email,
-        'phone' => $phone,
-        'passport_number' => $passport_number,
-        'nationality' => $nationality,
-        'meal_preference' => $meal_preference,
-        'special_requests' => $special_requests,
-        'emergency_contact' => $emergency_contact,
-        'emergency_phone' => $emergency_phone
-      ],
-    ]);
+$flight = mysqli_fetch_assoc($result);
 
-    // Redirect to the Stripe checkout page
-    header("Location: " . $session->url);
-    exit;
-  } catch (\Stripe\Exception\ApiErrorException $e) {
-    // Handle errors from Stripe
-    echo 'Error: ' . $e->getMessage();
-    exit;
+// Process booking form
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  // Check if user is logged in
+  if (!isset($_SESSION['user_id'])) {
+    $error = "Please log in to book a flight.";
+  } else {
+    $user_id = $_SESSION['user_id'];
+    $booking_time = date('Y-m-d H:i:s');
+    $flight_status = 'Pending';
+
+    // Insert into flight_book table
+    $insert_query = "INSERT INTO flight_book (user_id, flight_id, booking_time, flight_status) 
+                        VALUES ('$user_id', '$flight_id', '$booking_time', '$flight_status')";
+
+    if (mysqli_query($conn, $insert_query)) {
+      $success = "Flight booked successfully! Your booking is pending confirmation.";
+    } else {
+      $error = "Error booking flight: " . mysqli_error($conn);
+    }
   }
 }
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Book Your Umrah Flight - Confirmation</title>
+  <?php include 'includes/css-links.php' ?>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
-<body class="bg-teal-50 font-sans">
-
+<body class="bg-gray-50 font-sans">
   <?php include 'includes/navbar.php' ?>
-  <div class="my-6">&nbsp;</div>
-  <!-- Booking Form Section -->
-  <section class="py-16 bg-teal-100">
-    <div class="container mx-auto text-center">
-      <h2 class="text-3xl font-bold text-teal-600">Confirm Your Flight Booking</h2>
-      <p class="mt-4 text-gray-700">Please fill in your details to confirm the booking for your Umrah flight.</p>
+  <br><br><br>
+  <section class="py-16">
+    <div class="container mx-auto px-4">
+      <div class="max-w-3xl mx-auto bg-white rounded-lg shadow-md p-8">
+        <h1 class="text-3xl font-bold text-teal-600 mb-6">Book Your Flight</h1>
 
-      <div class="mt-8 max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
-        <!-- Flight Details -->
-        <div class="mb-8 text-left">
-          <h3 class="text-2xl font-semibold text-teal-600">Flight Details</h3>
-          <div class="mt-4">
-            <p><strong>Flight:</strong> PIA Airlines</p>
-            <p><strong>Departure City:</strong> Karachi</p>
-            <p><strong>Arrival City:</strong> Jeddah</p>
-            <p><strong>Departure Date:</strong> 2025-03-10</p>
-            <p><strong>Price:</strong> $850</p>
+        <?php if (isset($error)): ?>
+          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <?php echo $error; ?>
           </div>
-        </div>
+        <?php endif; ?>
 
-        <!-- Passenger Information Form -->
-        <div class="mb-8 text-left">
-          <h3 class="text-2xl font-semibold text-teal-600">Passenger Information</h3>
-          <form action="" method="POST" class="space-y-6">
-            <!-- Full Name -->
-            <div>
-              <label for="name" class="block text-gray-700">Full Name</label>
-              <input type="text" id="name" name="name" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Enter your full name" required>
+        <?php if (isset($success)): ?>
+          <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+            <?php echo $success; ?>
+            <p class="mt-2">
+              <a href="index.php" class="text-teal-600 hover:underline">Return to Flights</a>
+            </p>
+          </div>
+        <?php else: ?>
+          <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-4">Flight Details</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p><span class="font-medium">Airline:</span> <?php echo htmlspecialchars($flight['airline_name']); ?></p>
+                <p><span class="font-medium">Flight Number:</span> <?php echo htmlspecialchars($flight['flight_number']); ?></p>
+                <p><span class="font-medium">From:</span> <?php echo htmlspecialchars($flight['departure_city']); ?></p>
+                <p><span class="font-medium">To:</span> <?php echo htmlspecialchars($flight['arrival_city']); ?></p>
+              </div>
+              <div>
+                <p><span class="font-medium">Departure Date:</span> <?php echo htmlspecialchars($flight['departure_date']); ?></p>
+                <p><span class="font-medium">Departure Time:</span> <?php echo htmlspecialchars($flight['departure_time']); ?></p>
+                <p><span class="font-medium">Economy Price:</span> $<?php echo htmlspecialchars($flight['economy_price']); ?></p>
+                <p><span class="font-medium">Business Price:</span> $<?php echo htmlspecialchars($flight['business_price']); ?></p>
+              </div>
             </div>
+          </div>
 
-            <!-- Email -->
-            <div>
-              <label for="email" class="block text-gray-700">Email</label>
-              <input type="email" id="email" name="email" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Enter your email" required>
+          <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-4">Select Ticket Type</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="border rounded-lg p-4 hover:shadow-md cursor-pointer">
+                <input type="radio" id="economy" name="ticket_type" value="economy" checked>
+                <label for="economy" class="cursor-pointer">
+                  <h3 class="text-lg font-medium">Economy</h3>
+                  <p class="text-xl font-bold text-teal-600">$<?php echo htmlspecialchars($flight['economy_price']); ?></p>
+                  <p class="text-sm text-gray-500">Standard seating</p>
+                </label>
+              </div>
+
+              <div class="border rounded-lg p-4 hover:shadow-md cursor-pointer">
+                <input type="radio" id="business" name="ticket_type" value="business">
+                <label for="business" class="cursor-pointer">
+                  <h3 class="text-lg font-medium">Business</h3>
+                  <p class="text-xl font-bold text-teal-600">$<?php echo htmlspecialchars($flight['business_price']); ?></p>
+                  <p class="text-sm text-gray-500">Premium seating with extra legroom</p>
+                </label>
+              </div>
+
+              <div class="border rounded-lg p-4 hover:shadow-md cursor-pointer">
+                <input type="radio" id="first_class" name="ticket_type" value="first_class">
+                <label for="first_class" class="cursor-pointer">
+                  <h3 class="text-lg font-medium">First Class</h3>
+                  <p class="text-xl font-bold text-teal-600">$<?php echo htmlspecialchars($flight['first_class_price']); ?></p>
+                  <p class="text-sm text-gray-500">Luxury experience with all amenities</p>
+                </label>
+              </div>
             </div>
+          </div>
 
-            <!-- Phone Number -->
-            <div>
-              <label for="phone" class="block text-gray-700">Phone Number</label>
-              <input type="tel" id="phone" name="phone" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Enter your phone number" required>
-            </div>
-
-            <!-- Passport Number -->
-            <div>
-              <label for="passport-number" class="block text-gray-700">Passport Number</label>
-              <input type="text" id="passport-number" name="passport-number" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Enter your passport number" required>
-            </div>
-
-            <!-- Nationality -->
-            <div>
-              <label for="nationality" class="block text-gray-700">Nationality</label>
-              <select id="nationality" name="nationality" class="w-full p-3 border border-gray-300 rounded-lg" required>
-                <option value="" disabled selected>Select your nationality</option>
-                <option value="Pakistani">Pakistani</option>
-                <option value="Indian">Indian</option>
-                <option value="Bangladeshi">Bangladeshi</option>
-                <!-- Add other options as needed -->
-              </select>
-            </div>
-
-            <!-- Meal Preference -->
-            <div>
-              <label for="meal-preference" class="block text-gray-700">Meal Preference</label>
-              <select id="meal-preference" name="meal-preference" class="w-full p-3 border border-gray-300 rounded-lg">
-                <option value="" disabled selected>Select meal preference</option>
-                <option value="vegetarian">Vegetarian</option>
-                <option value="non-vegetarian">Non-Vegetarian</option>
-                <option value="halal">Halal</option>
-                <option value="kosher">Kosher</option>
-              </select>
-            </div>
-
-            <!-- Special Requests -->
-            <div>
-              <label for="special-requests" class="block text-gray-700">Special Requests</label>
-              <textarea id="special-requests" name="special-requests" class="w-full p-3 border border-gray-300 rounded-lg" rows="4" placeholder="Any special requests or information (e.g., wheelchair, assistance, etc.)"></textarea>
-            </div>
-
-            <!-- Emergency Contact -->
-            <div>
-              <label for="emergency-contact" class="block text-gray-700">Emergency Contact Name</label>
-              <input type="text" id="emergency-contact" name="emergency-contact" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Enter emergency contact name" required>
-            </div>
-
-            <div>
-              <label for="emergency-phone" class="block text-gray-700">Emergency Contact Phone</label>
-              <input type="tel" id="emergency-phone" name="emergency-phone" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Enter emergency contact phone" required>
-            </div>
-
-            <!-- Submit Button -->
-            <button type="submit" class="w-full px-6 py-3 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-500 focus:outline-none">
-              Confirm Booking
-            </button>
+          <form method="POST" action="">
+            <?php if (!isset($_SESSION['user_id'])): ?>
+              <div class="mb-6 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+                Please <a href="login.php" class="text-teal-600 hover:underline">log in</a> to book this flight.
+              </div>
+            <?php else: ?>
+              <button type="submit" class="w-full px-6 py-3 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                Confirm Booking
+              </button>
+            <?php endif; ?>
           </form>
-        </div>
+        <?php endif; ?>
       </div>
     </div>
   </section>
@@ -185,6 +148,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       <p>&copy; 2025 Umrah Journey. All Rights Reserved.</p>
     </div>
   </footer>
+
+  <script>
+    // Make the entire div clickable for ticket type selection
+    document.querySelectorAll('.ticket_type_container').forEach(container => {
+      container.addEventListener('click', function() {
+        const radio = this.querySelector('input[type="radio"]');
+        radio.checked = true;
+      });
+    });
+  </script>
 
 </body>
 

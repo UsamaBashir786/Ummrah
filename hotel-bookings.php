@@ -1,9 +1,7 @@
 <?php
-// Include the Stripe PHP library
 require_once('vendor/autoload.php');
 
-// Set your Stripe Secret Key
-\Stripe\Stripe::setApiKey('sk_test_4eC39HqLyjWDarjtT1zdp7dc');  // Replace with your secret key
+\Stripe\Stripe::setApiKey('sk_test_4eC39HqLyjWDarjtT1zdp7dc'); 
 
 // Handle payment processing
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {

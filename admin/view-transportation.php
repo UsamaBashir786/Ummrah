@@ -6,17 +6,31 @@ include 'connection/connection.php';
 $search = isset($_GET['search']) ? $_GET['search'] : '';
 $category_filter = isset($_GET['category']) ? $_GET['category'] : '';
 
-// Build the query with search and filter
-$query = "SELECT * FROM transportation WHERE 1=1";
+// Get current time
+$current_time = date('H:i:s');
+
+// Build the query for current transportation
+$query_current = "SELECT * FROM transportation WHERE time_to > '$current_time'";
 if ($search) {
-  $query .= " AND (transport_name LIKE '%$search%' OR transport_id LIKE '%$search%' OR location LIKE '%$search%')";
+  $query_current .= " AND (transport_name LIKE '%$search%' OR transport_id LIKE '%$search%' OR location LIKE '%$search%')";
 }
 if ($category_filter) {
-  $query .= " AND category = '$category_filter'";
+  $query_current .= " AND category = '$category_filter'";
 }
-$query .= " ORDER BY transport_id DESC";
+$query_current .= " ORDER BY transport_id DESC";
 
-$result = mysqli_query($conn, $query);
+// Build the query for past transportation
+$query_past = "SELECT * FROM transportation WHERE time_to <= '$current_time'";
+if ($search) {
+  $query_past .= " AND (transport_name LIKE '%$search%' OR transport_id LIKE '%$search%' OR location LIKE '%$search%')";
+}
+if ($category_filter) {
+  $query_past .= " AND category = '$category_filter'";
+}
+$query_past .= " ORDER BY transport_id DESC";
+
+$result_current = mysqli_query($conn, $query_current);
+$result_past = mysqli_query($conn, $query_past);
 ?>
 
 <!DOCTYPE html>
@@ -25,10 +39,11 @@ $result = mysqli_query($conn, $query);
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Transportation List</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="../assets/css/output.css">
+  <link rel="stylesheet" href="assets/css/output.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 </head>
 
 <body class="bg-gray-50">
@@ -49,105 +64,282 @@ $result = mysqli_query($conn, $query);
 
       <div class="container mx-auto px-4 py-8">
         <div class="bg-white p-6 rounded-lg shadow-lg">
-          <!-- Search and Filter Section -->
-          <div class="mb-6 flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
-            <h1 class="text-2xl font-bold text-gray-800">Vehicle Management</h1>
-            <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-              <input type="text" id="searchInput" placeholder="Search vehicles..."
-                class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
-                value="<?php echo htmlspecialchars($search); ?>">
-              <select id="categoryFilter"
-                class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto">
-                <option value="">All Categories</option>
-                <option value="luxury" <?php echo $category_filter == 'luxury' ? 'selected' : ''; ?>>Luxury</option>
-                <option value="standard" <?php echo $category_filter == 'standard' ? 'selected' : ''; ?>>Standard</option>
-                <option value="economy" <?php echo $category_filter == 'economy' ? 'selected' : ''; ?>>Economy</option>
-              </select>
+          <!-- Tabs Navigation -->
+          <div class="mb-6 flex justify-center space-x-4">
+            <button class="tablink flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500" onclick="openTab(event, 'current')">
+              <i class="fas fa-car-side mr-2"></i>
+              Current Transportations
+            </button>
+            <button class="tablink flex items-center bg-gray-300 text-gray-700 px-4 py-2 rounded-lg shadow hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" onclick="openTab(event, 'past')">
+              <i class="fas fa-history mr-2"></i>
+              Past Transportations
+            </button>
+          </div>
+
+          <!-- Current Transportations Tab -->
+          <div id="current" class="tabcontent">
+            <div class="overflow-x-auto">
+              <table class="min-w-full">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available Time</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  <?php while ($row = mysqli_fetch_assoc($result_current)) : ?>
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-6 py-4"><?php echo htmlspecialchars($row['id']); ?></td>
+                      <td class="px-6 py-4">
+                        <span class="px-2 py-1 text-sm rounded-full 
+                        <?php echo match ($row['category']) {
+                          'luxury' => 'bg-purple-100 text-purple-800',
+                          'standard' => 'bg-blue-100 text-blue-800',
+                          'economy' => 'bg-green-100 text-green-800',
+                          default => 'bg-gray-100 text-gray-800'
+                        }; ?>">
+                          <?php echo ucfirst($row['category']); ?>
+                        </span>
+                      </td>
+                      <td class="px-6 py-4">
+                        <div class="flex items-center">
+                          <!-- <img src="<?php echo htmlspecialchars($row['transport_image']); ?>" alt="Vehicle" class="h-12 w-16 object-cover rounded"> -->
+                          <div class="ml-4">
+                            <div class="font-medium text-gray-900"><?php echo htmlspecialchars($row['transport_name']); ?></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4 text-gray-600"><?php echo htmlspecialchars($row['location']); ?></td>
+                      <td class="px-6 py-4 text-gray-600">
+                        <?php echo date('h:i A', strtotime($row['time_from'])); ?> - <?php echo date('h:i A', strtotime($row['time_to'])); ?>
+                      </td>
+                      <td class="px-6 py-4">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                        <?php echo $row['status'] == 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'; ?>">
+                          <?php echo ucfirst($row['status']); ?>
+                        </span>
+                      </td>
+                      <td class="px-6 py-4">
+                        <div class="flex space-x-3">
+                          <button class="text-blue-600 hover:text-blue-900"
+                            onclick="window.location.href='edit-transportation.php?id=<?php echo $row['transport_id']; ?>'">
+                            <i class="fas fa-edit"></i>
+                          </button>
+                          <button class="text-red-600 hover:text-red-900 delete-btn"
+                            data-id="<?php echo htmlspecialchars($row['transport_id']); ?>">
+                            <i class="fas fa-trash"></i>
+                          </button>
+                          <button class="text-green-600 hover:text-green-900"
+                            onclick="window.location.href='view-transportation-details.php?id=<?php echo $row['transport_id']; ?>'">
+                            <i class="fas fa-eye"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  <?php endwhile; ?>
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <div class="overflow-x-auto">
-            <table class="min-w-full">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Seats</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available Time</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                <?php while ($row = mysqli_fetch_assoc($result)) : ?>
-                  <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4">
-                      <span class="px-2 py-1 text-sm rounded-full 
-                                                <?php echo match ($row['category']) {
-                                                  'luxury' => 'bg-purple-100 text-purple-800',
-                                                  'standard' => 'bg-blue-100 text-blue-800',
-                                                  'economy' => 'bg-green-100 text-green-800',
-                                                  default => 'bg-gray-100 text-gray-800'
-                                                }; ?>">
-                        <?php echo ucfirst($row['category']); ?>
-                      </span>
-                    </td>
-                    <td class="px-6 py-4">
-                      <div class="flex items-center">
-                        <img src="<?php echo htmlspecialchars($row['transport_image']); ?>"
-                          alt="Vehicle" class="h-12 w-16 object-cover rounded">
-                        <div class="ml-4">
-                          <div class="font-medium text-gray-900"><?php echo htmlspecialchars($row['transport_name']); ?></div>
-                          <div class="text-sm text-gray-500"><?php echo htmlspecialchars($row['transport_id']); ?></div>
-                        </div>
-                      </div>
-                    </td>
-                    <td class="px-6 py-4 text-gray-600"><?php echo htmlspecialchars($row['location']); ?></td>
-                    <td class="px-6 py-4 text-gray-600">
-                      <div class="truncate max-w-xs" title="<?php echo htmlspecialchars($row['details']); ?>">
-                        <?php echo htmlspecialchars($row['details']); ?>
-                      </div>
-                    </td>
-                    <td class="px-6 py-4 text-gray-600"><?php echo $row['seats']; ?></td>
-                    <td class="px-6 py-4 text-gray-600">
-                      <?php echo date('h:i A', strtotime($row['time_from'])); ?> -
-                      <?php echo date('h:i A', strtotime($row['time_to'])); ?>
-                    </td>
-                    <td class="px-6 py-4">
-                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                                <?php echo $row['status'] == 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'; ?>">
-                        <?php echo ucfirst($row['status']); ?>
-                      </span>
-                    </td>
-                    <td class="px-6 py-4">
-                      <div class="flex space-x-3">
-                        <button class="text-blue-600 hover:text-blue-900"
-                          onclick="window.location.href='edit-transportation.php?id=<?php echo $row['transport_id']; ?>'">
-                          <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="text-red-600 hover:text-red-900 delete-btn"
-                          data-id="<?php echo $row['transport_id']; ?>">
-                          <i class="fas fa-trash"></i>
-                        </button>
-                        <button class="text-green-600 hover:text-green-900"
-                          onclick="window.location.href='view-transportation-details.php?id=<?php echo $row['transport_id']; ?>'">
-                          <i class="fas fa-eye"></i>
-                        </button>
-                      </div>
-                    </td>
+          <!-- Past Transportations Tab -->
+          <div id="past" class="tabcontent" style="display:none">
+            <div class="overflow-x-auto">
+              <table class="min-w-full">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available Time</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
-                <?php endwhile; ?>
-              </tbody>
-            </table>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  <?php while ($row = mysqli_fetch_assoc($result_past)) : ?>
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-6 py-4"><?php echo htmlspecialchars($row['id']); ?></td>
+                      <td class="px-6 py-4">
+                        <span class="px-2 py-1 text-sm rounded-full 
+                        <?php echo match ($row['category']) {
+                          'luxury' => 'bg-purple-100 text-purple-800',
+                          'standard' => 'bg-blue-100 text-blue-800',
+                          'economy' => 'bg-green-100 text-green-800',
+                          default => 'bg-gray-100 text-gray-800'
+                        }; ?>">
+                          <?php echo ucfirst($row['category']); ?>
+                        </span>
+                      </td>
+                      <td class="px-6 py-4">
+                        <div class="flex items-center">
+                          <!-- <img src="<?php echo htmlspecialchars($row['transport_image']); ?>" alt="Vehicle" class="h-12 w-16 object-cover rounded"> -->
+                          <div class="ml-4">
+                            <div class="font-medium text-gray-900"><?php echo htmlspecialchars($row['transport_name']); ?></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4 text-gray-600"><?php echo htmlspecialchars($row['location']); ?></td>
+                      <td class="px-6 py-4 text-gray-600">
+                        <?php echo date('h:i A', strtotime($row['time_from'])); ?> - <?php echo date('h:i A', strtotime($row['time_to'])); ?>
+                      </td>
+                      <td class="px-6 py-4">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                        <?php echo $row['status'] == 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'; ?>">
+                          <?php echo ucfirst($row['status']); ?>
+                        </span>
+                      </td>
+                      <td class="px-6 py-4">
+                        <div class="flex space-x-3">
+                          <button class="text-blue-600 hover:text-blue-900"
+                            onclick="window.location.href='edit-transportation.php?id=<?php echo $row['transport_id']; ?>'">
+                            <i class="fas fa-edit"></i>
+                          </button>
+                          <button class="text-red-600 hover:text-red-900 delete-btn"
+                            data-id="<?php echo htmlspecialchars($row['transport_id']); ?>">
+                            <i class="fas fa-trash"></i>
+                          </button>
+                          <button class="text-green-600 hover:text-green-900"
+                            onclick="window.location.href='view-transportation-details.php?id=<?php echo $row['transport_id']; ?>'">
+                            <i class="fas fa-eye"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  <?php endwhile; ?>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
-
   <script>
+    // Enhanced sidebar toggle with animations
+    document.getElementById("menu-btn").addEventListener("click", function() {
+      const sidebar = document.getElementById("sidebar");
+
+      if (sidebar.classList.contains('hidden')) {
+        sidebar.classList.remove('hidden');
+        gsap.fromTo("#sidebar", {
+          x: -100,
+          opacity: 0
+        }, {
+          duration: 0.5,
+          x: 0,
+          opacity: 1,
+          ease: "power3.out"
+        });
+      } else {
+        gsap.to("#sidebar", {
+          duration: 0.5,
+          x: -100,
+          opacity: 0,
+          ease: "power3.in",
+          onComplete: () => {
+            sidebar.classList.add('hidden');
+          }
+        });
+      }
+    });
+
+    // Enhanced close button functionality
+    document.getElementById("close-sidebar").addEventListener("click", function() {
+      const sidebar = document.getElementById("sidebar");
+
+      gsap.to("#sidebar", {
+        duration: 0.5,
+        x: -100,
+        opacity: 0,
+        ease: "power3.in",
+        onComplete: () => {
+          sidebar.classList.add('hidden');
+          // Remove any inline styles added by GSAP
+          sidebar.style.transform = '';
+          sidebar.style.opacity = '';
+        }
+      });
+    });
+
+    // Function to handle dropdown animations
+    function toggleDropdown(dropdownId) {
+      const dropdown = document.getElementById(dropdownId);
+      const chevron = dropdown.previousElementSibling.querySelector('.fa-chevron-down');
+
+      if (dropdown.classList.contains('hidden')) {
+        // Show dropdown
+        dropdown.classList.remove('hidden');
+        gsap.fromTo(dropdown, {
+          height: 0,
+          opacity: 0
+        }, {
+          height: 'auto',
+          opacity: 1,
+          duration: 0.3,
+          ease: "power2.out"
+        });
+
+        // Animate dropdown links
+        gsap.fromTo(dropdown.querySelectorAll('a'), {
+          y: -10,
+          opacity: 0
+        }, {
+          y: 0,
+          opacity: 1,
+          duration: 0.3,
+          stagger: 0.05,
+          ease: "power2.out"
+        });
+
+        // Rotate chevron down
+        gsap.to(chevron, {
+          duration: 0.3,
+          rotation: 180
+        });
+      } else {
+        // Hide dropdown
+        gsap.to(dropdown, {
+          height: 0,
+          opacity: 0,
+          duration: 0.3,
+          ease: "power2.in",
+          onComplete: () => {
+            dropdown.classList.add('hidden');
+            // Reset height after animation
+            dropdown.style.height = '';
+          }
+        });
+
+        // Rotate chevron up
+        gsap.to(chevron, {
+          duration: 0.3,
+          rotation: 0
+        });
+      }
+    }
+
+    // Tab functionality
+    function openTab(evt, tabName) {
+      var i, tabcontent, tablinks;
+      tabcontent = document.getElementsByClassName("tabcontent");
+      for (i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].style.display = "none";
+      }
+      tablinks = document.getElementsByClassName("tablink");
+      for (i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" bg-blue-600 text-white", " bg-gray-300 text-gray-700");
+      }
+      document.getElementById(tabName).style.display = "block";
+      evt.currentTarget.className += " bg-blue-600 text-white";
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
       // Search and Filter Implementation
       const searchInput = document.getElementById('searchInput');

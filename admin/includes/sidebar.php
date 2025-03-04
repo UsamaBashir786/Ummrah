@@ -138,6 +138,22 @@
       </div>
     </div>
 
+    <!-- Assigning Section -->
+    <div class="sidebar-section">
+      <button class="w-full flex items-center justify-between px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors group"
+        onclick="toggleDropdown('assign-dropdown')">
+        <div class="flex items-center space-x-3">
+          <i class="fas fa-tasks text-gray-400 group-hover:text-teal-400"></i>
+          <span class="group-hover:text-teal-400">Assigning</span>
+        </div>
+        <i class="fas fa-chevron-down text-sm transition-transform duration-200"></i>
+      </button>
+      <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="assign-dropdown">
+        <a href="assigning-main-page.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Main Page</a>
+        <a href="assigning-action-one.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Actions</a>
+      </div>
+    </div>
+
     <!-- Logout -->
     <a href="logout.php" onclick="confirmLogout(event)"
       class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors group mt-4">

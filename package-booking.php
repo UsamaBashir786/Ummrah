@@ -1,14 +1,39 @@
 <?php
-// Include the Stripe PHP library
 require_once('vendor/autoload.php');
+\Stripe\Stripe::setApiKey('sk_test_4eC39HqLyjWDarjtT1zdp7dc');
 
-// Set your Stripe Secret Key
-\Stripe\Stripe::setApiKey('sk_test_4eC39HqLyjWDarjtT1zdp7dc');  // Replace with your secret key
+// Check booking limit before processing
+function checkBookingLimit($hotel)
+{
+  global $conn;
 
-// Handle payment processing
+  // Get current booking count
+  $sql = "SELECT COUNT(*) as booking_count FROM bookings WHERE hotel = ? AND DATE(check_in) = CURDATE()";
+  $stmt = $conn->prepare($sql);
+  $stmt->bind_param("s", $hotel);
+  $stmt->execute();
+  $result = $stmt->get_result();
+  $row = $result->fetch_assoc();
+
+  // Set booking limit (you can adjust this or fetch from settings table)
+  $booking_limit = 50;
+
+  return $row['booking_count'] < $booking_limit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-  // Get data from the frontend
   $hotel = $_POST['hotel'];
+
+  // Check if booking limit is reached
+  if (!checkBookingLimit($hotel)) {
+    echo "<script>
+            alert('Booking limit reached for today. Please try another date or hotel.');
+            window.location.href = 'booking.php';
+        </script>";
+    exit;
+  }
+
+  // Continue with existing booking logic
   $check_in = $_POST['check_in'];
   $firstName = $_POST['firstName'];
   $lastName = $_POST['lastName'];
@@ -16,31 +41,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
   $phone = $_POST['phone'];
   $packageType = $_POST['packageType'];
   $address = $_POST['address'];
-  $profileImage = $_FILES['profileImage'];  // Handle file upload
+  $profileImage = $_FILES['profileImage'];
 
-  $amount = 85000;  // The amount in cents (e.g., $850 = 85000 cents)
+  $amount = 85000;
 
   try {
-    // Create a Checkout Session
     $session = \Stripe\Checkout\Session::create([
       'payment_method_types' => ['card'],
-      'line_items' => [
-        [
-          'price_data' => [
-            'currency' => 'usd',
-            'product_data' => [
-              'name' => 'Umrah Flight Booking',
-            ],
-            'unit_amount' => $amount,
+      'line_items' => [[
+        'price_data' => [
+          'currency' => 'usd',
+          'product_data' => [
+            'name' => 'Umrah Flight Booking',
           ],
-          'quantity' => 1,
+          'unit_amount' => $amount,
         ],
-      ],
+        'quantity' => 1,
+      ]],
       'mode' => 'payment',
-      // 'success_url' => 'success.php?session_id={CHECKOUT_SESSION_ID}',
       'success_url' => 'http://localhost:8000/success.php',
       'cancel_url' => 'http://localhost:8000/fail.php',
-
       'metadata' => [
         'hotel' => $hotel,
         'check_in' => $check_in,
@@ -53,16 +73,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       ],
     ]);
 
-    // Redirect to the Stripe checkout page
     header("Location: " . $session->url);
     exit;
   } catch (\Stripe\Exception\ApiErrorException $e) {
-    // Handle errors from Stripe
     echo 'Error: ' . $e->getMessage();
     exit;
   }
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -73,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 </head>
 
 <body class="bg-gray-50">
-<?php include 'includes/navbar.php'; ?>
+  <?php include 'includes/navbar.php'; ?>
 
   <!-- Booking Form Section -->
   <section class="py-16 px-4">

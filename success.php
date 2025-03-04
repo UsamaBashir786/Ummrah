@@ -1,22 +1,23 @@
 <?php
-// success.php
-?>
+include "connection/connection.php";
+session_start();
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Successful</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-green-100 h-screen flex items-center justify-center">
+if (!isset($_GET['booking_id'])) {
+  die("Error: Invalid request.");
+}
 
-    <div class="bg-white p-8 rounded-xl shadow-lg text-center max-w-sm w-full">
-        <h1 class="text-4xl font-bold text-green-600 mb-4">Payment Successful!</h1>
-        <p class="text-gray-700 mb-6">Thank you for your payment. Your transaction has been completed successfully.</p>
-        <a href="index.php" class="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">Go back to homepage</a>
-    </div>
+$booking_id = intval($_GET['booking_id']);
 
-</body>
-</html>
+// Update the booking to 'paid'
+$query = "UPDATE package_booking SET payment_status = 'paid' WHERE id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $booking_id);
+
+if ($stmt->execute()) {
+  echo "<script>
+    alert('Payment successful! Your booking is confirmed.');
+    window.location.href = 'index.php';
+  </script>";
+} else {
+  echo "Error updating payment status.";
+}

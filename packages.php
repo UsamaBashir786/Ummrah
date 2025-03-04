@@ -1,3 +1,8 @@
+<?php
+session_start();
+
+include "connection/connection.php";
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -6,71 +11,81 @@
 </head>
 
 <body class="bg-gray-50 font-sans">
-<?php include 'includes/navbar.php' ?>
+  <?php include 'includes/navbar.php' ?>
 
   <div class="my-12">&nbsp;</div>
-  <!-- Package Listings Section -->
-  <section class="my-5 py-16">
-    <div class="container mx-auto px-6">
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+  <!----
+  --------------- >Packages Section
+  --->
+  <section id="packages" class="py-20 bg-gray-50">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <h3 class="text-2xl text-teal-600 my-5">- Packages</h3>
+      <div class="flex flex-col lg:flex-row justify-between items-center mb-8 px-4">
+        <h2 class="packages-heading-media-query text-4xl text-teal-600 mb-4 lg:mb-0" style="font-family: 'Times New Roman', Times, serif;" data-aos="fade-up" id="title">
+          Choose Your Umrah Package
+        </h2>
+        <a href="#packages" class="flex items-center text-teal-500 text-2xl py-2 px-4 rounded-lg transition duration-300 hover:underline" data-aos="zoom-in-up">
+          View Packages <i class="bx bx-chevron-right ml-2 text-2xl"></i>
+        </a>
+      </div>
 
-        <!-- Single Umrah Package Card -->
-        <div class="bg-white p-8 rounded-lg shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
-          <div class="flex items-center space-x-4 mb-6">
-            <i class="bx bxs-plane-alt text-teal-600 text-3xl"></i>
-            <h3 class="text-2xl font-semibold text-teal-700">Single Umrah Package</h3>
-          </div>
-          <p class="mt-4 text-gray-600">A solo journey for those seeking peace and spiritual growth.</p>
-          <ul class="mt-6 space-y-4 text-gray-600">
-            <li><i class="bx bxs-plane-alt text-teal-600 mr-2"></i><strong>Flight:</strong> PIA Airlines</li>
-            <li><i class="bx bx-location-plus text-teal-600 mr-2"></i><strong>Departure:</strong> Karachi</li>
-            <li><i class="bx bx-location-pin text-teal-600 mr-2"></i><strong>Arrival:</strong> Jeddah</li>
-            <li><i class="bx bx-check-circle text-teal-600 mr-2"></i><strong>Includes:</strong> Flight, Hotel, Transport</li>
-          </ul>
-          <p class="mt-6 text-xl font-semibold text-teal-700 my-3">$1,200</p>
-          <a href="package-booking.php" class="mt-6 inline-block w-full text-center px-6 py-3 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-500 transition-all duration-300">
-            Book Now
-          </a>
-        </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 px-4">
+        <?php
+        // Fetch packages from database
+        $query = "SELECT * FROM packages";
+        $result = $conn->query($query);
 
-        <!-- Group Umrah Package Card -->
-        <div class="bg-white p-8 rounded-lg shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
-          <div class="flex items-center space-x-4 mb-6">
-            <i class="bx bx-group text-teal-600 text-3xl"></i>
-            <h3 class="text-2xl font-semibold text-teal-700">Group Umrah Package</h3>
-          </div>
-          <p class="mt-4 text-gray-600">Join a group and enjoy a discounted rate while traveling together.</p>
-          <ul class="mt-6 space-y-4 text-gray-600">
-            <li><i class="bx bxs-plane-alt text-teal-600 mr-2"></i><strong>Flight:</strong> PIA Airlines</li>
-            <li><i class="bx bx-location-plus text-teal-600 mr-2"></i><strong>Departure:</strong> Karachi</li>
-            <li><i class="bx bx-location-pin text-teal-600 mr-2"></i><strong>Arrival:</strong> Jeddah</li>
-            <li><i class="bx bx-check-circle text-teal-600 mr-2"></i><strong>Includes:</strong> Flight, Hotel, Transport, Group Guide</li>
-          </ul>
-          <p class="mt-6 text-xl font-semibold text-teal-700 my-3">$1,000 per person (Discounts for groups of 5+)</p>
-          <a href="package-booking.php" class="mt-6 inline-block w-full text-center px-6 py-3 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-500 transition-all duration-300">
-            Book Now
-          </a>
-        </div>
+        if ($result->num_rows > 0) {
+          while ($row = $result->fetch_assoc()) {
+        ?>
+            <div class="bg-white p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 package-card relative border border-gray-200">
+              <div class="mb-6">
+                <img data-aos="zoom-in-right" src="admin/<?= htmlspecialchars($row['package_image']) ?>" loading="lazy" alt="<?php echo htmlspecialchars($row['title']); ?>" class="w-full h-48 object-cover rounded-2xl mb-4 shadow-sm" />
+                <div data-aos="zoom-in-right" class="absolute top-4 right-4 bg-teal-600 text-white text-sm font-semibold px-4 py-1 rounded-full shadow-md">
+                  Limited Offer
+                </div>
+                <p data-aos="zoom-in-right" class="text-4xl font-extrabold text-teal-600 mb-2">$<?php echo number_format($row['price'], 2); ?></p>
+                <h3 data-aos="zoom-in-right" class="text-xl font-semibold text-gray-800 mb-2"><?php echo htmlspecialchars($row['title']); ?></h3>
+                <p data-aos="zoom-in-right" class="text-gray-500 text-sm mb-4"><?php echo htmlspecialchars($row['departure_city']); ?> - <?php echo htmlspecialchars($row['arrival_city']); ?></p>
+              </div>
 
-        <!-- VIP Umrah Package Card -->
-        <div class="bg-white p-8 rounded-lg shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
-          <div class="flex items-center space-x-4 mb-6">
-            <i class="bx bx-star text-teal-600 text-3xl"></i>
-            <h3 class="text-2xl font-semibold text-teal-700">VIP Umrah Package</h3>
-          </div>
-          <p class="mt-4 text-gray-600">For those seeking luxury and a more exclusive Umrah experience.</p>
-          <ul class="mt-6 space-y-4 text-gray-600">
-            <li><i class="bx bxs-plane-alt text-teal-600 mr-2"></i><strong>Flight:</strong> Emirates</li>
-            <li><i class="bx bx-location-plus text-teal-600 mr-2"></i><strong>Departure:</strong> Lahore</li>
-            <li><i class="bx bx-location-pin text-teal-600 mr-2"></i><strong>Arrival:</strong> Jeddah</li>
-            <li><i class="bx bx-check-circle text-teal-600 mr-2"></i><strong>Includes:</strong> Business Class Flight, Luxury Hotel, Transport, VIP Services</li>
-          </ul>
-          <p class="mt-6 text-xl font-semibold text-teal-700 my-3">$3,500</p>
-          <a href="package-booking.php" class="mt-6 inline-block w-full text-center px-6 py-3 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-500 transition-all duration-300">
-            Book Now
-          </a>
-        </div>
+              <ul class="text-left space-y-4 text-gray-700 mb-6">
+                <li class="flex items-center space-x-3">
+                  <div class="bg-teal-100 text-teal-600 p-2 rounded-full shadow-sm">
+                    <i data-aos="zoom-in-right" class="bx bx-book-alt text-xl"></i>
+                  </div>
+                  <span data-aos="zoom-in-right">Document Guide</span>
+                </li>
+                <li class="flex items-center space-x-3">
+                  <div class="bg-teal-100 text-teal-600 p-2 rounded-full shadow-sm">
+                    <i data-aos="zoom-in-right" class="bx bx-hotel text-xl"></i>
+                  </div>
+                  <span data-aos="zoom-in-right"><?php echo htmlspecialchars($row['flight_class']); ?> Class Flight</span>
+                </li>
+                <li class="flex items-center space-x-3">
+                  <div class="bg-teal-100 text-teal-600 p-2 rounded-full shadow-sm">
+                    <i data-aos="zoom-in-right" class="bx bx-food-menu text-xl"></i>
+                  </div>
+                  <span data-aos="zoom-in-right">Local Meals</span>
+                </li>
+                <li class="flex items-center space-x-3">
+                  <div class="bg-teal-100 text-teal-600 p-2 rounded-full shadow-sm">
+                    <i data-aos="zoom-in-right" class="bx bx-check-circle text-xl"></i>
+                  </div>
+                  <span data-aos="zoom-in-right">Visa Included</span>
+                </li>
+              </ul>
 
+              <a data-aos="zoom-in-right" href="package-details.php?id=<?php echo $row['id']; ?>" class="inline-block bg-gradient-to-r from-teal-600 to-teal-400 hover:from-teal-700 hover:to-teal-500 text-white font-medium py-3 px-5 rounded-xl shadow-md transition-all duration-300">
+                Learn More
+              </a>
+            </div>
+        <?php
+          }
+        } else {
+          echo "<p class='text-gray-500 text-center col-span-4'>No packages available at the moment.</p>";
+        }
+        ?>
       </div>
     </div>
   </section>
@@ -81,7 +96,38 @@
       <p>&copy; 2025 Umrah Journey. All Rights Reserved.</p>
     </div>
   </footer>
+  <!----
+  --------------- >JS Links
+  --->
+  <script src="assets/aos-master/dist/aos.js"></script>
+  <!----
+  --------------- >AOS Initialization
+  --->
+  <script>
+    AOS.init({
+      duration: 1000,
+      // once: true
+    });
+  </script>
+  <!------------- AOS end -------------->
 
+  <!----
+  --------------- >Slick Slider Start
+  --->
+  <script>
+    $(document).ready(function() {
+      $("#testimonialSlider").slick({
+        autoplay: true,
+        autoplaySpeed: 3000,
+        arrows: false,
+        dots: true,
+        fade: true,
+      });
+    });
+  </script>
+  <!----
+    --------------- >Slick Slider End
+    --->
 </body>
 
 </html>
