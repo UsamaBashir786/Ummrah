@@ -2,11 +2,7 @@
 session_start();
 include 'connection/connection.php';
 
-// Verify admin is logged in
-if (!isset($_SESSION['admin_email'])) {
-  header("Location: admin/login.php");
-  exit();
-}
+
 
 // Process form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {

@@ -32,14 +32,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $description = trim($_POST['description']);
   $amenities = isset($_POST['amenities']) ? json_encode($_POST['amenities']) : json_encode([]);
 
+  // Generate room IDs based on room count
+  $room_ids = [];
+  for ($i = 1; $i <= $room_count; $i++) {
+    $room_ids[] = "r" . $i;
+  }
+  $room_ids_json = json_encode($room_ids);
+
   try {
     // Start transaction
     $pdo->beginTransaction();
 
     // Insert hotel data
     $stmt = $pdo->prepare("
-            INSERT INTO hotels (hotel_name, location, room_count, price_per_night, rating, description, amenities)
-            VALUES (:hotel_name, :location, :room_count, :price, :rating, :description, :amenities)
+            INSERT INTO hotels (hotel_name, location, room_count, price_per_night, rating, description, amenities, room_ids)
+            VALUES (:hotel_name, :location, :room_count, :price, :rating, :description, :amenities, :room_ids)
         ");
 
     $stmt->execute([
@@ -49,7 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       'price' => $price,
       'rating' => $rating,
       'description' => $description,
-      'amenities' => $amenities
+      'amenities' => $amenities,
+      'room_ids' => $room_ids_json
     ]);
 
     $hotel_id = $pdo->lastInsertId();
@@ -173,6 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <input type="number" name="room_count" min="1"
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                 placeholder="Enter total number of rooms">
+              <p class="text-sm text-gray-500 mt-1">Room IDs (r1, r2, etc.) will be automatically generated based on this count</p>
             </div>
 
 
@@ -246,7 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div>
 
   <?php include 'includes/js-links.php'; ?>
-  
+
 </body>
 
 </html>
