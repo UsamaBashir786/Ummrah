@@ -1480,7 +1480,7 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       // Check if flight is already booked
-      const alreadyBooked = <?php echo (isset($already_booked) && $already_booked) ? 'true' : 'false'; ?>;
+      const alreadyBooked = false; // Replace with your PHP variable
 
       // Initialize step navigation
       const nextButtons = document.querySelectorAll('.next-step');
@@ -1521,6 +1521,11 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
       const passengerPhoneInput = document.getElementById('passenger_phone');
       const cabinClassSelect = document.getElementById('cabin_class');
 
+      // Track the last counts to detect changes
+      let lastAdultCount = parseInt(adultCount.value) || 1;
+      let lastChildCount = parseInt(childrenCount.value) || 0;
+
+      // Selected seats array
       let selectedSeats = [];
 
       // Progress animations for steps
@@ -1610,6 +1615,31 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
         }, 150);
       }
 
+      // Function to update the number of seats to select
+      function updateSeatsToSelect() {
+        const total = parseInt(adultCount.value) + parseInt(childrenCount.value);
+        if (seatsToSelect) {
+          seatsToSelect.textContent = total;
+        }
+      }
+
+      // Function to reset all seat selections
+      function resetSeatSelections() {
+        // Clear the selected seats array
+        selectedSeats = [];
+
+        // Remove the 'selected' class from all seats
+        document.querySelectorAll('.seat.selected').forEach(seat => {
+          seat.classList.remove('selected');
+        });
+
+        // Update the UI to show no seats selected
+        updateSelectedSeatsUI();
+
+        // Show a toast notification that seats have been reset
+        showToast('Passenger count changed. Your seat selection has been reset.', 'info');
+      }
+
       // Disable navigation to next steps if already booked
       if (alreadyBooked) {
         nextButtons.forEach(button => {
@@ -1620,22 +1650,21 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
         // Add a message at the top of the page
         const container = document.querySelector('.max-w-5xl');
         if (container) {
-          document.getElementById("yourElement").innerHTML = '<br>'.repeat(7);
           const message = document.createElement('div');
           message.className = 'bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg mb-6 shadow-sm mt-6';
           message.innerHTML = `
-            <div class="flex">
-              <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                </svg>
-              </div>
-              <div class="ml-3">
-                <p class="text-sm text-amber-700 font-medium">You have already booked this flight.</p>
-                <p class="text-sm text-amber-700 mt-1">You cannot make duplicate bookings for the same flight.</p>
-              </div>
-            </div>
-          `;
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3">
+            <p class="text-sm text-amber-700 font-medium">You have already booked this flight.</p>
+            <p class="text-sm text-amber-700 mt-1">You cannot make duplicate bookings for the same flight.</p>
+          </div>
+        </div>
+      `;
 
           // Insert after the navbar and before the first child of the container
           const firstElement = container.querySelector(':first-child');
@@ -1646,7 +1675,6 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
           }
         }
       }
-      // Add this code within the DOMContentLoaded event handler, after the variable declarations
 
       // Filter seats based on selected cabin class
       function filterSeatsByCabinClass(selectedCabinClass) {
@@ -1673,9 +1701,9 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
         const cabinTabContainer = document.querySelector('.cabin-tab').parentNode;
         if (cabinTabContainer) {
           Array.from(cabinTabContainer.children).forEach(tabElement => {
-            if (tabElement.dataset.cabin === selectedCabinClass) {
+            if (tabElement.dataset && tabElement.dataset.cabin === selectedCabinClass) {
               tabElement.style.display = 'block';
-            } else {
+            } else if (tabElement.dataset && tabElement.dataset.cabin) {
               tabElement.style.display = 'none';
             }
           });
@@ -1716,46 +1744,6 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
         }, 100);
       }
 
-      // Also modify the step navigation to ensure cabin class filtering when moving to seat selection step
-      nextButtons.forEach(button => {
-        if (button.dataset.next === 'seat-selection-section') {
-          const originalClickHandler = button.onclick;
-
-          button.onclick = function(e) {
-            // If we're going to the seat selection step, make sure we filter the seats
-            if (cabinClassSelect && cabinClassSelect.value) {
-              filterSeatsByCabinClass(cabinClassSelect.value);
-            }
-
-            // Then proceed with the original handler if it exists
-            if (originalClickHandler) {
-              return originalClickHandler.call(this, e);
-            }
-          };
-        }
-      });
-
-      // Add this to the validateSeatSelection function to ensure seats are from the selected cabin
-      const originalValidateSeatSelection = validateSeatSelection;
-      validateSeatSelection = function() {
-        if (!originalValidateSeatSelection()) {
-          return false;
-        }
-
-        // Additional check: ensure all selected seats belong to the selected cabin class
-        const selectedCabinClass = cabinClassSelect.value;
-
-        // Check each selected seat
-        for (const seatId of selectedSeats) {
-          const seatElement = document.querySelector(`.seat[data-seat-id="${seatId}"]`);
-          if (!seatElement || seatElement.dataset.cabinClass !== selectedCabinClass) {
-            showToast(`Seat ${seatId} is not in the ${selectedCabinClass} cabin. Please select seats from your chosen cabin class.`, 'error');
-            return false;
-          }
-        }
-
-        return true;
-      };
       // Add enhanced validation with visual feedback
       function validateWithFeedback(inputElement) {
         if (!inputElement.value.trim()) {
@@ -1878,6 +1866,18 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
           return false;
         }
 
+        // Additional check: ensure all selected seats belong to the selected cabin class
+        const selectedCabinClass = cabinClassSelect.value;
+
+        // Check each selected seat
+        for (const seatId of selectedSeats) {
+          const seatElement = document.querySelector(`.seat[data-seat-id="${seatId}"]`);
+          if (!seatElement || seatElement.dataset.cabinClass !== selectedCabinClass) {
+            showToast(`Seat ${seatId} is not in the ${selectedCabinClass} cabin. Please select seats from your chosen cabin class.`, 'error');
+            return false;
+          }
+        }
+
         // Show success toast
         showToast('Seats selected successfully!', 'success');
         return true;
@@ -1906,20 +1906,20 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
 
         // Set content
         toast.innerHTML = `
-          <div class="flex items-center">
-            <span class="mr-2">
-              ${type === 'error' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>' : ''}
-              ${type === 'success' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>' : ''}
-              ${type === 'info' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>' : ''}
-            </span>
-            <span>${message}</span>
-            <button class="ml-4 text-white hover:text-gray-200 focus:outline-none" onclick="this.parentNode.parentNode.remove()">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-              </svg>
-            </button>
-          </div>
-        `;
+      <div class="flex items-center">
+        <span class="mr-2">
+          ${type === 'error' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>' : ''}
+          ${type === 'success' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>' : ''}
+          ${type === 'info' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>' : ''}
+        </span>
+        <span>${message}</span>
+        <button class="ml-4 text-white hover:text-gray-200 focus:outline-none" onclick="this.parentNode.parentNode.remove()">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      </div>
+    `;
 
         // Add to DOM
         document.body.appendChild(toast);
@@ -1938,22 +1938,96 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
         }, 4000);
       }
 
+      // Handle counter buttons with reset
+      if (increaseAdults) {
+        increaseAdults.addEventListener('click', function() {
+          const current = parseInt(adultCount.value);
+          if (current < 8) {
+            adultCount.value = current + 1;
+            updateSeatsToSelect();
+            // Mark that passenger count has changed
+            lastAdultCount = current + 1;
+            // Important: We've changed passenger count, so we should reset seat selections
+            resetSeatSelections();
+          }
+        });
+      }
+
+      if (decreaseAdults) {
+        decreaseAdults.addEventListener('click', function() {
+          const current = parseInt(adultCount.value);
+          if (current > 1) {
+            adultCount.value = current - 1;
+            updateSeatsToSelect();
+            // Mark that passenger count has changed
+            lastAdultCount = current - 1;
+            // Important: We've changed passenger count, so we should reset seat selections
+            resetSeatSelections();
+          }
+        });
+      }
+
+      if (increaseChildren) {
+        increaseChildren.addEventListener('click', function() {
+          const current = parseInt(childrenCount.value);
+          if (current < 8) {
+            childrenCount.value = current + 1;
+            updateSeatsToSelect();
+            // Mark that passenger count has changed
+            lastChildCount = current + 1;
+            // Important: We've changed passenger count, so we should reset seat selections
+            resetSeatSelections();
+          }
+        });
+      }
+
+      if (decreaseChildren) {
+        decreaseChildren.addEventListener('click', function() {
+          const current = parseInt(childrenCount.value);
+          if (current > 0) {
+            childrenCount.value = current - 1;
+            updateSeatsToSelect();
+            // Mark that passenger count has changed
+            lastChildCount = current - 1;
+            // Important: We've changed passenger count, so we should reset seat selections
+            resetSeatSelections();
+          }
+        });
+      }
+
       // Navigation event listeners with improved validation flow
       nextButtons.forEach(button => {
         button.addEventListener('click', function() {
           const nextSection = this.dataset.next;
           const nextIndex = sections.indexOf(nextSection);
 
-          // Validate beforeproceeding
+          // If we're returning to seat selection from passenger info
+          if (nextSection === 'seat-selection-section' && currentStep === 1) {
+            // Check if total passenger count has changed
+            const currentAdultCount = parseInt(adultCount.value);
+            const currentChildCount = parseInt(childrenCount.value);
+
+            // If counts have changed, we should have already reset seats
+            // This check is mostly for redundancy
+            if (currentAdultCount !== lastAdultCount || currentChildCount !== lastChildCount) {
+              resetSeatSelections();
+              lastAdultCount = currentAdultCount;
+              lastChildCount = currentChildCount;
+            }
+          }
+
+          // Validate before proceeding
           if (nextIndex === 2) { // Before seat selection
             if (validatePassengerInfo()) {
               showStep(nextIndex);
               // Update steps-to-select text with animation
               const stepsToSelect = document.getElementById('seats-to-select');
-              stepsToSelect.classList.add('highlight-text');
-              setTimeout(() => {
-                stepsToSelect.classList.remove('highlight-text');
-              }, 1500);
+              if (stepsToSelect) {
+                stepsToSelect.classList.add('highlight-text');
+                setTimeout(() => {
+                  stepsToSelect.classList.remove('highlight-text');
+                }, 1500);
+              }
             }
           } else if (nextIndex === 3) { // Before confirmation
             if (validateSeatSelection()) {
@@ -1965,101 +2039,65 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
         });
       });
 
-      // Previous step with improved transitions
+      // Previous step with seat preservation
       prevButtons.forEach(button => {
         button.addEventListener('click', function() {
           const prevSection = this.dataset.prev;
           const prevIndex = sections.indexOf(prevSection);
+
+          // If we're going from seat selection back to passenger info
+          if (prevSection === 'passenger-info-section' && currentStep === 2) {
+            // Store current counts to compare later
+            lastAdultCount = parseInt(adultCount.value);
+            lastChildCount = parseInt(childrenCount.value);
+          }
+
           showStep(prevIndex);
         });
       });
 
       // Directly clickable step indicators (only if appropriate)
       steps.forEach((step, index) => {
-        document.getElementById(step).addEventListener('click', function() {
-          // Only allow clicking to steps that are completed or the next one
-          if (index <= currentStep + 1 && !alreadyBooked) {
-            // Validate before allowing skips forward
-            if (index > currentStep) {
-              if (currentStep === 0 && index === 2) {
-                // Trying to skip passenger info to seat selection
-                if (validatePassengerInfo()) {
-                  showStep(index);
-                }
-              } else if (currentStep === 0 && index === 3) {
-                // Trying to skip to confirmation
-                if (validatePassengerInfo()) {
-                  // First go to seat selection
-                  showStep(2);
-                  // Then validate seat selection before allowing final step
-                  setTimeout(() => {
-                    if (validateSeatSelection()) {
-                      showStep(index);
-                    }
-                  }, 500);
-                }
-              } else if (currentStep === 1 && index === 3) {
-                // Trying to skip seat selection to confirmation
-                if (validateSeatSelection()) {
+        const stepElement = document.getElementById(step);
+        if (stepElement) {
+          stepElement.addEventListener('click', function() {
+            // Only allow clicking to steps that are completed or the next one
+            if (index <= currentStep + 1 && !alreadyBooked) {
+              // Validate before allowing skips forward
+              if (index > currentStep) {
+                if (currentStep === 0 && index === 2) {
+                  // Trying to skip passenger info to seat selection
+                  if (validatePassengerInfo()) {
+                    showStep(index);
+                  }
+                } else if (currentStep === 0 && index === 3) {
+                  // Trying to skip to confirmation
+                  if (validatePassengerInfo()) {
+                    // First go to seat selection
+                    showStep(2);
+                    // Then validate seat selection before allowing final step
+                    setTimeout(() => {
+                      if (validateSeatSelection()) {
+                        showStep(index);
+                      }
+                    }, 500);
+                  }
+                } else if (currentStep === 1 && index === 3) {
+                  // Trying to skip seat selection to confirmation
+                  if (validateSeatSelection()) {
+                    showStep(index);
+                  }
+                } else {
                   showStep(index);
                 }
               } else {
+                // Going backward is always allowed
                 showStep(index);
               }
-            } else {
-              // Going backward is always allowed
-              showStep(index);
             }
-          }
-        });
+          });
+        }
       });
-
-      // Update seats to select
-      function updateSeatsToSelect() {
-        const total = parseInt(adultCount.value) + parseInt(childrenCount.value);
-        seatsToSelect.textContent = total;
-      }
-
-      // Handle counter buttons
-      if (increaseAdults) {
-        increaseAdults.addEventListener('click', function() {
-          const current = parseInt(adultCount.value);
-          if (current < 8) {
-            adultCount.value = current + 1;
-            updateSeatsToSelect();
-          }
-        });
-      }
-
-      if (decreaseAdults) {
-        decreaseAdults.addEventListener('click', function() {
-          const current = parseInt(adultCount.value);
-          if (current > 1) {
-            adultCount.value = current - 1;
-            updateSeatsToSelect();
-          }
-        });
-      }
-
-      if (increaseChildren) {
-        increaseChildren.addEventListener('click', function() {
-          const current = parseInt(childrenCount.value);
-          if (current < 8) {
-            childrenCount.value = current + 1;
-            updateSeatsToSelect();
-          }
-        });
-      }
-
-      if (decreaseChildren) {
-        decreaseChildren.addEventListener('click', function() {
-          const current = parseInt(childrenCount.value);
-          if (current > 0) {
-            childrenCount.value = current - 1;
-            updateSeatsToSelect();
-          }
-        });
-      }
 
       // Switch cabin tabs
       cabinTabs.forEach(tab => {
@@ -2121,98 +2159,124 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
       // Update selected seats UI
       function updateSelectedSeatsUI() {
         // Update hidden inputs for form submission
-        selectedSeatsInputs.innerHTML = '';
-        selectedSeats.forEach(id => {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = 'selected_seats[]';
-          input.value = id;
-          selectedSeatsInputs.appendChild(input);
-        });
+        if (selectedSeatsInputs) {
+          selectedSeatsInputs.innerHTML = '';
+          selectedSeats.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'selected_seats[]';
+            input.value = id;
+            selectedSeatsInputs.appendChild(input);
+          });
+        }
 
         // Update visible chips
-        selectedSeatsChips.innerHTML = '';
-        if (selectedSeats.length > 0) {
-          noSeatsSelected.style.display = 'none';
-          selectedSeats.forEach(id => {
-            const chip = document.createElement('div');
-            chip.className = 'px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium flex items-center';
-            chip.innerHTML = `
-              ${id}
-              <button type="button" class="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none" data-seat-id="${id}">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                </svg>
-              </button>
-            `;
-            selectedSeatsChips.appendChild(chip);
+        if (selectedSeatsChips) {
+          selectedSeatsChips.innerHTML = '';
+          if (selectedSeats.length > 0) {
+            if (noSeatsSelected) {
+              noSeatsSelected.style.display = 'none';
+            }
+            selectedSeats.forEach(id => {
+              const chip = document.createElement('div');
+              chip.className = 'px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium flex items-center';
+              chip.innerHTML = `
+            ${id}
+            <button type="button" class="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none" data-seat-id="${id}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          `;
+              selectedSeatsChips.appendChild(chip);
 
-            // Add click event to remove button
-            const removeButton = chip.querySelector('button');
-            removeButton.addEventListener('click', function() {
-              const seatId = this.dataset.seatId;
-              const seat = document.querySelector(`.seat[data-seat-id="${seatId}"]`);
-              if (seat) {
-                seat.classList.remove('selected');
-              }
-              selectedSeats = selectedSeats.filter(id => id !== seatId);
-              updateSelectedSeatsUI();
+              // Add click event to remove button
+              const removeButton = chip.querySelector('button');
+              removeButton.addEventListener('click', function() {
+                const seatId = this.dataset.seatId;
+                const seat = document.querySelector(`.seat[data-seat-id="${seatId}"]`);
+                if (seat) {
+                  seat.classList.remove('selected');
+                }
+                selectedSeats = selectedSeats.filter(id => id !== seatId);
+                updateSelectedSeatsUI();
+              });
             });
-          });
-        } else {
-          noSeatsSelected.style.display = 'block';
-          selectedSeatsChips.appendChild(noSeatsSelected);
+          } else {
+            if (noSeatsSelected) {
+              noSeatsSelected.style.display = 'block';
+              selectedSeatsChips.appendChild(noSeatsSelected);
+            }
+          }
         }
       }
 
       // Update summary
+      // Update summary
       function updateSummary() {
-        summaryPassengerName.textContent = passengerNameInput.value || '-';
-        summaryPassengerEmail.textContent = passengerEmailInput.value || '-';
-        summaryPassengerPhone.textContent = passengerPhoneInput.value || '-';
+        if (summaryPassengerName) {
+          summaryPassengerName.textContent = passengerNameInput.value || '-';
+        }
+        if (summaryPassengerEmail) {
+          summaryPassengerEmail.textContent = passengerEmailInput.value || '-';
+        }
+        if (summaryPassengerPhone) {
+          summaryPassengerPhone.textContent = passengerPhoneInput.value || '-';
+        }
 
-        const cabinClassText = cabinClassSelect.options[cabinClassSelect.selectedIndex].text;
-        summaryCabinClass.textContent = cabinClassText || '-';
+        if (summaryCabinClass && cabinClassSelect) {
+          const cabinClassText = cabinClassSelect.options[cabinClassSelect.selectedIndex].text;
+          summaryCabinClass.textContent = cabinClassText || '-';
+        }
 
-        summaryAdultCount.textContent = adultCount.value || '0';
-        summaryChildrenCount.textContent = childrenCount.value || '0';
+        if (summaryAdultCount) {
+          summaryAdultCount.textContent = adultCount.value || '0';
+        }
+        if (summaryChildrenCount) {
+          summaryChildrenCount.textContent = childrenCount.value || '0';
+        }
 
-        if (selectedSeats.length > 0) {
-          summarySelectedSeats.textContent = selectedSeats.join(', ');
-        } else {
-          summarySelectedSeats.textContent = '-';
+        if (summarySelectedSeats) {
+          if (selectedSeats.length > 0) {
+            summarySelectedSeats.textContent = selectedSeats.join(', ');
+          } else {
+            summarySelectedSeats.textContent = '-';
+          }
         }
       }
 
       // Form validation
-      document.getElementById('booking-form').addEventListener('submit', function(e) {
-        if (alreadyBooked) {
-          e.preventDefault();
-          showToast('You have already booked this flight. You cannot make another booking.', 'error');
-          return false;
-        }
+      const bookingForm = document.getElementById('booking-form');
+      if (bookingForm) {
+        bookingForm.addEventListener('submit', function(e) {
+          if (alreadyBooked) {
+            e.preventDefault();
+            showToast('You have already booked this flight. You cannot make another booking.', 'error');
+            return false;
+          }
 
-        if (!validatePassengerInfo() || !validateSeatSelection()) {
-          e.preventDefault();
-          return false;
-        }
+          if (!validatePassengerInfo() || !validateSeatSelection()) {
+            e.preventDefault();
+            return false;
+          }
 
-        // Show loading overlay
-        const loadingOverlay = document.createElement('div');
-        loadingOverlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-        loadingOverlay.innerHTML = `
-          <div class="bg-white p-5 rounded-lg shadow-lg flex flex-col items-center">
-            <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p class="text-gray-700 font-medium">Processing your booking...</p>
-          </div>
-        `;
-        document.body.appendChild(loadingOverlay);
+          // Show loading overlay
+          const loadingOverlay = document.createElement('div');
+          loadingOverlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+          loadingOverlay.innerHTML = `
+        <div class="bg-white p-5 rounded-lg shadow-lg flex flex-col items-center">
+          <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p class="text-gray-700 font-medium">Processing your booking...</p>
+        </div>
+      `;
+          document.body.appendChild(loadingOverlay);
 
-        return true;
-      });
+          return true;
+        });
+      }
 
       // Initialize Select2 for cabin class
-      if ($.fn.select2) {
+      if (typeof $ !== 'undefined' && $.fn.select2) {
         $(document).ready(function() {
           $('#cabin_class').select2({
             placeholder: 'Select cabin class',
@@ -2221,16 +2285,14 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
         });
       }
 
-      // Initialize tooltips (if supported)
-      if (typeof tippy !== 'undefined') {
-        tippy('[data-tippy-content]');
-      }
-
       // Make progress bar visible
       const bookingProgress = document.getElementById('booking-progress');
       if (bookingProgress) {
         bookingProgress.classList.remove('hidden');
       }
+
+      // Initial setup
+      updateSeatsToSelect();
     });
   </script>
 </body>

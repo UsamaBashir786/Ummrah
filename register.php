@@ -1,4 +1,7 @@
 <?php
+// Start the session at the very beginning
+session_start();
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $db_host = "localhost";
   $db_user = "root";
@@ -16,13 +19,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $upload_success = move_uploaded_file($_FILES["profile_image"]["tmp_name"], $profile_image);
 
   if ($upload_success) {
+    $email = $_POST['email'];
     $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
+    
     $stmt = $conn->prepare("INSERT INTO users (full_name, email, phone_number, date_of_birth, profile_image, gender, address, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
 
     $stmt->bind_param(
-      "ssssssss", // Fixed: Added missing 's' parameter for password
+      "ssssssss",
       $_POST['full_name'],
-      $_POST['email'],
+      $email,
       $_POST['phone_number'],
       $_POST['date_of_birth'],
       $profile_image,
@@ -32,17 +37,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     );
     
     if ($stmt->execute()) {
+      // Get the user ID of the newly registered user
+      $user_id = $conn->insert_id;
+      
+      // Set session variables to log the user in
+      $_SESSION['user_id'] = $user_id;
+      $_SESSION['full_name'] = $_POST['full_name'];
+      $_SESSION['email'] = $email;
+      $_SESSION['logged_in'] = true;
+      
 ?>
       <script>
         document.addEventListener('DOMContentLoaded', function() {
           Swal.fire({
             title: 'Success!',
-            text: 'Registration completed successfully',
+            text: 'Registration completed successfully. You are now logged in!',
             icon: 'success',
             confirmButtonText: 'OK'
           }).then((result) => {
             if (result.isConfirmed) {
-              window.location.href = 'thankyou.php';
+              // Redirect to user dashboard or homepage after login
+              window.location.href = 'index.php';
             }
           });
         });
@@ -80,7 +95,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $conn->close();
 }
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">

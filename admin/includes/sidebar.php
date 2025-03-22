@@ -119,6 +119,7 @@
       <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="flight-dropdown">
         <a href="view-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">View Flights</a>
         <a href="add-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Flight</a>
+        <a href="booked-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Booked Flights</a>
       </div>
     </div>
 
