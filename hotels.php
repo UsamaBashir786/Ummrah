@@ -2,10 +2,19 @@
 session_start();
 include 'connection/connection.php';
 
+// Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
-  header('Location: login.php');
-  exit();
+  // Store return URL for later login
+  $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'];
+
+  // Optionally, display a message instead of redirecting
+
+  // Set a default user_id for non-logged-in users (optional)
+  $user_id = null;
+} else {
+  $user_id = $_SESSION['user_id'];
 }
+
 
 // Fetch filter values from GET parameters
 $location = isset($_GET['location']) ? $_GET['location'] : '';

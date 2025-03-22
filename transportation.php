@@ -4,13 +4,17 @@ include 'connection/connection.php';
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
-  // Redirect to login page with return URL
+  // Store return URL for later login
   $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'];
-  header("Location: login.php?message=" . urlencode("Please login to book transportation"));
-  exit();
+
+  // Optionally, display a message instead of redirecting
+
+  // Set a default user_id for non-logged-in users (optional)
+  $user_id = null;
+} else {
+  $user_id = $_SESSION['user_id'];
 }
 
-$user_id = $_SESSION['user_id'];
 
 // Function to get taxi routes
 function getTaxiRoutes()

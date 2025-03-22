@@ -7,7 +7,27 @@ require_once('vendor/autoload.php');
 
 // Ensure user is logged in
 if (!isset($_SESSION['user_id'])) {
-  die("Error: You must be logged in.");
+  die("<div style='
+        color: #721c24; 
+        background-color: #f8d7da; 
+        border: 1px solid #f5c6cb; 
+        padding: 15px; 
+        border-radius: 5px; 
+        font-family: Arial, sans-serif;
+        width: 50%;
+        margin: 20px auto;
+        text-align: center;
+      '>
+        <strong>Error:</strong> You must be logged in.<br><br>
+        <button onclick='window.history.back()' style='
+          background-color: #dc3545; 
+          color: white; 
+          border: none; 
+          padding: 10px 15px; 
+          border-radius: 5px; 
+          cursor: pointer;
+        '>Go Back</button>
+      </div>");
 }
 
 $package = [];
