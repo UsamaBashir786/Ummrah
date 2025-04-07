@@ -2126,6 +2126,34 @@ $package_bookings = $package_stmt->get_result();
         modal.style.display = 'none';
       }
     }
+    // View Package Details Function
+    function viewPackageDetails(packageId) {
+      const modal = document.getElementById('flightDetailsModal');
+      const contentDiv = document.getElementById('flightDetailsContent');
+
+      // Change the modal title
+      const modalTitle = modal.querySelector('h2');
+      if (modalTitle) {
+        modalTitle.textContent = 'Package Details';
+      }
+
+      modal.style.display = 'flex';
+
+      // Fetch package details via AJAX
+      fetch(`get_package_details.php?package_id=${packageId}`)
+        .then(response => response.text())
+        .then(data => {
+          contentDiv.innerHTML = data;
+        })
+        .catch(error => {
+          contentDiv.innerHTML = `
+        <div class="bg-red-100 p-4 rounded-lg text-red-700">
+          <p>Error loading package details. Please try again later.</p>
+        </div>
+      `;
+          console.error('Error fetching package details:', error);
+        });
+    }
   </script>
 </body>
 

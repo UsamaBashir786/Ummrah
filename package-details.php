@@ -125,44 +125,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-    
+
     body {
       font-family: 'Poppins', sans-serif;
       background-color: #f5f7fa;
     }
-    
+
     .hero-gradient {
       background: linear-gradient(to right, rgba(0, 128, 128, 0.9), rgba(0, 0, 0, 0.6));
     }
-    
+
     .package-card {
       border-radius: 16px;
       overflow: hidden;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
       transition: all 0.3s ease;
     }
-    
+
     .package-card:hover {
       box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
       transform: translateY(-5px);
     }
-    
+
     .feature-icon {
       background: linear-gradient(135deg, #20c997, #0d6efd);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
-    
+
     .book-btn {
       background: linear-gradient(135deg, #20c997, #0d6efd);
       transition: all 0.3s ease;
     }
-    
+
     .book-btn:hover {
       transform: translateY(-3px);
       box-shadow: 0 7px 15px rgba(13, 110, 253, 0.3);
     }
-    
+
     .section-title::after {
       content: '';
       display: block;
@@ -171,12 +171,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       background: linear-gradient(to right, #20c997, #0d6efd);
       margin-top: 10px;
     }
-    
+
     .tab-btn {
       position: relative;
       transition: all 0.3s ease;
     }
-    
+
     .tab-btn.active::after {
       content: '';
       position: absolute;
@@ -186,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       height: 3px;
       background: linear-gradient(to right, #20c997, #0d6efd);
     }
-    
+
     .dot-separator {
       display: inline-block;
       width: 4px;
@@ -196,18 +196,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       margin: 0 10px;
       opacity: 0.5;
     }
-    
+
     .glass-card {
       background: rgba(255, 255, 255, 0.8);
       backdrop-filter: blur(10px);
       border: 1px solid rgba(255, 255, 255, 0.3);
     }
-    
+
     .info-card {
       border-left: 4px solid #20c997;
       transition: all 0.3s ease;
     }
-    
+
     .info-card:hover {
       transform: translateX(5px);
     }
@@ -269,13 +269,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Reviews
           </button>
         </div>
-        
+
         <!-- Package Details Content -->
         <div class="bg-white rounded-b-xl p-6 md:p-8 shadow-md mb-8">
           <!-- Overview Section -->
           <section id="overview">
             <h2 class="section-title text-2xl font-bold text-gray-800 mb-6">Package Overview</h2>
-            
+
             <!-- Flight Details -->
             <div class="bg-gray-50 rounded-xl p-6 mb-8">
               <h3 class="flex items-center text-lg font-semibold text-gray-800 mb-4">
@@ -293,7 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
               </div>
             </div>
-            
+
             <!-- Description Section -->
             <div class="mb-8">
               <h3 class="flex items-center text-lg font-semibold text-gray-800 mb-4">
@@ -306,7 +306,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </p>
               </div>
             </div>
-            
+
             <!-- Inclusions Section -->
             <div class="mb-8">
               <h3 class="flex items-center text-lg font-semibold text-gray-800 mb-4">
@@ -360,7 +360,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
               </div>
             </div>
-            
+
             <!-- Additional Features -->
             <div class="bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl p-6 border border-teal-100">
               <h3 class="text-lg font-semibold text-gray-800 mb-4">Special Features</h3>
@@ -397,7 +397,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </section>
         </div>
       </div>
-      
+
       <!-- Sidebar Column -->
       <div class="md:col-span-1">
         <!-- Booking Card -->
@@ -406,14 +406,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <h3 class="text-xl font-bold text-gray-800 mb-2">Book This Package</h3>
             <p class="text-gray-600 text-sm">Secure your spot for this blessed journey</p>
           </div>
-          
+
           <div class="mb-6">
             <p class="text-gray-500 text-sm mb-1">Price per person</p>
             <div class="text-3xl font-bold text-teal-600">
               $<?= isset($package['price']) ? number_format($package['price'], 2) : '0.00' ?>
             </div>
           </div>
-          
+
           <div class="mb-6">
             <div class="flex items-center justify-between text-sm text-gray-600 mb-2">
               <span>Airline</span>
@@ -428,7 +428,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <span class="font-medium"><?= htmlspecialchars($package['package_type'] ?? 'N/A') ?></span>
             </div>
           </div>
-          
+
           <form method="POST" action="">
             <input type="hidden" name="package_id" value="<?= htmlspecialchars($package['id'] ?? '0') ?>">
             <input type="hidden" name="total_price" value="<?= htmlspecialchars($package['price'] ?? '0.00') ?>">
@@ -436,7 +436,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <i class="fas fa-check-circle mr-2"></i> Book Now
             </button>
           </form>
-          
+
           <div class="mt-6 text-center">
             <p class="text-sm text-gray-500">Secure payment with Stripe</p>
             <div class="flex justify-center mt-2 space-x-2">
@@ -446,7 +446,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           </div>
         </div>
-        
+
         <!-- Need Help Card -->
         <div class="bg-white rounded-xl shadow-md p-6">
           <h3 class="text-xl font-bold text-gray-800 mb-4">Need Help?</h3>
@@ -479,7 +479,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     document.addEventListener("DOMContentLoaded", function() {
       // Tab functionality
       const tabButtons = document.querySelectorAll('.tab-btn');
-      
+
       tabButtons.forEach(button => {
         button.addEventListener('click', () => {
           // Remove active class from all buttons
@@ -488,14 +488,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             btn.classList.add('text-gray-500');
             btn.classList.remove('text-gray-800');
           });
-          
+
           // Add active class to clicked button
           button.classList.add('active');
           button.classList.remove('text-gray-500');
           button.classList.add('text-gray-800');
         });
       });
-      
+
       <?php if ($booking_success === false) : ?>
         Swal.fire({
           title: "Booking Failed",
@@ -506,7 +506,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php endif; ?>
     });
   </script>
+  <script>
+    // View Package Details Function
+    function viewPackageDetails(packageId) {
+      const modal = document.getElementById('flightDetailsModal');
+      const contentDiv = document.getElementById('flightDetailsContent');
 
+      // Change the modal title
+      const modalTitle = modal.querySelector('h2');
+      if (modalTitle) {
+        modalTitle.textContent = 'Package Details';
+      }
+
+      modal.style.display = 'flex';
+
+      // Fetch package details via AJAX
+      fetch(`get_package_details.php?package_id=${packageId}`)
+        .then(response => response.text())
+        .then(data => {
+          contentDiv.innerHTML = data;
+        })
+        .catch(error => {
+          contentDiv.innerHTML = `
+        <div class="bg-red-100 p-4 rounded-lg text-red-700">
+          <p>Error loading package details. Please try again later.</p>
+        </div>
+      `;
+          console.error('Error fetching package details:', error);
+        });
+    }
+  </script>
 </body>
 
 </html>
