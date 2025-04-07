@@ -136,6 +136,7 @@
       <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="hotels-dropdown">
         <a href="view-hotels.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">View Hotels</a>
         <a href="add-hotels.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Hotel</a>
+        <a href="booked-hotels.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Booked Hotels</a>
       </div>
     </div>
 

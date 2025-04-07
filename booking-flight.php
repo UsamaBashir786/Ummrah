@@ -179,11 +179,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_flight'])) {
             adult_count INT NOT NULL DEFAULT 1,
             children_count INT NOT NULL DEFAULT 0,
             seats JSON NOT NULL,
+            return_flight_data JSON NULL,
             booking_date DATETIME NOT NULL,
             FOREIGN KEY (flight_id) REFERENCES flights(id),
             FOREIGN KEY (user_id) REFERENCES users(id)
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
           $conn->query($create_table_sql);
+        } else {
+          // Check if return_flight_data column exists
+          $check_return_column = $conn->query("SHOW COLUMNS FROM flight_bookings LIKE 'return_flight_data'");
+
+          // Add return_flight_data column if it doesn't exist
+          if ($check_return_column->num_rows == 0) {
+            $alter_table_sql = "ALTER TABLE flight_bookings 
+                ADD COLUMN return_flight_data JSON NULL AFTER seats";
+            $conn->query($alter_table_sql);
+          }
         }
 
         // Check if seats are still available
@@ -208,9 +219,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_flight'])) {
           }
         }
 
+        // Get return flight data from original flight
+        $return_flight_data = null;
+        if (isset($flight_details['return_flight_data']) && !empty($flight_details['return_flight_data'])) {
+          $return_flight_data = $flight_details['return_flight_data'];
+        }
+
         // Instead of looping through seats, create one booking with all seats
         $seats_json = json_encode($selected_seats);
 
+        // Updated SQL query to include return_flight_data
         $booking_sql = "INSERT INTO flight_bookings (
           flight_id, 
           user_id,
@@ -221,12 +239,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_flight'])) {
           adult_count, 
           children_count, 
           seats, 
+          return_flight_data,
           booking_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
 
         $booking_stmt = $conn->prepare($booking_sql);
         $booking_stmt->bind_param(
-          "iissssiss",
+          "iissssisss",
           $flight_id,
           $user_id,
           $passenger_name,
@@ -235,7 +254,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_flight'])) {
           $selected_cabin,
           $adult_count,
           $children_count,
-          $seats_json
+          $seats_json,
+          $return_flight_data  // Add return flight data to the prepared statement
         );
         $booking_stmt->execute();
 
@@ -842,7 +862,7 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
   </style>
 </head>
 
-<body class="bg-gray-50 min-h-screen py-6 px-4 sm:px-6 lg:px-8">
+<body class="bg-gray-50 min-h-screen py-6">
   <?php include 'includes/navbar.php'; ?>
 
   <div class="max-w-5xl mx-auto">
@@ -1011,7 +1031,7 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
                   <div class="h-1 flex-1 mx-1 bg-gray-300"></div>
                   <div class="h-1 w-2 bg-gray-300 rounded-full"></div>
                 </div>
-                <p class="text-gray-700 font-medium mt-1"><?php echo $flight_duration; ?></p>
+                <p class="text-gray-600"><?php echo htmlspecialchars($flight_details['flight_duration'] ?? 'N/A'); ?> hours</p>
               </div>
 
               <!-- Arrival -->
@@ -1353,7 +1373,7 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
 
               <div class="bg-white rounded-lg p-4 mb-4 shadow-sm">
                 <div class="flex justify-between items-center mb-2">
-                  <div class="font-bold"><?php echo htmlspecialchars($flight_details['airline'] ?? 'Airline'); ?></div>
+                  <div class="font-bold"><?php echo htmlspecialchars($flight_details['airline_name'] ?? 'Airline'); ?></div>
                   <div class="text-sm text-gray-500">Flight #<?php echo htmlspecialchars($flight_details['flight_number']); ?></div>
                 </div>
 
@@ -1366,7 +1386,7 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
 
                   <div class="w-1/5 flex flex-col items-center justify-center">
                     <div class="text-sm text-gray-500">Duration</div>
-                    <div class="text-sm font-medium"><?php echo $flight_duration; ?></div>
+                    <p class="text-gray-600"><?php echo htmlspecialchars($flight_details['flight_duration'] ?? 'N/A'); ?> hours</p>
                   </div>
 
                   <div class="w-2/5 text-right">
@@ -1375,7 +1395,92 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
                     <div class="text-sm"><?php echo $arrival_time_formatted; ?>, <?php echo $departure_date_formatted; ?></div>
                   </div>
                 </div>
+
+                <?php
+                // Display stops information if available
+                $stops = json_decode($flight_details['stops'] ?? '{}', true);
+                if (is_array($stops) && !empty($stops)):
+                ?>
+                  <div class="mt-3 pt-3 border-t border-gray-200">
+                    <div class="text-sm text-gray-500 mb-2">Stops:</div>
+                    <div class="flex flex-wrap gap-2">
+                      <?php foreach ($stops as $stop): ?>
+                        <span class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs">
+                          <?php echo htmlspecialchars($stop['city']); ?> (<?php echo htmlspecialchars($stop['duration']); ?> hrs)
+                        </span>
+                      <?php endforeach; ?>
+                    </div>
+                  </div>
+                <?php endif; ?>
+
+                <?php if (isset($flight_details['distance']) && !empty($flight_details['distance'])): ?>
+                  <div class="mt-3 pt-3 border-t border-gray-200">
+                    <div class="text-sm text-gray-500">Distance:</div>
+                    <div class="font-medium"><?php echo htmlspecialchars($flight_details['distance']); ?> km</div>
+                  </div>
+                <?php endif; ?>
               </div>
+
+              <!-- Return Flight Summary (if available) -->
+              <?php if (isset($flight_details['return_flight_data']) && !empty($flight_details['return_flight_data'])):
+                $return_data = json_decode($flight_details['return_flight_data'], true);
+                if (isset($return_data['has_return']) && $return_data['has_return'] == 1):
+              ?>
+                  <h3 class="text-lg font-medium text-gray-800 mb-4 mt-6">Return Flight Summary</h3>
+                  <div class="bg-white rounded-lg p-4 mb-4 shadow-sm border-l-4 border-purple-500">
+                    <div class="flex justify-between items-center mb-2">
+                      <div class="font-bold"><?php echo htmlspecialchars($return_data['return_airline'] ?? 'Airline'); ?></div>
+                      <div class="text-sm text-gray-500">Flight #<?php echo htmlspecialchars($return_data['return_flight_number']); ?></div>
+                    </div>
+
+                    <div class="flex items-start space-x-4">
+                      <div class="w-2/5">
+                        <div class="text-sm text-gray-500">From</div>
+                        <div class="font-medium"><?php echo htmlspecialchars($flight_details['arrival_city']); ?></div>
+                        <div class="text-sm">
+                          <?php
+                          $return_time_formatted = isset($return_data['return_time']) ?
+                            date('g:i A', strtotime($return_data['return_time'])) : 'N/A';
+                          $return_date_formatted = isset($return_data['return_date']) ?
+                            date('D, M j, Y', strtotime($return_data['return_date'])) : 'N/A';
+                          echo $return_time_formatted . ', ' . $return_date_formatted;
+                          ?>
+                        </div>
+                      </div>
+
+                      <div class="w-1/5 flex flex-col items-center justify-center">
+                        <div class="text-sm text-gray-500">Duration</div>
+                        <p class="text-gray-600"><?php echo htmlspecialchars($return_data['return_flight_duration'] ?? 'N/A'); ?> hours</p>
+                      </div>
+
+                      <div class="w-2/5 text-right">
+                        <div class="text-sm text-gray-500">To</div>
+                        <div class="font-medium"><?php echo htmlspecialchars($flight_details['departure_city']); ?></div>
+                        <div class="text-sm"><?php echo $return_date_formatted; ?></div>
+                      </div>
+                    </div>
+
+                    <!-- Return Flight Stops (if any) -->
+                    <?php
+                    if (isset($return_data['return_stops']) && $return_data['return_stops'] != '"direct"'):
+                      $return_stops = json_decode($return_data['return_stops'], true);
+                      if (is_array($return_stops) && !empty($return_stops)):
+                    ?>
+                        <div class="mt-3 pt-3 border-t border-gray-200">
+                          <div class="text-sm text-gray-500 mb-2">Stops:</div>
+                          <div class="flex flex-wrap gap-2">
+                            <?php foreach ($return_stops as $stop): ?>
+                              <span class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs">
+                                <?php echo htmlspecialchars($stop['city']); ?> (<?php echo htmlspecialchars($stop['duration']); ?> hrs)
+                              </span>
+                            <?php endforeach; ?>
+                          </div>
+                        </div>
+                      <?php endif; ?>
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
+              <?php endif; ?>
 
               <h3 class="text-lg font-medium text-gray-800 mb-4">Passenger Information</h3>
 
@@ -1423,6 +1528,21 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
                   <div class="font-medium" id="summary-selected-seats">-</div>
                 </div>
               </div>
+
+              <?php if (isset($flight_details['return_flight_data']) && !empty($flight_details['return_flight_data'])):
+                $return_data = json_decode($flight_details['return_flight_data'], true);
+                if (isset($return_data['has_return']) && $return_data['has_return'] == 1):
+              ?>
+                  <div class="bg-purple-50 p-4 rounded-lg mt-4">
+                    <p class="text-sm text-purple-700">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                      </svg>
+                      You're booking a round-trip flight. Your selected seats will be reserved for the outbound journey.
+                    </p>
+                  </div>
+                <?php endif; ?>
+              <?php endif; ?>
             </div>
 
             <div class="mt-8 flex justify-between">
@@ -1605,6 +1725,14 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
             if (stepIndex === 3) {
               updateSummary();
             }
+
+            // If we're moving to seat selection, apply the currently selected cabin class
+            if (stepIndex === 2 && cabinClassSelect) {
+              // Get the selected cabin class value
+              const selectedCabinClass = cabinClassSelect.value;
+              // Apply the cabin class filter to show appropriate seats
+              filterSeatsByCabinClass(selectedCabinClass);
+            }
           }, 300);
 
           // Scroll to top
@@ -1653,18 +1781,18 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
           const message = document.createElement('div');
           message.className = 'bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg mb-6 shadow-sm mt-6';
           message.innerHTML = `
-        <div class="flex">
-          <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-            </svg>
-          </div>
-          <div class="ml-3">
-            <p class="text-sm text-amber-700 font-medium">You have already booked this flight.</p>
-            <p class="text-sm text-amber-700 mt-1">You cannot make duplicate bookings for the same flight.</p>
-          </div>
-        </div>
-      `;
+    <div class="flex">
+      <div class="flex-shrink-0">
+        <svg class="h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+        </svg>
+      </div>
+      <div class="ml-3">
+        <p class="text-sm text-amber-700 font-medium">You have already booked this flight.</p>
+        <p class="text-sm text-amber-700 mt-1">You cannot make duplicate bookings for the same flight.</p>
+      </div>
+    </div>
+  `;
 
           // Insert after the navbar and before the first child of the container
           const firstElement = container.querySelector(':first-child');
@@ -1675,20 +1803,19 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
           }
         }
       }
-
       // Filter seats based on selected cabin class
       function filterSeatsByCabinClass(selectedCabinClass) {
-        // First, reset all tabs
-        cabinTabs.forEach(tab => {
-          tab.classList.remove('active');
+        if (!selectedCabinClass) return;
 
-          // If this tab matches the selected cabin, activate it
-          if (tab.dataset.cabin === selectedCabinClass) {
-            tab.classList.add('active');
-          }
-        });
+        console.log("Filtering seats for cabin class:", selectedCabinClass);
 
-        // Then show only the matching cabin's seats
+        // Hide all cabin tabs container
+        const cabinTabsContainer = document.querySelector('.cabin-tab').parentNode;
+        if (cabinTabsContainer) {
+          cabinTabsContainer.style.display = 'none';
+        }
+
+        // Then show only the matching cabin's seats and hide others
         seatCabins.forEach(cabin => {
           if (cabin.dataset.cabin === selectedCabinClass) {
             cabin.classList.remove('hidden');
@@ -1696,18 +1823,6 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
             cabin.classList.add('hidden');
           }
         });
-
-        // Show only the relevant cabin tab and hide others
-        const cabinTabContainer = document.querySelector('.cabin-tab').parentNode;
-        if (cabinTabContainer) {
-          Array.from(cabinTabContainer.children).forEach(tabElement => {
-            if (tabElement.dataset && tabElement.dataset.cabin === selectedCabinClass) {
-              tabElement.style.display = 'block';
-            } else if (tabElement.dataset && tabElement.dataset.cabin) {
-              tabElement.style.display = 'none';
-            }
-          });
-        }
       }
 
       // Add a change event listener to the cabin class select element
@@ -1717,8 +1832,6 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
 
           // If we have a valid cabin class selected
           if (selectedCabinClass) {
-            filterSeatsByCabinClass(selectedCabinClass);
-
             // Also deselect any seats that don't belong to this cabin class
             selectedSeats = selectedSeats.filter(seatId => {
               const seatElement = document.querySelector(`.seat[data-seat-id="${seatId}"]`);
@@ -1733,15 +1846,6 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
             updateSelectedSeatsUI();
           }
         });
-
-        // Trigger the change event on page load to set the initial state
-        // Set a small timeout to ensure everything else is initialized
-        setTimeout(() => {
-          // If there's a default selection, filter to that cabin class
-          if (cabinClassSelect.value) {
-            filterSeatsByCabinClass(cabinClassSelect.value);
-          }
-        }, 100);
       }
 
       // Add enhanced validation with visual feedback
@@ -1906,20 +2010,20 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
 
         // Set content
         toast.innerHTML = `
-      <div class="flex items-center">
-        <span class="mr-2">
-          ${type === 'error' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>' : ''}
-          ${type === 'success' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>' : ''}
-          ${type === 'info' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>' : ''}
-        </span>
-        <span>${message}</span>
-        <button class="ml-4 text-white hover:text-gray-200 focus:outline-none" onclick="this.parentNode.parentNode.remove()">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-          </svg>
-        </button>
-      </div>
-    `;
+  <div class="flex items-center">
+    <span class="mr-2">
+      ${type === 'error' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>' : ''}
+      ${type === 'success' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>' : ''}
+      ${type === 'info' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>' : ''}
+    </span>
+    <span>${message}</span>
+    <button class="ml-4 text-white hover:text-gray-200 focus:outline-none" onclick="this.parentNode.parentNode.remove()">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+      </svg>
+    </button>
+  </div>
+`;
 
         // Add to DOM
         document.body.appendChild(toast);
@@ -2103,19 +2207,7 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
       cabinTabs.forEach(tab => {
         tab.addEventListener('click', function() {
           const cabinClass = this.dataset.cabin;
-
-          // Update tab active state
-          cabinTabs.forEach(t => t.classList.remove('active'));
-          this.classList.add('active');
-
-          // Show corresponding cabin
-          seatCabins.forEach(cabin => {
-            if (cabin.dataset.cabin === cabinClass) {
-              cabin.classList.remove('hidden');
-            } else {
-              cabin.classList.add('hidden');
-            }
-          });
+          filterSeatsByCabinClass(cabinClass);
         });
       });
 
@@ -2181,13 +2273,13 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
               const chip = document.createElement('div');
               chip.className = 'px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium flex items-center';
               chip.innerHTML = `
-            ${id}
-            <button type="button" class="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none" data-seat-id="${id}">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-              </svg>
-            </button>
-          `;
+        ${id}
+        <button type="button" class="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none" data-seat-id="${id}">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      `;
               selectedSeatsChips.appendChild(chip);
 
               // Add click event to remove button
@@ -2211,7 +2303,6 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
         }
       }
 
-      // Update summary
       // Update summary
       function updateSummary() {
         if (summaryPassengerName) {
@@ -2264,11 +2355,11 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
           const loadingOverlay = document.createElement('div');
           loadingOverlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
           loadingOverlay.innerHTML = `
-        <div class="bg-white p-5 rounded-lg shadow-lg flex flex-col items-center">
-          <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p class="text-gray-700 font-medium">Processing your booking...</p>
-        </div>
-      `;
+    <div class="bg-white p-5 rounded-lg shadow-lg flex flex-col items-center">
+      <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p class="text-gray-700 font-medium">Processing your booking...</p>
+    </div>
+  `;
           document.body.appendChild(loadingOverlay);
 
           return true;

@@ -19,6 +19,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $departure_date = trim($_POST['departure_date']);
   $departure_time = trim($_POST['departure_time']);
   $flight_duration = trim($_POST['flight_duration']);
+  $distance = trim($_POST['distance'] ?? ''); // New distance field
   $flight_notes = trim($_POST['flight_notes'] ?? '');
 
   // Return flight information
@@ -164,6 +165,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $errors[] = "Flight duration is required";
   }
 
+  if (empty($distance)) {
+    $errors[] = "Flight distance is required";
+  }
+
   // Validate return flight fields if round trip is selected
   if ($has_return) {
     if (empty($return_date)) {
@@ -202,16 +207,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </script>";
   } else {
     try {
-      // Updated SQL Query with flight duration and enhanced return flight data
+      // Updated SQL Query with flight duration, distance, and enhanced return flight data
       $sql = "INSERT INTO flights (
                 airline_name, flight_number, departure_city, arrival_city,
-                departure_date, departure_time, flight_duration, prices, seats, 
+                departure_date, departure_time, flight_duration, distance, prices, seats, 
                 cabin_class, flight_notes, stops, return_flight_data
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
 
       $stmt = $conn->prepare($sql);
       $stmt->bind_param(
-        "sssssssssssss",
+        "ssssssssssssss",
         $airline_name,
         $flight_number,
         $departure_city,
@@ -219,6 +224,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $departure_date,
         $departure_time,
         $flight_duration,
+        $distance,
         $prices,
         $seats,
         $cabin_class,
@@ -396,6 +402,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <label class="block text-gray-700 font-semibold mb-2">Flight Duration (hours) <span class="text-red-500">*</span></label>
                 <input type="text" name="flight_duration" class="w-full px-4 py-2 border rounded-lg" placeholder="e.g., 5.5" required>
               </div>
+            </div>
+
+            <!-- Distance Field -->
+            <div>
+              <label class="block text-gray-700 font-semibold mb-2">Distance (km) <span class="text-red-500">*</span></label>
+              <input type="text" name="distance" class="w-full px-4 py-2 border rounded-lg" placeholder="e.g., 3500" required>
             </div>
 
             <!-- Return Flight Section -->

@@ -104,14 +104,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if (isset($return_data['has_return']) && $return_data['has_return'] == 1) {
               $row['has_return'] = true;
               $row['return_flight_info'] = $return_data;
+
+              // For round trips, check if the return date matches the requested return date
+              if ($is_round_trip && !empty($return_date) && isset($return_data['return_date'])) {
+                // Only include flights where the return date matches
+                if ($return_data['return_date'] == $return_date) {
+                  $search_results[] = $row;
+                }
+              } else {
+                $search_results[] = $row;
+              }
             } else {
               $row['has_return'] = false;
+              // For one-way trips, include all flights
+              if (!$is_round_trip) {
+                $search_results[] = $row;
+              }
             }
           } else {
             $row['has_return'] = false;
+            // For one-way trips, include all flights
+            if (!$is_round_trip) {
+              $search_results[] = $row;
+            }
           }
-
-          $search_results[] = $row;
         }
       }
     } else {
@@ -351,8 +367,10 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
 
       <form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" id="flight-search-form">
         <input type="hidden" name="trip_type" id="trip_type" value="<?php echo (isset($_POST['trip_type'])) ? htmlspecialchars($_POST['trip_type']) : 'one_way'; ?>">
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 relative">
+        <?php
+        $current_date = date('d F Y'); // Format the date as "date month year"
+        ?>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative">
           <!-- From City -->
           <div class="lg:col-span-1 city-input">
             <label for="departure_city" class="block text-sm font-medium text-white mb-1">
@@ -374,9 +392,9 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
           </div>
 
           <!-- Swap Cities Button -->
-          <div class="swap-cities" id="swap-cities">
+          <!-- <div class="swap-cities" id="swap-cities">
             <i class="fas fa-exchange-alt text-emerald-600"></i>
-          </div>
+          </div> -->
 
           <!-- To City -->
           <div class="lg:col-span-1 city-input">
@@ -424,46 +442,6 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
               value="<?php echo isset($_POST['return_date']) ? htmlspecialchars($_POST['return_date']) : ''; ?>">
           </div>
 
-          <!-- Cabin Class -->
-          <div class="lg:col-span-1 city-input">
-            <label for="cabin_class" class="block text-sm font-medium text-white mb-1">
-              Cabin Class
-            </label>
-            <div class="icon">
-              <i class="fas fa-chair"></i>
-            </div>
-            <select class="w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring focus:ring-emerald-200 focus:ring-opacity-50 py-3 px-4 border bg-white"
-              id="cabin_class" name="cabin_class">
-              <option value="">Any Class</option>
-              <?php foreach ($cabin_classes as $class): ?>
-                <option value="<?php echo htmlspecialchars($class); ?>"
-                  <?php echo (isset($_POST['cabin_class']) && $_POST['cabin_class'] == $class) ? 'selected' : ''; ?>>
-                  <?php echo htmlspecialchars(ucwords($class)); ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-
-          <!-- Passengers -->
-          <div class="lg:col-span-1 city-input passengers-input" <?php echo (isset($_POST['trip_type']) && $_POST['trip_type'] == 'round_trip') ? 'style="display:none;"' : ''; ?>>
-            <label for="passengers" class="block text-sm font-medium text-white mb-1">
-              Passengers
-            </label>
-            <div class="icon">
-              <i class="fas fa-users"></i>
-            </div>
-            <div class="relative">
-              <select class="w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring focus:ring-emerald-200 focus:ring-opacity-50 py-3 px-4 border bg-white"
-                id="passengers" name="passengers">
-                <?php for ($i = 1; $i <= 9; $i++): ?>
-                  <option value="<?php echo $i; ?>"
-                    <?php echo (isset($_POST['passengers']) && $_POST['passengers'] == $i) ? 'selected' : ''; ?>>
-                    <?php echo $i . ' ' . ($i === 1 ? 'Passenger' : 'Passengers'); ?>
-                  </option>
-                <?php endfor; ?>
-              </select>
-            </div>
-          </div>
         </div>
 
         <div class="mt-6">
@@ -473,7 +451,35 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
         </div>
       </form>
     </div>
+    <!-- Refresh Button HTML -->
+    <div class="mb-6 flex justify-end">
+      <button id="refresh-button" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-300 flex items-center">
+        <i class="fas fa-sync-alt mr-2"></i> Refresh Results
+      </button>
+    </div>
 
+    <!-- JavaScript for Refresh Button -->
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        const refreshButton = document.getElementById('refresh-button');
+
+        if (refreshButton) {
+          refreshButton.addEventListener('click', function() {
+            // Add a spinning animation to the refresh icon
+            const refreshIcon = this.querySelector('.fa-sync-alt');
+            if (refreshIcon) {
+              refreshIcon.classList.add('animate-spin');
+            }
+
+            // Reload the current page without submitting forms
+            // The true parameter ensures the page is reloaded from the server, not from cache
+            setTimeout(function() {
+              window.location.reload(true);
+            }, 300);
+          });
+        }
+      });
+    </script>
     <!-- Search Results -->
     <div id="search-results" class="animate__animated animate__fadeIn">
       <?php if (!empty($error_message)): ?>
@@ -671,7 +677,7 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
                     <div class="tab" data-tab="info-<?php echo $flight['id']; ?>">
                       <i class="fas fa-info-circle mr-1"></i> Flight Information
                     </div>
-                    <?php if ($flight['has_return']): ?>
+                    <?php if (isset($flight['has_return']) && $flight['has_return']): ?>
                       <div class="tab" data-tab="return-<?php echo $flight['id']; ?>">
                         <i class="fas fa-undo-alt mr-1"></i> Return Flight
                       </div>
@@ -903,10 +909,99 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
                           </div>
                         </div>
                       </div>
+
+                      <!-- Return Flight Information Panel -->
+                      <?php
+                      if (isset($flight['return_flight_data']) && !empty($flight['return_flight_data'])):
+                        $return_data = json_decode($flight['return_flight_data'], true);
+                        if ($return_data && isset($return_data['has_return']) && $return_data['has_return'] == 1):
+                      ?>
+                          <div class="mt-6 bg-purple-50 rounded-lg p-4 border border-purple-200">
+                            <h3 class="text-lg font-medium text-purple-700 mb-2">
+                              <i class="fas fa-plane-arrival mr-2"></i> Return Flight Information
+                            </h3>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <!-- Return flight details -->
+                                <div class="mb-3">
+                                  <p class="text-sm text-gray-600 mb-1">Return Route</p>
+                                  <p class="font-medium">
+                                    <?php echo htmlspecialchars($flight['arrival_city']); ?> to <?php echo htmlspecialchars($flight['departure_city']); ?>
+                                  </p>
+                                </div>
+
+                                <?php if (isset($return_data['return_date'])): ?>
+                                  <div class="mb-3">
+                                    <p class="text-sm text-gray-600 mb-1">Return Date</p>
+                                    <p class="font-medium">
+                                      <?php echo date('D, M j, Y', strtotime($return_data['return_date'])); ?>
+                                    </p>
+                                  </div>
+                                <?php endif; ?>
+
+                                <?php if (isset($return_data['return_time'])): ?>
+                                  <div class="mb-3">
+                                    <p class="text-sm text-gray-600 mb-1">Return Time</p>
+                                    <p class="font-medium">
+                                      <?php echo date('h:i A', strtotime($return_data['return_time'])); ?>
+                                    </p>
+                                  </div>
+                                <?php endif; ?>
+                              </div>
+
+                              <div>
+                                <?php if (isset($return_data['return_flight_number'])): ?>
+                                  <div class="mb-3">
+                                    <p class="text-sm text-gray-600 mb-1">Return Flight Number</p>
+                                    <p class="font-medium"><?php echo htmlspecialchars($return_data['return_flight_number']); ?></p>
+                                  </div>
+                                <?php endif; ?>
+
+                                <?php if (isset($return_data['return_flight_duration'])): ?>
+                                  <div class="mb-3">
+                                    <p class="text-sm text-gray-600 mb-1">Return Flight Duration</p>
+                                    <p class="font-medium"><?php echo htmlspecialchars($return_data['return_flight_duration']); ?> hours</p>
+                                  </div>
+                                <?php endif; ?>
+
+                                <?php if (isset($return_data['return_airline'])): ?>
+                                  <div class="mb-3">
+                                    <p class="text-sm text-gray-600 mb-1">Return Airline</p>
+                                    <p class="font-medium"><?php echo htmlspecialchars($return_data['return_airline']); ?></p>
+                                  </div>
+                                <?php endif; ?>
+                              </div>
+                            </div>
+
+                            <?php
+                            if (isset($return_data['return_stops']) && !empty($return_data['return_stops']) && $return_data['return_stops'] != 'direct'):
+                              $stops_data = json_decode($return_data['return_stops'], true);
+                              if (is_array($stops_data) && !empty($stops_data)):
+                            ?>
+                                <div class="mt-3">
+                                  <p class="text-sm text-gray-600 mb-1">Return Flight Stops</p>
+                                  <div class="bg-white rounded p-3 border border-gray-200">
+                                    <?php foreach ($stops_data as $stop): ?>
+                                      <div class="mb-2">
+                                        <i class="fas fa-map-marker-alt text-amber-500 mr-2"></i>
+                                        <?php echo htmlspecialchars($stop['city']); ?>
+                                        (<?php echo htmlspecialchars($stop['duration']); ?> hrs)
+                                      </div>
+                                    <?php endforeach; ?>
+                                  </div>
+                                </div>
+                            <?php
+                              endif;
+                            endif;
+                            ?>
+                          </div>
+                      <?php endif;
+                      endif; ?>
                     </div>
 
                     <!-- Return Flight Tab -->
-                    <?php if ($flight['has_return']): ?>
+                    <?php if (isset($flight['has_return']) && $flight['has_return']): ?>
                       <div id="return-<?php echo $flight['id']; ?>" class="tab-pane hidden">
                         <div class="bg-purple-50 rounded-xl p-6">
                           <h6 class="font-bold text-purple-700 mb-4">

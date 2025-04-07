@@ -86,6 +86,65 @@ $common_amenities = [
   'ac' => 'Air Conditioning',
   'breakfast' => 'Free Breakfast'
 ];
+
+// Process amenities array
+$amenities = isset($_GET['amenities']) ? $_GET['amenities'] : [];
+if (!is_array($amenities)) {
+  $amenities = [$amenities]; // Convert single value to array
+}
+
+// SQL query to fetch hotels with one image per hotel
+$query = "
+    SELECT h.*, 
+           (SELECT hi.image_path FROM hotel_images hi WHERE hi.hotel_id = h.id LIMIT 1) AS image_path
+    FROM hotels h
+    WHERE h.price_per_night BETWEEN ? AND ?
+";
+
+// Parameters array
+$params = [$min_price, $max_price];
+
+if (!empty($location)) {
+  $query .= " AND h.location LIKE ?";
+  $params[] = "%$location%";
+}
+
+// Add amenities filter to query
+if (!empty($amenities)) {
+  // For each selected amenity, we'll check if it exists in the amenities column
+  foreach ($amenities as $amenity) {
+    // This approach uses LIKE for each amenity (simpler and more compatible)
+    $query .= " AND h.amenities LIKE ?";
+    $params[] = "%\"$amenity\"%"; // Match JSON-encoded values
+  }
+}
+
+// Print query for debugging (you can remove this in production)
+// echo "<pre>Query: $query\nParams: " . print_r($params, true) . "</pre>";
+
+// Apply sorting
+switch ($sort_by) {
+  case 'price_asc':
+    $query .= " ORDER BY h.price_per_night ASC";
+    break;
+  case 'price_desc':
+    $query .= " ORDER BY h.price_per_night DESC";
+    break;
+  case 'name_asc':
+    $query .= " ORDER BY h.hotel_name ASC";
+    break;
+  default:
+    $query .= " ORDER BY h.price_per_night ASC";
+}
+
+$stmt = $conn->prepare($query);
+if (!empty($params)) {
+  $types = str_repeat('s', count($params));
+  $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$result = $stmt->get_result();
+$hotels = $result->fetch_all(MYSQLI_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -95,300 +154,8 @@ $common_amenities = [
   <?php include 'includes/css-links.php'; ?>
   <link href="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
-  <style>
-    /* Custom Styles */
-    .hero-section {
-      background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('assets/images/hotel-banner.jpg');
-      background-size: cover;
-      background-position: center;
-      height: 300px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .hotel-card {
-      transition: all 0.3s ease;
-      overflow: hidden;
-      border-radius: 12px;
-    }
-
-    .hotel-card:hover {
-      transform: translateY(-10px);
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    }
-
-    .hotel-image {
-      height: 240px;
-      object-fit: cover;
-      width: 100%;
-      transition: transform 0.5s ease;
-    }
-
-    .hotel-card:hover .hotel-image {
-      transform: scale(1.05);
-    }
-
-    .price-badge {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background-color: rgba(0, 0, 0, 0.6);
-      color: white;
-      padding: 8px 12px;
-      border-radius: 20px;
-      font-weight: 600;
-    }
-
-    .location-badge {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      background-color: rgba(20, 184, 166, 0.9);
-      color: white;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-weight: 500;
-      font-size: 0.875rem;
-      display: flex;
-      align-items: center;
-    }
-
-    .filter-sidebar {
-      position: sticky;
-      top: 20px;
-    }
-
-    .amenity-checkbox {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-
-    .amenity-checkbox input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-    }
-
-    .star-rating {
-      color: #FBC02D;
-      font-size: 1.2rem;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-      background: #f9fafb;
-      border-radius: 12px;
-    }
-
-    .skeleton {
-      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-      background-size: 200% 100%;
-      animation: skeleton-loading 1.5s infinite;
-      border-radius: 4px;
-    }
-
-    @keyframes skeleton-loading {
-      0% {
-        background-position: 200% 0;
-      }
-
-      100% {
-        background-position: -200% 0;
-      }
-    }
-
-    .sort-option {
-      padding: 8px 16px;
-      border-radius: 20px;
-      background-color: #f3f4f6;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .sort-option.active {
-      background-color: #14b8a6;
-      color: white;
-    }
-
-    .mobile-filter-toggle {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      z-index: 50;
-      background-color: #14b8a6;
-      color: white;
-      border-radius: 50%;
-      width: 60px;
-      height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    }
-
-    /* Tooltip styles */
-    .tooltip {
-      position: relative;
-      display: inline-block;
-    }
-
-    .tooltip .tooltip-text {
-      visibility: hidden;
-      width: 120px;
-      background-color: rgba(0, 0, 0, 0.8);
-      color: #fff;
-      text-align: center;
-      border-radius: 6px;
-      padding: 5px;
-      position: absolute;
-      z-index: 1;
-      bottom: 125%;
-      left: 50%;
-      margin-left: -60px;
-      opacity: 0;
-      transition: opacity 0.3s;
-      font-size: 0.75rem;
-    }
-
-    .tooltip:hover .tooltip-text {
-      visibility: visible;
-      opacity: 1;
-    }
-
-    /* Animation for showing filter on mobile */
-    @keyframes slideIn {
-      from {
-        transform: translateX(100%);
-      }
-
-      to {
-        transform: translateX(0);
-      }
-    }
-
-    .slide-in {
-      animation: slideIn 0.3s forwards;
-    }
-
-    /* Styles for the view options */
-    .view-option {
-      cursor: pointer;
-      padding: 0.5rem;
-      display: flex;
-      align-items: center;
-      border-radius: 0.375rem;
-    }
-
-    .view-option.active {
-      background-color: #f3f4f6;
-    }
-
-    /* Styles for list view */
-    .grid-view {
-      display: grid;
-      grid-template-columns: repeat(1, 1fr);
-      gap: 1.5rem;
-    }
-
-    @media (min-width: 768px) {
-      .grid-view {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    .list-view {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-    }
-
-    .list-view .hotel-card {
-      display: grid;
-      grid-template-columns: 1fr;
-    }
-
-    @media (min-width: 768px) {
-      .list-view .hotel-card {
-        grid-template-columns: 300px 1fr;
-      }
-    }
-
-    .list-view .hotel-image-container {
-      height: 200px;
-    }
-
-    .list-view .hotel-details {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .heart-button {
-      transition: all 0.3s ease;
-    }
-
-    .heart-button:hover,
-    .heart-button.active {
-      color: #e11d48;
-      transform: scale(1.2);
-    }
-
-    .sliding-panel {
-      position: fixed;
-      top: 0;
-      right: -100%;
-      width: 100%;
-      height: 100%;
-      background-color: white;
-      z-index: 1000;
-      transition: right 0.3s ease-in-out;
-      overflow-y: auto;
-      box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
-    }
-
-    @media (min-width: 640px) {
-      .sliding-panel {
-        width: 400px;
-      }
-    }
-
-    .sliding-panel.open {
-      right: 0;
-    }
-
-    .overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(0, 0, 0, 0.5);
-      z-index: 999;
-      display: none;
-    }
-
-    .overlay.show {
-      display: block;
-    }
-
-    /* Pill badges for amenities */
-    .amenity-badge {
-      display: inline-block;
-      padding: 0.25rem 0.75rem;
-      border-radius: 9999px;
-      background-color: #f3f4f6;
-      color: #4b5563;
-      font-size: 0.75rem;
-      font-weight: 500;
-      margin-right: 0.5rem;
-      margin-bottom: 0.5rem;
-    }
-  </style>
+  <link href="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/hotels.css">
 </head>
 
 <body class="bg-gray-50">
@@ -452,6 +219,20 @@ $common_amenities = [
         </div>
 
         <!-- Amenities Filter -->
+        <!-- Desktop form -->
+        <div class="mb-6">
+          <label class="block text-gray-700 font-semibold mb-2">Amenities</label>
+          <div class="space-y-2">
+            <?php foreach ($common_amenities as $key => $label): ?>
+              <label class="flex items-center space-x-2">
+                <input type="checkbox" name="amenities[]" value="<?php echo $key; ?>" class="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500" <?php if (in_array($key, $amenities)) echo 'checked'; ?>>
+                <span><?php echo $label; ?></span>
+              </label>
+            <?php endforeach; ?>
+          </div>
+        </div>
+
+        <!-- Mobile form -->
         <div>
           <label class="block text-gray-700 font-semibold mb-2">Amenities</label>
           <div class="grid grid-cols-2 gap-2">
@@ -463,6 +244,39 @@ $common_amenities = [
             <?php endforeach; ?>
           </div>
         </div>
+
+        <!-- Add this Javascript to ensure the mobile form has the same amenity selections as desktop -->
+        <script>
+          document.addEventListener('DOMContentLoaded', function() {
+            // Sync amenities checkboxes between desktop and mobile forms
+            const desktopForm = document.getElementById('filter-form');
+            const mobileForm = document.getElementById('mobile-filter-form');
+
+            if (desktopForm && mobileForm) {
+              // Get all amenity checkboxes in both forms
+              const desktopCheckboxes = desktopForm.querySelectorAll('input[name="amenities[]"]');
+              const mobileCheckboxes = mobileForm.querySelectorAll('input[name="amenities[]"]');
+
+              // Sync from desktop to mobile
+              desktopCheckboxes.forEach((checkbox, index) => {
+                checkbox.addEventListener('change', function() {
+                  if (mobileCheckboxes[index]) {
+                    mobileCheckboxes[index].checked = this.checked;
+                  }
+                });
+              });
+
+              // Sync from mobile to desktop
+              mobileCheckboxes.forEach((checkbox, index) => {
+                checkbox.addEventListener('change', function() {
+                  if (desktopCheckboxes[index]) {
+                    desktopCheckboxes[index].checked = this.checked;
+                  }
+                });
+              });
+            }
+          });
+        </script>
 
         <!-- Submit Buttons -->
         <div class="flex space-x-2">
@@ -728,6 +542,37 @@ $common_amenities = [
   <?php include 'includes/js-links.php'; ?>
   <script src="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.js"></script>
   <script>
+    // Mobile filter panel toggle
+    const mobileFilterToggle = document.getElementById('mobile-filter-toggle');
+    const mobileFilterPanel = document.getElementById('mobile-filter-panel');
+    const closeFilterBtn = document.getElementById('close-filter');
+    const filterOverlay = document.getElementById('filter-overlay');
+
+    if (mobileFilterToggle && mobileFilterPanel) {
+      mobileFilterToggle.addEventListener('click', function() {
+        mobileFilterPanel.classList.add('open');
+        filterOverlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
+      });
+    }
+
+    if (closeFilterBtn) {
+      closeFilterBtn.addEventListener('click', function() {
+        mobileFilterPanel.classList.remove('open');
+        filterOverlay.classList.remove('show');
+        document.body.style.overflow = '';
+      });
+    }
+
+    if (filterOverlay) {
+      filterOverlay.addEventListener('click', function() {
+        mobileFilterPanel.classList.remove('open');
+        filterOverlay.classList.remove('show');
+        document.body.style.overflow = '';
+      });
+    }
+  </script>
+  <script>
     document.addEventListener('DOMContentLoaded', function() {
       // Initialize loading state
       let isLoading = false;
@@ -890,6 +735,146 @@ $common_amenities = [
           once: true
         });
       }
+    });
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize view state (grid or list)
+      let viewMode = localStorage.getItem('hotelViewMode') || 'grid';
+
+      // View toggle functionality
+      const gridViewBtn = document.getElementById('grid-view-btn');
+      const listViewBtn = document.getElementById('list-view-btn');
+      const hotelContainer = document.getElementById('hotel-container');
+
+      if (gridViewBtn && listViewBtn && hotelContainer) {
+        // Set initial view based on saved preference
+        if (viewMode === 'grid') {
+          hotelContainer.className = 'grid-view';
+          gridViewBtn.classList.add('active');
+          listViewBtn.classList.remove('active');
+        } else {
+          hotelContainer.className = 'list-view';
+          listViewBtn.classList.add('active');
+          gridViewBtn.classList.remove('active');
+        }
+
+        // Grid view button click handler
+        gridViewBtn.addEventListener('click', function() {
+          if (viewMode === 'grid') return;
+
+          viewMode = 'grid';
+          hotelContainer.className = 'grid-view';
+
+          // Update active state
+          listViewBtn.classList.remove('active');
+          gridViewBtn.classList.add('active');
+
+          // Store preference in localStorage
+          localStorage.setItem('hotelViewMode', 'grid');
+        });
+
+        // List view button click handler
+        listViewBtn.addEventListener('click', function() {
+          if (viewMode === 'list') return;
+
+          viewMode = 'list';
+          hotelContainer.className = 'list-view';
+
+          // Update active state
+          gridViewBtn.classList.remove('active');
+          listViewBtn.classList.add('active');
+
+          // Store preference in localStorage
+          localStorage.setItem('hotelViewMode', 'list');
+        });
+
+        console.log('View toggle initialized. Current mode:', viewMode);
+      } else {
+        console.error('View toggle elements not found:', {
+          gridViewBtn: !!gridViewBtn,
+          listViewBtn: !!listViewBtn,
+          hotelContainer: !!hotelContainer
+        });
+      }
+    });
+  </script>
+  <!-- Add this JavaScript for initializing the sliders properly -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Function to initialize the price slider
+      function initPriceSlider(sliderId, minPriceId, maxPriceId, minPriceDisplayId, maxPriceDisplayId) {
+        const slider = document.getElementById(sliderId);
+
+        if (!slider) {
+          console.error(`Slider element with ID '${sliderId}' not found`);
+          return;
+        }
+
+        // Check if slider already has noUiSlider instance
+        if (slider.noUiSlider) {
+          console.log(`Slider '${sliderId}' already initialized, destroying previous instance`);
+          slider.noUiSlider.destroy();
+        }
+
+        const minPriceInput = document.getElementById(minPriceId);
+        const maxPriceInput = document.getElementById(maxPriceId);
+        const minPriceDisplay = document.getElementById(minPriceDisplayId);
+        const maxPriceDisplay = document.getElementById(maxPriceDisplayId);
+
+        if (!minPriceInput || !maxPriceInput || !minPriceDisplay || !maxPriceDisplay) {
+          console.error('Required price elements not found');
+          return;
+        }
+
+        // Get initial values
+        const minValue = parseInt(minPriceInput.value) || 0;
+        const maxValue = parseInt(maxPriceInput.value) || 10000;
+
+        // Ensure noUiSlider is available
+        if (typeof noUiSlider === 'undefined') {
+          console.error('noUiSlider library not loaded');
+          return;
+        }
+
+        try {
+          // Create the slider
+          noUiSlider.create(slider, {
+            start: [minValue, maxValue],
+            connect: true,
+            step: 10,
+            range: {
+              'min': 0, // Minimum price
+              'max': 10000 // Maximum price
+            },
+            format: {
+              to: value => Math.round(value),
+              from: value => Math.round(value)
+            }
+          });
+
+          // Update the inputs and displays when the slider is changed
+          slider.noUiSlider.on('update', function(values, handle) {
+            const min = values[0];
+            const max = values[1];
+
+            minPriceInput.value = min;
+            maxPriceInput.value = max;
+            minPriceDisplay.textContent = '$' + min;
+            maxPriceDisplay.textContent = '$' + max;
+          });
+
+          console.log(`Slider '${sliderId}' initialized successfully`);
+        } catch (error) {
+          console.error('Error initializing slider:', error);
+        }
+      }
+
+      // Initialize both price sliders with a slight delay to ensure DOM is ready
+      setTimeout(function() {
+        initPriceSlider('price-slider', 'min-price', 'max-price', 'min-price-display', 'max-price-display');
+        initPriceSlider('mobile-price-slider', 'mobile-min-price', 'mobile-max-price', 'mobile-min-price-display', 'mobile-max-price-display');
+      }, 100);
     });
   </script>
 </body>
