@@ -1,4 +1,5 @@
 <?php
+session_name("admin_session");
 session_start();
 require_once 'includes/db-config.php';
 if (!isset($_SESSION['admin_email'])) {

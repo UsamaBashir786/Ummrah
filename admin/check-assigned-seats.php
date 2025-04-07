@@ -1,5 +1,6 @@
 <?php
 // Save this as check-assigned-seats.php
+session_name("admin_session");
 session_start();
 include 'connection/connection.php';
 

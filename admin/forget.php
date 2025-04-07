@@ -1,5 +1,6 @@
 <?php
 include "connection/connection.php";
+session_name("admin_session");
 session_start();
 
 // Secret key for password reset

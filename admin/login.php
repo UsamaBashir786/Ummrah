@@ -1,6 +1,8 @@
 <?php
 include "connection/connection.php";
+session_name("admin_session");
 session_start();
+
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $email = $_POST['email'];

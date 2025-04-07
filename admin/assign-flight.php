@@ -1,4 +1,5 @@
 <?php
+session_name("admin_session");
 session_start();
 include 'connection/connection.php'; // Include database connection
 
