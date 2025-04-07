@@ -15,6 +15,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $departure_time = $_POST['departure_time'];
     $departure_date = $_POST['departure_date'];
     $arrival_city = $_POST['arrival_city'];
+    $return_time = $_POST['return_time'];
+    $return_date = $_POST['return_date'];
     $inclusions = implode(', ', $_POST['inclusions']); // Convert array to string
     $price = $_POST['price'];
 
@@ -30,8 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Prepare and execute the SQL query
-    $sql = "INSERT INTO packages (package_type, title, description, airline, flight_class, departure_city, departure_time, departure_date, arrival_city, inclusions, price, package_image)
-            VALUES (:package_type, :title, :description, :airline, :flight_class, :departure_city, :departure_time, :departure_date, :arrival_city, :inclusions, :price, :package_image)";
+    $sql = "INSERT INTO packages (package_type, title, description, airline, flight_class, departure_city, departure_time, departure_date, arrival_city, return_time, return_date, inclusions, price, package_image)
+            VALUES (:package_type, :title, :description, :airline, :flight_class, :departure_city, :departure_time, :departure_date, :arrival_city, :return_time, :return_date, :inclusions, :price, :package_image)";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
@@ -44,6 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       ':departure_time' => $departure_time,
       ':departure_date' => $departure_date,
       ':arrival_city' => $arrival_city,
+      ':return_time' => $return_time,
+      ':return_date' => $return_date,
       ':inclusions' => $inclusions,
       ':price' => $price,
       ':package_image' => $package_image
@@ -176,6 +180,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <div>
                 <label class="block text-gray-700 text-sm font-bold mb-2">Departure Time</label>
                 <input type="time" name="departure_time" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-teal-500" required>
+              </div>
+            </div>
+
+            <!-- Return Date & Time -->
+            <div class="grid grid-cols-2 gap-4 mb-6">
+              <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2">Return Date</label>
+                <input type="date" name="return_date" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-teal-500" required>
+              </div>
+              <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2">Return Time</label>
+                <input type="time" name="return_time" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-teal-500" required>
               </div>
             </div>
 

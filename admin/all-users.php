@@ -118,6 +118,7 @@ $result = $conn->query($sql);
                       onclick="editUser(<?php echo $user['id']; ?>)">Edit</button>
                     <button class="text-red-600 hover:text-red-900"
                       onclick="deleteUser(<?php echo $user['id']; ?>)">Delete</button>
+                    <a href="user-details.php?id=<?php echo $user['id']; ?>" class="btn btn-info btn-sm">View Details</a>
                   </td>
                 </tr>
               <?php endwhile; ?>
@@ -138,7 +139,7 @@ $result = $conn->query($sql);
     function deleteUser(userId) {
       Swal.fire({
         title: 'Are you sure?',
-        text: "You won't be able to revert this!",
+        text: "This will delete the user and all their associated data (bookings, etc.). This action cannot be undone!",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#3085d6',
@@ -146,15 +147,36 @@ $result = $conn->query($sql);
         confirmButtonText: 'Yes, delete it!'
       }).then((result) => {
         if (result.isConfirmed) {
+          // Show loading state
+          Swal.fire({
+            title: 'Deleting...',
+            text: 'Please wait while we delete the user and associated data',
+            allowOutsideClick: false,
+            didOpen: () => {
+              Swal.showLoading();
+            }
+          });
+
+          // Add console.log to debug
+          console.log('Deleting user with ID:', userId);
+
           fetch(`delete-user.php?id=${userId}`, {
-              method: 'DELETE'
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              }
             })
-            .then(response => response.json())
+            .then(response => {
+              if (!response.ok) {
+                throw new Error('Network response was not ok');
+              }
+              return response.json();
+            })
             .then(data => {
               if (data.success) {
                 Swal.fire({
                   title: 'Deleted!',
-                  text: 'User has been deleted.',
+                  text: 'User and all associated data have been deleted.',
                   icon: 'success',
                   showConfirmButton: false,
                   timer: 1500
@@ -162,13 +184,17 @@ $result = $conn->query($sql);
                   window.location.reload();
                 });
               } else {
-                Swal.fire({
-                  title: 'Error!',
-                  text: 'Failed to delete user',
-                  icon: 'error',
-                  confirmButtonColor: '#3085d6'
-                });
+                throw new Error(data.message || 'Failed to delete user');
               }
+            })
+            .catch(error => {
+              console.error('Error:', error);
+              Swal.fire({
+                title: 'Error!',
+                text: error.message || 'An error occurred while deleting the user',
+                icon: 'error',
+                confirmButtonColor: '#3085d6'
+              });
             });
         }
       });

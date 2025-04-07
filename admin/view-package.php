@@ -2,7 +2,7 @@
 include 'includes/db-config.php';
 
 // Fetch all packages from the database
-$sql = "SELECT * FROM packages";
+$sql = "SELECT id, title, description, package_type, departure_city, departure_date, departure_time, arrival_city, return_date, return_time, price, package_image FROM packages";
 $stmt = $pdo->query($sql);
 $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -80,9 +80,6 @@ $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <button class="bg-teal-600 text-white px-3 sm:px-4 py-2 rounded hover:bg-teal-500 text-sm sm:text-base" onclick="window.location.href='add-packages.php'">
                 <i class="fas fa-plus mr-2"></i>Add Package
               </button>
-              <button onclick="openFilterModal()" class="bg-gray-500 text-white px-3 sm:px-4 py-2 rounded hover:bg-gray-400 text-sm sm:text-base">
-                <i class="fas fa-filter mr-2"></i>Filter
-              </button>
             </div>
             <div class="relative w-full sm:w-auto">
               <input type="search" id="searchInput" placeholder="Search packages..."
@@ -135,10 +132,18 @@ $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <div class="text-gray-900">
                           <i class="fas fa-plane-departure text-gray-400 mr-1"></i>
                           <?= htmlspecialchars($package['departure_city']) ?>
+                          <span class="text-gray-500 text-xs ml-1">
+                            (<?= date('M d, Y', strtotime($package['departure_date'])) ?> 
+                            <?= date('h:i A', strtotime($package['departure_time'])) ?>)
+                          </span>
                         </div>
                         <div class="text-gray-900">
                           <i class="fas fa-plane-arrival text-gray-400 mr-1"></i>
                           <?= htmlspecialchars($package['arrival_city']) ?>
+                          <span class="text-gray-500 text-xs ml-1">
+                            (<?= date('M d, Y', strtotime($package['return_date'])) ?> 
+                            <?= date('h:i A', strtotime($package['return_time'])) ?>)
+                          </span>
                         </div>
                       </div>
                     </td>

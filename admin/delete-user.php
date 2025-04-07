@@ -8,20 +8,48 @@ if (!isset($_SESSION['admin_email'])) {
   exit();
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-  $userId = $_GET['id'];
+// Set header to ensure JSON response
+header('Content-Type: application/json');
 
-  $stmt = $conn->prepare("DELETE FROM user WHERE id = ?");
-  $stmt->bind_param("i", $userId);
+// Debug logging
+error_log("Received request with GET parameters: " . print_r($_GET, true));
 
-  if ($stmt->execute()) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => true]);
-  } else {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Database error']);
-  }
+if (isset($_GET['id']) && !empty($_GET['id'])) {
+    $userId = (int)$_GET['id'];
+    
+    // Debug logging
+    error_log("Attempting to delete user with ID: " . $userId);
+    
+    // Start transaction
+    $conn->begin_transaction();
+    
+    try {
+        // First, delete all related bookings
+        $stmt = $conn->prepare("DELETE FROM flight_bookings WHERE user_id = ?");
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $stmt->close();
 
-  $stmt->close();
-  $conn->close();
+        // Then delete the user
+        $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+        $stmt->bind_param("i", $userId);
+        
+        if ($stmt->execute()) {
+            $conn->commit();
+            echo json_encode(['success' => true]);
+        } else {
+            throw new Exception($stmt->error);
+        }
+        
+        $stmt->close();
+    } catch (Exception $e) {
+        $conn->rollback();
+        error_log("Error deleting user: " . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+} else {
+    error_log("No valid user ID provided in request");
+    echo json_encode(['success' => false, 'message' => 'No valid user ID provided']);
 }
+
+$conn->close();
