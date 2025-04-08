@@ -1,8 +1,11 @@
 <?php
 require_once 'connection/connection.php';
 
-// Fetch all users
-$sql = "SELECT * FROM users ORDER BY created_at DESC";
+// Fetch all users with city information
+$sql = "SELECT u.*, c.name as city_name 
+        FROM users u 
+        LEFT JOIN cities c ON u.city_id = c.id 
+        ORDER BY u.created_at DESC";
 $result = $conn->query($sql);
 ?>
 <!DOCTYPE html>
@@ -10,6 +13,62 @@ $result = $conn->query($sql);
 
 <head>
   <?php include 'includes/css-links.php'; ?>
+  <style>
+    /* Custom scrollbar for better mobile experience */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 10px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+
+    /* Card transitions for mobile */
+    .user-card {
+      transition: all 0.3s ease;
+    }
+
+    .user-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Badge styles */
+    .badge {
+      font-size: 0.65rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-city {
+      background-color: #e5f2f8;
+      color: #0369a1;
+    }
+
+    .badge-gender {
+      background-color: #f0f9ff;
+      color: #0891b2;
+    }
+
+    .badge-date {
+      background-color: #ecfdf5;
+      color: #059669;
+    }
+  </style>
 </head>
 
 <body class="bg-gray-100">
@@ -18,134 +77,365 @@ $result = $conn->query($sql);
     <?php include 'includes/sidebar.php'; ?>
 
     <!-- Main Content -->
-    <div class="main flex-1 flex flex-col">
+    <div class="main flex-1 flex flex-col overflow-hidden">
       <!-- Navbar -->
       <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center">
         <button class="md:hidden text-gray-800" id="menu-btn">
           <i class="fas fa-bars"></i>
         </button>
-        <h1 class="text-xl font-semibold"><i class="text-teal-600 fa fa-user mx-2"></i> All Users</h1>
+        <h1 class="text-xl font-semibold"><i class="text-teal-600 fa fa-user mx-2"></i> User Management</h1>
+        <div class="flex items-center">
+          <a href="add-user.php" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center">
+            <i class="fas fa-plus mr-2"></i> Add User
+          </a>
+        </div>
       </div>
 
-      <div class="container mx-auto p-4 sm:p-6">
-        <div class="overflow-x-auto bg-white rounded-lg shadow max-h-[500px] overflow-y-auto">
-          <!-- For small screens - Card view -->
-          <div class="block md:hidden max-h-[500px] overflow-y-auto">
-            <div class="space-y-4 p-4">
-              <?php if ($result && $result->num_rows > 0): ?>
-                <?php while ($user = $result->fetch_assoc()): ?>
-                  <div class="bg-white rounded-lg shadow p-4 hover:bg-gray-50">
-                    <div class="flex items-center space-x-4 mb-3">
-                      <img class="h-10 w-10 rounded-full object-cover"
-                        src="../<?php echo isset($user['profile_image']) ? htmlspecialchars($user['profile_image']) : 'user/uploads/default.png'; ?>"
-                        alt="User avatar" />
-
-                      <div>
-                        <div class="text-sm font-medium text-gray-900">
-                          <?php echo isset($user['full_name']) ? htmlspecialchars($user['full_name']) : 'Unknown'; ?>
-                        </div>
-                        <div class="text-sm text-gray-500">
-                          <?php echo isset($user['email']) ? htmlspecialchars($user['email']) : 'No email'; ?>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="space-y-2">
-                      <div class="flex justify-between">
-                        <span class="text-sm text-gray-500">Phone:</span>
-                        <span class="text-sm text-gray-900">
-                          <?php echo isset($user['phone_number']) ? htmlspecialchars($user['phone_number']) : 'No phone'; ?>
-                        </span>
-                      </div>
-                      <div class="flex justify-end space-x-3 mt-3">
-                        <button class="text-indigo-600 hover:text-indigo-900"
-                          onclick="editUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)">Edit</button>
-                        <button class="text-red-600 hover:text-red-900"
-                          onclick="deleteUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)">Delete</button>
-                      </div>
-                    </div>
-                  </div>
-                <?php endwhile; ?>
-              <?php else: ?>
-                <div class="text-center p-6 text-gray-500">No users found</div>
-              <?php endif; ?>
-            </div>
+      <!-- Search and Filter Controls -->
+      <div class="bg-white border-b border-gray-200 p-4">
+        <div class="flex flex-col md:flex-row gap-3 mb-3">
+          <div class="flex-1">
+            <input type="text" id="searchInput" placeholder="Search users..."
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-transparent">
           </div>
-
-          <!-- For medium and larger screens - Table view -->
-          <table class="min-w-full hidden md:table">
-            <thead class="bg-gray-50 sticky top-0">
-              <tr>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
+          <div class="flex flex-wrap gap-2">
+            <select id="filterCity" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-transparent">
+              <option value="">All Cities</option>
               <?php
               // Reset the result pointer
               if ($result && $result->num_rows > 0) {
+                $cities = array();
                 $result->data_seek(0);
-                while ($user = $result->fetch_assoc()):
+                while ($row = $result->fetch_assoc()) {
+                  if (!empty($row['city_name']) && !in_array($row['city_name'], $cities)) {
+                    $cities[] = $row['city_name'];
+                    echo '<option value="' . htmlspecialchars($row['city_name']) . '">' . htmlspecialchars($row['city_name']) . '</option>';
+                  }
+                }
+              }
               ?>
-                  <tr class="hover:bg-gray-50">
-                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                      <div class="flex items-center">
-                        <div class="h-10 w-10">
-                          <img class="h-10 w-10 rounded-full object-cover"
-                            src="../<?php echo isset($user['profile_image']) ? htmlspecialchars($user['profile_image']) : 'user/uploads/default.png'; ?>"
-                            alt="User avatar" />
+            </select>
+            <select id="filterGender" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-transparent">
+              <option value="">All Genders</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+            <button id="resetFilters" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">
+              <i class="fas fa-redo-alt mr-1"></i> Reset
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-auto custom-scrollbar">
+        <div class="container mx-auto p-4">
+          <div class="grid grid-cols-1 md:hidden gap-4">
+            <?php if ($result && $result->num_rows > 0): ?>
+              <?php
+              $result->data_seek(0);
+              while ($user = $result->fetch_assoc()):
+                $created_date = new DateTime($user['created_at']);
+                $formatted_date = $created_date->format('M d, Y');
+              ?>
+                <div class="user-card bg-white rounded-xl shadow-md p-4 hover:bg-gray-50">
+                  <div class="flex items-start justify-between">
+                    <div class="flex items-center space-x-4">
+                      <div class="relative">
+                        <img class="h-16 w-16 rounded-full object-cover border-2 border-teal-500"
+                          src="../<?php echo isset($user['profile_image']) ? htmlspecialchars($user['profile_image']) : 'user/uploads/default.png'; ?>"
+                          alt="User avatar" />
+                      </div>
+                      <div>
+                        <h3 class="text-lg font-semibold text-gray-900">
+                          <?php echo isset($user['full_name']) ? htmlspecialchars($user['full_name']) : 'Unknown'; ?>
+                        </h3>
+                        <div class="flex items-center text-sm text-gray-600">
+                          <i class="far fa-envelope mr-1"></i>
+                          <?php echo isset($user['email']) ? htmlspecialchars($user['email']) : 'No email'; ?>
                         </div>
-                        <div class="ml-4">
-                          <div class="text-sm font-medium text-gray-900">
-                            <?php echo isset($user['full_name']) ? htmlspecialchars($user['full_name']) : 'Unknown'; ?>
-                          </div>
-                          <div class="text-sm text-gray-500">
-                            <?php echo isset($user['gender']) ? htmlspecialchars($user['gender']) : 'Unknown'; ?>
-                          </div>
+                        <div class="flex gap-1 mt-1 flex-wrap">
+                          <?php if (!empty($user['city_name'])): ?>
+                            <span class="badge badge-city">
+                              <i class="fas fa-map-marker-alt mr-1"></i> <?php echo htmlspecialchars($user['city_name']); ?>
+                            </span>
+                          <?php endif; ?>
+                          <?php if (!empty($user['gender'])): ?>
+                            <span class="badge badge-gender">
+                              <?php echo htmlspecialchars($user['gender']); ?>
+                            </span>
+                          <?php endif; ?>
                         </div>
                       </div>
-                    </td>
-                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                      <div class="text-sm text-gray-900">
-                        <?php echo isset($user['email']) ? htmlspecialchars($user['email']) : 'No email'; ?>
+                    </div>
+                  </div>
+
+                  <div class="mt-4 space-y-3">
+                    <div class="flex justify-between items-center">
+                      <div class="text-sm text-gray-600">
+                        <i class="fas fa-phone mr-1"></i> <?php echo isset($user['phone_number']) ? htmlspecialchars($user['phone_number']) : 'N/A'; ?>
                       </div>
-                    </td>
-                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                      <div class="text-sm text-gray-900">
-                        <?php echo isset($user['phone_number']) ? htmlspecialchars($user['phone_number']) : 'No phone'; ?>
+                      <div class="badge badge-date">
+                        <i class="far fa-calendar-alt mr-1"></i> <?php echo $formatted_date; ?>
                       </div>
-                    </td>
-                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button class="text-indigo-600 hover:text-indigo-900 mr-3"
-                        onclick="editUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)">Edit</button>
-                      <button class="text-red-600 hover:text-red-900 mr-3"
-                        onclick="deleteUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)">Delete</button>
-                      <?php if (isset($user['id']) && $user['id'] > 0): ?>
-                        <a href="user-details.php?id=<?php echo $user['id']; ?>" class="text-blue-600 hover:text-blue-900">View Details</a>
-                      <?php endif; ?>
+                    </div>
+
+                    <div class="flex items-center text-sm text-gray-600">
+                      <i class="far fa-calendar mr-1"></i> DOB:
+                      <?php echo isset($user['date_of_birth']) ? date('M d, Y', strtotime($user['date_of_birth'])) : 'N/A'; ?>
+                    </div>
+
+                    <div class="text-sm text-gray-600 line-clamp-2">
+                      <i class="fas fa-map-pin mr-1"></i>
+                      <?php echo isset($user['address']) ? htmlspecialchars($user['address']) : 'No address'; ?>
+                    </div>
+
+                    <div class="pt-3 mt-3 border-t border-gray-100 flex justify-between items-center">
+                      <div class="flex space-x-2">
+                        <button onclick="editUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)"
+                          class="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors">
+                          <i class="fas fa-edit mr-1"></i> Edit
+                        </button>
+                        <button onclick="deleteUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)"
+                          class="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors">
+                          <i class="fas fa-trash-alt mr-1"></i> Delete
+                        </button>
+                      </div>
+                      <a href="user-details.php?id=<?php echo $user['id']; ?>"
+                        class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors">
+                        <i class="fas fa-eye mr-1"></i> Details
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              <?php endwhile; ?>
+            <?php else: ?>
+              <div class="text-center p-6 bg-white rounded-lg shadow text-gray-500">
+                <i class="fas fa-users text-4xl mb-3 text-gray-400"></i>
+                <p class="text-lg">No users found</p>
+                <p class="text-sm mt-2">Add new users to see them here</p>
+              </div>
+            <?php endif; ?>
+          </div>
+
+          <!-- Table for medium screens and up -->
+          <div class="hidden md:block overflow-hidden bg-white rounded-lg shadow">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50 sticky top-0">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact Info</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <?php
+                if ($result && $result->num_rows > 0) {
+                  $result->data_seek(0);
+                  while ($user = $result->fetch_assoc()):
+                    $created_date = new DateTime($user['created_at']);
+                    $formatted_date = $created_date->format('M d, Y');
+                ?>
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-6 py-4">
+                        <div class="flex items-center">
+                          <div class="flex-shrink-0 h-10 w-10">
+                            <img class="h-10 w-10 rounded-full object-cover border border-gray-200"
+                              src="../<?php echo isset($user['profile_image']) ? htmlspecialchars($user['profile_image']) : 'user/uploads/default.png'; ?>"
+                              alt="User avatar" />
+                          </div>
+                          <div class="ml-4">
+                            <div class="text-sm font-medium text-gray-900">
+                              <?php echo isset($user['full_name']) ? htmlspecialchars($user['full_name']) : 'Unknown'; ?>
+                            </div>
+                            <div class="text-xs text-gray-500">
+                              <span class="badge badge-gender">
+                                <?php echo isset($user['gender']) ? htmlspecialchars($user['gender']) : 'Unknown'; ?>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4">
+                        <div class="text-sm text-gray-900">
+                          <i class="far fa-envelope mr-1 text-gray-500"></i>
+                          <?php echo isset($user['email']) ? htmlspecialchars($user['email']) : 'No email'; ?>
+                        </div>
+                        <div class="text-sm text-gray-600 mt-1">
+                          <i class="fas fa-phone mr-1 text-gray-500"></i>
+                          <?php echo isset($user['phone_number']) ? htmlspecialchars($user['phone_number']) : 'No phone'; ?>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4">
+                        <div class="text-sm text-gray-900">
+                          <?php if (!empty($user['city_name'])): ?>
+                            <span class="badge badge-city">
+                              <?php echo htmlspecialchars($user['city_name']); ?>
+                            </span>
+                          <?php else: ?>
+                            <span class="text-gray-500">No city</span>
+                          <?php endif; ?>
+                        </div>
+                        <div class="text-sm text-gray-500 mt-1 max-w-xs truncate">
+                          <?php echo isset($user['address']) ? htmlspecialchars($user['address']) : 'No address'; ?>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4">
+                        <div class="text-sm text-gray-900">
+                          <i class="far fa-calendar mr-1 text-gray-500"></i>
+                          <?php echo isset($user['date_of_birth']) ? date('M d, Y', strtotime($user['date_of_birth'])) : 'N/A'; ?>
+                        </div>
+                        <div class="text-sm text-gray-500 mt-1">
+                          <i class="far fa-clock mr-1"></i> Joined: <?php echo $formatted_date; ?>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4 text-sm font-medium">
+                        <div class="flex space-x-2">
+                          <button class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
+                            onclick="editUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)">
+                            <i class="fas fa-edit mr-1"></i> Edit
+                          </button>
+                          <button class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                            onclick="deleteUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)">
+                            <i class="fas fa-trash-alt mr-1"></i> Delete
+                          </button>
+                          <a href="user-details.php?id=<?php echo $user['id']; ?>"
+                            class="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                            <i class="fas fa-eye mr-1"></i> View
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  <?php
+                  endwhile;
+                } else {
+                  ?>
+                  <tr>
+                    <td colspan="5" class="px-6 py-8 text-center text-gray-500">
+                      <i class="fas fa-users text-4xl mb-3 text-gray-400"></i>
+                      <p class="text-lg">No users found</p>
+                      <p class="text-sm mt-2">Add new users to see them here</p>
                     </td>
                   </tr>
                 <?php
-                endwhile;
-              } else {
+                }
                 ?>
-                <tr>
-                  <td colspan="4" class="px-4 sm:px-6 py-4 text-center text-gray-500">
-                    No users found
-                  </td>
-                </tr>
-              <?php
-              }
-              ?>
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
       <?php include 'includes/js-links.php'; ?>
     </div>
   </div>
   <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Mobile menu toggle
+      const menuBtn = document.getElementById('menu-btn');
+      const sidebar = document.querySelector('.sidebar');
+
+      if (menuBtn && sidebar) {
+        menuBtn.addEventListener('click', function() {
+          sidebar.classList.toggle('hidden');
+        });
+      }
+
+      // Search and filtering functionality
+      const searchInput = document.getElementById('searchInput');
+      const filterCity = document.getElementById('filterCity');
+      const filterGender = document.getElementById('filterGender');
+      const resetFilters = document.getElementById('resetFilters');
+      const userCards = document.querySelectorAll('.user-card');
+      const tableRows = document.querySelectorAll('tbody tr');
+
+      function applyFilters() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const cityFilter = filterCity.value.toLowerCase();
+        const genderFilter = filterGender.value.toLowerCase();
+
+        // Filter mobile cards
+        userCards.forEach(card => {
+          const fullName = card.querySelector('h3').textContent.toLowerCase();
+          const email = card.querySelector('.text-gray-600 i.far.fa-envelope').nextSibling.textContent.toLowerCase();
+          const phone = card.querySelector('.text-gray-600 i.fas.fa-phone').nextSibling.textContent.toLowerCase();
+
+          // Get city if it exists
+          let city = '';
+          const cityBadge = card.querySelector('.badge-city');
+          if (cityBadge) {
+            city = cityBadge.textContent.toLowerCase();
+          }
+
+          // Get gender if it exists
+          let gender = '';
+          const genderBadge = card.querySelector('.badge-gender');
+          if (genderBadge) {
+            gender = genderBadge.textContent.trim().toLowerCase();
+          }
+
+          const matchesSearch = fullName.includes(searchTerm) || email.includes(searchTerm) || phone.includes(searchTerm);
+          const matchesCity = cityFilter === '' || city.includes(cityFilter);
+          const matchesGender = genderFilter === '' || gender === genderFilter.toLowerCase();
+
+          if (matchesSearch && matchesCity && matchesGender) {
+            card.style.display = '';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+
+        // Filter table rows
+        tableRows.forEach(row => {
+          // Skip the "No users found" row
+          if (row.cells.length === 1) return;
+
+          const fullName = row.querySelector('.text-gray-900').textContent.toLowerCase();
+          const email = row.querySelector('.far.fa-envelope').nextSibling.textContent.toLowerCase();
+          const phone = row.querySelector('.fas.fa-phone').nextSibling.textContent.toLowerCase();
+
+          // Get city if it exists
+          let city = '';
+          const cityBadge = row.querySelector('.badge-city');
+          if (cityBadge) {
+            city = cityBadge.textContent.toLowerCase();
+          }
+
+          // Get gender
+          let gender = '';
+          const genderBadge = row.querySelector('.badge-gender');
+          if (genderBadge) {
+            gender = genderBadge.textContent.trim().toLowerCase();
+          }
+
+          const matchesSearch = fullName.includes(searchTerm) || email.includes(searchTerm) || phone.includes(searchTerm);
+          const matchesCity = cityFilter === '' || city.includes(cityFilter);
+          const matchesGender = genderFilter === '' || gender === genderFilter.toLowerCase();
+
+          if (matchesSearch && matchesCity && matchesGender) {
+            row.style.display = '';
+          } else {
+            row.style.display = 'none';
+          }
+        });
+      }
+
+      // Add event listeners
+      if (searchInput) searchInput.addEventListener('input', applyFilters);
+      if (filterCity) filterCity.addEventListener('change', applyFilters);
+      if (filterGender) filterGender.addEventListener('change', applyFilters);
+
+      if (resetFilters) {
+        resetFilters.addEventListener('click', function() {
+          if (searchInput) searchInput.value = '';
+          if (filterCity) filterCity.value = '';
+          if (filterGender) filterGender.value = '';
+          applyFilters();
+        });
+      }
+    });
+
     function editUser(userId) {
       if (userId > 0) {
         window.location.href = `edit-user.php?id=${userId}`;
@@ -170,7 +460,7 @@ $result = $conn->query($sql);
 
       Swal.fire({
         title: 'Are you sure?',
-        text: "This will delete the user and all their associated data (bookings, etc.). This action cannot be undone!",
+        text: "This will delete the user and all their associated data. This action cannot be undone!",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#3085d6',
@@ -187,9 +477,6 @@ $result = $conn->query($sql);
               Swal.showLoading();
             }
           });
-
-          // Add console.log to debug
-          console.log('Deleting user with ID:', userId);
 
           fetch(`delete-user.php?id=${userId}`, {
               method: 'POST',

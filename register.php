@@ -2,6 +2,22 @@
 // Start the session at the very beginning
 session_start();
 
+// Function to get all cities from database
+function getCities($conn)
+{
+  $cities = array();
+  $sql = "SELECT id, name FROM cities ORDER BY name ASC";
+  $result = $conn->query($sql);
+
+  if ($result && $result->num_rows > 0) {
+    while ($row = $result->fetch_assoc()) {
+      $cities[] = $row;
+    }
+  }
+
+  return $cities;
+}
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $db_host = "localhost";
   $db_user = "root";
@@ -21,11 +37,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   if ($upload_success) {
     $email = $_POST['email'];
     $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-    
-    $stmt = $conn->prepare("INSERT INTO users (full_name, email, phone_number, date_of_birth, profile_image, gender, address, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+
+    // Handle city - either from select or add new
+    $city_id = null;
+    if (isset($_POST['city_selection']) && $_POST['city_selection'] == 'existing' && !empty($_POST['city_id'])) {
+      $city_id = $_POST['city_id'];
+    } elseif (isset($_POST['city_selection']) && $_POST['city_selection'] == 'new' && !empty($_POST['new_city'])) {
+      // Insert new city
+      $new_city = $_POST['new_city'];
+      $city_stmt = $conn->prepare("INSERT INTO cities (name) VALUES (?)");
+      $city_stmt->bind_param("s", $new_city);
+      if ($city_stmt->execute()) {
+        $city_id = $conn->insert_id;
+      }
+      $city_stmt->close();
+    }
+
+    $stmt = $conn->prepare("INSERT INTO users (full_name, email, phone_number, date_of_birth, profile_image, gender, address, city_id, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     $stmt->bind_param(
-      "ssssssss",
+      "sssssssss",
       $_POST['full_name'],
       $email,
       $_POST['phone_number'],
@@ -33,19 +64,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       $profile_image,
       $_POST['gender'],
       $_POST['address'],
+      $city_id,
       $password
     );
-    
+
     if ($stmt->execute()) {
       // Get the user ID of the newly registered user
       $user_id = $conn->insert_id;
-      
+
       // Set session variables to log the user in
       $_SESSION['user_id'] = $user_id;
       $_SESSION['full_name'] = $_POST['full_name'];
       $_SESSION['email'] = $email;
       $_SESSION['logged_in'] = true;
-      
+
 ?>
       <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -62,9 +94,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
           });
         });
       </script>
-<?php
+    <?php
     } else {
-?>
+    ?>
       <script>
         document.addEventListener('DOMContentLoaded', function() {
           Swal.fire({
@@ -75,11 +107,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
           });
         });
       </script>
-<?php
+    <?php
     }
     $stmt->close();
   } else {
-?>
+    ?>
     <script>
       document.addEventListener('DOMContentLoaded', function() {
         Swal.fire({
@@ -92,7 +124,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </script>
 <?php
   }
+
+  // Get cities for the form in case of error
+  $cities = getCities($conn);
   $conn->close();
+} else {
+  // Just connect to get cities for the initial form display
+  $db_host = "localhost";
+  $db_user = "root";
+  $db_pass = "";
+  $db_name = "ummrah";
+
+  $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
+  $cities = array();
+
+  if (!$conn->connect_error) {
+    $cities = getCities($conn);
+    $conn->close();
+  }
 }
 ?>
 
@@ -214,6 +263,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   </select>
                 </div>
 
+                <!-- New City Selection -->
+                <div class="flex-1 mt-4">
+                  <label class="block mb-2 text-sm text-gray-600 dark:text-gray-200">City</label>
+                  <div class="mb-3">
+                    <label class="inline-flex items-center">
+                      <input type="radio" name="city_selection" value="existing" class="text-teal-600" checked onchange="toggleCityFields()">
+                      <span class="ml-2 text-sm text-gray-600 dark:text-gray-200">Select from existing cities</span>
+                    </label>
+                    <label class="inline-flex items-center ml-6">
+                      <input type="radio" name="city_selection" value="new" class="text-teal-600" onchange="toggleCityFields()">
+                      <span class="ml-2 text-sm text-gray-600 dark:text-gray-200">Add a new city</span>
+                    </label>
+                  </div>
+
+                  <div id="existing-city-field">
+                    <select name="city_id" id="city_id" class="block w-full px-5 py-3 mt-2 text-gray-700 bg-white border border-gray-200 rounded-md dark:bg-gray-900 dark:text-gray-300 dark:border-gray-600 focus:border-teal-400 focus:ring-teal-300 focus:ring-opacity-40 dark:focus:border-teal-300 focus:outline-none focus:ring">
+                      <option value="">Select City</option>
+                      <?php foreach ($cities as $city): ?>
+                        <option value="<?php echo $city['id']; ?>"><?php echo htmlspecialchars($city['name']); ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </div>
+
+                  <div id="new-city-field" style="display: none;">
+                    <input type="text" name="new_city" id="new_city" placeholder="Enter new city name" class="block w-full px-5 py-3 mt-2 text-gray-700 bg-white border border-gray-200 rounded-md dark:bg-gray-900 dark:text-gray-300 dark:border-gray-600 focus:border-teal-400 focus:ring-teal-300 focus:ring-opacity-40 dark:focus:border-teal-300 focus:outline-none focus:ring">
+                  </div>
+                </div>
+
                 <div class="w-full mt-4">
                   <label class="block mb-2 text-sm text-gray-600 dark:text-gray-200">Address</label>
                   <textarea name="address"
@@ -267,6 +344,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
         `;
+      }
+    }
+
+    function toggleCityFields() {
+      const selection = document.querySelector('input[name="city_selection"]:checked').value;
+      const existingCityField = document.getElementById('existing-city-field');
+      const newCityField = document.getElementById('new-city-field');
+
+      if (selection === 'existing') {
+        existingCityField.style.display = 'block';
+        newCityField.style.display = 'none';
+        document.getElementById('city_id').setAttribute('required', 'required');
+        document.getElementById('new_city').removeAttribute('required');
+      } else {
+        existingCityField.style.display = 'none';
+        newCityField.style.display = 'block';
+        document.getElementById('city_id').removeAttribute('required');
+        document.getElementById('new_city').setAttribute('required', 'required');
       }
     }
   </script>
