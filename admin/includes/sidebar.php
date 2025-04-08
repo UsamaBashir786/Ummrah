@@ -162,11 +162,19 @@
     </div>
 
     <!-- Logout -->
+    <a href="table-view.php"
+      class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors group mt-4">
+      <i class="fas fa-sign-out-alt text-gray-400 group-hover:text-red-400"></i>
+      <span class="group-hover:text-yellow-400">Advance Analysis</span>
+    </a>
+
+    <!-- Logout -->
     <a href="logout.php" onclick="confirmLogout(event)"
       class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors group mt-4">
       <i class="fas fa-sign-out-alt text-gray-400 group-hover:text-red-400"></i>
       <span class="group-hover:text-red-400">Logout</span>
     </a>
+
   </nav>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
