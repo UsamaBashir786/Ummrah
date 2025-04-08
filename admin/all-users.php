@@ -32,38 +32,42 @@ $result = $conn->query($sql);
           <!-- For small screens - Card view -->
           <div class="block md:hidden max-h-[500px] overflow-y-auto">
             <div class="space-y-4 p-4">
-              <?php while ($user = $result->fetch_assoc()): ?>
-                <div class="bg-white rounded-lg shadow p-4 hover:bg-gray-50">
-                  <div class="flex items-center space-x-4 mb-3">
-                    <img class="h-10 w-10 rounded-full object-cover"
-                      src="../<?php echo htmlspecialchars($user['profile_image']); ?>"
-                      alt="User avatar" />
+              <?php if ($result && $result->num_rows > 0): ?>
+                <?php while ($user = $result->fetch_assoc()): ?>
+                  <div class="bg-white rounded-lg shadow p-4 hover:bg-gray-50">
+                    <div class="flex items-center space-x-4 mb-3">
+                      <img class="h-10 w-10 rounded-full object-cover"
+                        src="../<?php echo isset($user['profile_image']) ? htmlspecialchars($user['profile_image']) : 'user/uploads/default.png'; ?>"
+                        alt="User avatar" />
 
-                    <div>
-                      <div class="text-sm font-medium text-gray-900">
-                        <?php echo htmlspecialchars($user['full_name']); ?>
+                      <div>
+                        <div class="text-sm font-medium text-gray-900">
+                          <?php echo isset($user['full_name']) ? htmlspecialchars($user['full_name']) : 'Unknown'; ?>
+                        </div>
+                        <div class="text-sm text-gray-500">
+                          <?php echo isset($user['email']) ? htmlspecialchars($user['email']) : 'No email'; ?>
+                        </div>
                       </div>
-                      <div class="text-sm text-gray-500">
-                        <?php echo htmlspecialchars($user['email']); ?>
+                    </div>
+                    <div class="space-y-2">
+                      <div class="flex justify-between">
+                        <span class="text-sm text-gray-500">Phone:</span>
+                        <span class="text-sm text-gray-900">
+                          <?php echo isset($user['phone_number']) ? htmlspecialchars($user['phone_number']) : 'No phone'; ?>
+                        </span>
+                      </div>
+                      <div class="flex justify-end space-x-3 mt-3">
+                        <button class="text-indigo-600 hover:text-indigo-900"
+                          onclick="editUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)">Edit</button>
+                        <button class="text-red-600 hover:text-red-900"
+                          onclick="deleteUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)">Delete</button>
                       </div>
                     </div>
                   </div>
-                  <div class="space-y-2">
-                    <div class="flex justify-between">
-                      <span class="text-sm text-gray-500">Phone:</span>
-                      <span class="text-sm text-gray-900">
-                        <?php echo htmlspecialchars($user['phone_number']); ?>
-                      </span>
-                    </div>
-                    <div class="flex justify-end space-x-3 mt-3">
-                      <button class="text-indigo-600 hover:text-indigo-900"
-                        onclick="editUser(<?php echo $user['id']; ?>)">Edit</button>
-                      <button class="text-red-600 hover:text-red-900"
-                        onclick="deleteUser(<?php echo $user['id']; ?>)">Delete</button>
-                    </div>
-                  </div>
-                </div>
-              <?php endwhile; ?>
+                <?php endwhile; ?>
+              <?php else: ?>
+                <div class="text-center p-6 text-gray-500">No users found</div>
+              <?php endif; ?>
             </div>
           </div>
 
@@ -80,52 +84,62 @@ $result = $conn->query($sql);
             <tbody class="bg-white divide-y divide-gray-200">
               <?php
               // Reset the result pointer
-              $result->data_seek(0);
-              while ($user = $result->fetch_assoc()):
+              if ($result && $result->num_rows > 0) {
+                $result->data_seek(0);
+                while ($user = $result->fetch_assoc()):
               ?>
-                <tr class="hover:bg-gray-50">
-                  <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                    <div class="flex items-center">
-                      <div class="h-10 w-10">
-                        <img class="h-10 w-10 rounded-full object-cover"
-                          src="../<?php echo htmlspecialchars($user['profile_image']); ?>"
-                          alt="User avatar" />
-
-
-                      </div>
-                      <div class="ml-4">
-                        <div class="text-sm font-medium text-gray-900">
-                          <?php echo htmlspecialchars($user['full_name']); ?>
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <div class="flex items-center">
+                        <div class="h-10 w-10">
+                          <img class="h-10 w-10 rounded-full object-cover"
+                            src="../<?php echo isset($user['profile_image']) ? htmlspecialchars($user['profile_image']) : 'user/uploads/default.png'; ?>"
+                            alt="User avatar" />
                         </div>
-                        <div class="text-sm text-gray-500">
-                          <?php echo htmlspecialchars($user['gender']); ?>
+                        <div class="ml-4">
+                          <div class="text-sm font-medium text-gray-900">
+                            <?php echo isset($user['full_name']) ? htmlspecialchars($user['full_name']) : 'Unknown'; ?>
+                          </div>
+                          <div class="text-sm text-gray-500">
+                            <?php echo isset($user['gender']) ? htmlspecialchars($user['gender']) : 'Unknown'; ?>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm text-gray-900">
-                      <?php echo htmlspecialchars($user['email']); ?>
-                    </div>
-                  </td>
-                  <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm text-gray-900">
-                      <?php echo htmlspecialchars($user['phone_number']); ?>
-                    </div>
-                  </td>
-                  <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button class="text-indigo-600 hover:text-indigo-900 mr-3"
-                      onclick="editUser(<?php echo $user['id']; ?>)">Edit</button>
-                    <button class="text-red-600 hover:text-red-900"
-                      onclick="deleteUser(<?php echo $user['id']; ?>)">Delete</button>
-                    <a href="user-details.php?id=<?php echo $user['id']; ?>" class="btn btn-info btn-sm">View Details</a>
+                    </td>
+                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <div class="text-sm text-gray-900">
+                        <?php echo isset($user['email']) ? htmlspecialchars($user['email']) : 'No email'; ?>
+                      </div>
+                    </td>
+                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <div class="text-sm text-gray-900">
+                        <?php echo isset($user['phone_number']) ? htmlspecialchars($user['phone_number']) : 'No phone'; ?>
+                      </div>
+                    </td>
+                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button class="text-indigo-600 hover:text-indigo-900 mr-3"
+                        onclick="editUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)">Edit</button>
+                      <button class="text-red-600 hover:text-red-900 mr-3"
+                        onclick="deleteUser(<?php echo isset($user['id']) ? $user['id'] : 0; ?>)">Delete</button>
+                      <?php if (isset($user['id']) && $user['id'] > 0): ?>
+                        <a href="user-details.php?id=<?php echo $user['id']; ?>" class="text-blue-600 hover:text-blue-900">View Details</a>
+                      <?php endif; ?>
+                    </td>
+                  </tr>
+                <?php
+                endwhile;
+              } else {
+                ?>
+                <tr>
+                  <td colspan="4" class="px-4 sm:px-6 py-4 text-center text-gray-500">
+                    No users found
                   </td>
                 </tr>
-              <?php endwhile; ?>
+              <?php
+              }
+              ?>
             </tbody>
           </table>
-
-
         </div>
       </div>
       <?php include 'includes/js-links.php'; ?>
@@ -133,10 +147,27 @@ $result = $conn->query($sql);
   </div>
   <script>
     function editUser(userId) {
-      window.location.href = `edit-user.php?id=${userId}`;
+      if (userId > 0) {
+        window.location.href = `edit-user.php?id=${userId}`;
+      } else {
+        Swal.fire({
+          title: 'Error',
+          text: 'Invalid user ID',
+          icon: 'error'
+        });
+      }
     }
 
     function deleteUser(userId) {
+      if (userId <= 0) {
+        Swal.fire({
+          title: 'Error',
+          text: 'Invalid user ID',
+          icon: 'error'
+        });
+        return;
+      }
+
       Swal.fire({
         title: 'Are you sure?',
         text: "This will delete the user and all their associated data (bookings, etc.). This action cannot be undone!",
