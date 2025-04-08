@@ -366,7 +366,7 @@ if (empty($topRoutes)) {
   <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
     <?php include 'includes/sidebar.php'; ?>
-
+    <?php include 'includes/preloader.php'; ?>
     <!-- Main Content -->
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Navbar -->

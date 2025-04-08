@@ -74,19 +74,20 @@
       </div>
     </div>
 
-    <!-- Packages Section -->
+    <!-- Flight Section -->
     <div class="sidebar-section">
       <button class="w-full flex items-center justify-between px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors group"
-        onclick="toggleDropdown('packages-dropdown')">
+        onclick="toggleDropdown('flight-dropdown')">
         <div class="flex items-center space-x-3">
-          <i class="fas fa-box text-gray-400 group-hover:text-teal-400"></i>
-          <span class="group-hover:text-teal-400">Packages</span>
+          <i class="fas fa-plane text-gray-400 group-hover:text-teal-400"></i>
+          <span class="group-hover:text-teal-400">Flights</span>
         </div>
         <i class="fas fa-chevron-down text-sm transition-transform duration-200"></i>
       </button>
-      <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="packages-dropdown">
-        <a href="view-package.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">View Packages</a>
-        <a href="add-packages.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Package</a>
+      <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="flight-dropdown">
+        <a href="view-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">View Flights</a>
+        <a href="add-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Flight</a>
+        <a href="booked-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Booked Flights</a>
       </div>
     </div>
 
@@ -103,23 +104,6 @@
       <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="transportation-dropdown">
         <a href="view-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">View Transportation</a>
         <a href="add-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Transportation</a>
-      </div>
-    </div>
-
-    <!-- Flight Section -->
-    <div class="sidebar-section">
-      <button class="w-full flex items-center justify-between px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors group"
-        onclick="toggleDropdown('flight-dropdown')">
-        <div class="flex items-center space-x-3">
-          <i class="fas fa-plane text-gray-400 group-hover:text-teal-400"></i>
-          <span class="group-hover:text-teal-400">Flights</span>
-        </div>
-        <i class="fas fa-chevron-down text-sm transition-transform duration-200"></i>
-      </button>
-      <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="flight-dropdown">
-        <a href="view-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">View Flights</a>
-        <a href="add-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Flight</a>
-        <a href="booked-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Booked Flights</a>
       </div>
     </div>
 
@@ -140,6 +124,27 @@
       </div>
     </div>
 
+
+    <!-- Packages Section -->
+    <div class="sidebar-section">
+      <button class="w-full flex items-center justify-between px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors group"
+        onclick="toggleDropdown('packages-dropdown')">
+        <div class="flex items-center space-x-3">
+          <i class="fas fa-box text-gray-400 group-hover:text-teal-400"></i>
+          <span class="group-hover:text-teal-400">Packages</span>
+        </div>
+        <i class="fas fa-chevron-down text-sm transition-transform duration-200"></i>
+      </button>
+      <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="packages-dropdown">
+        <a href="view-package.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">View Packages</a>
+        <a href="add-packages.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Package</a>
+      </div>
+    </div>
+
+
+
+
+
     <!-- Assigning Section -->
     <div class="sidebar-section">
       <button class="w-full flex items-center justify-between px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors group"
@@ -151,8 +156,8 @@
         <i class="fas fa-chevron-down text-sm transition-transform duration-200"></i>
       </button>
       <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="assign-dropdown">
-      <a href="assign-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Assign Transportation</a>
-      <a href="assign-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Assign Flight</a>
+        <a href="assign-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Assign Transportation</a>
+        <a href="assign-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Assign Flight</a>
       </div>
     </div>
 
