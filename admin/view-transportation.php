@@ -9,139 +9,306 @@ if (!isset($_SESSION['admin_id'])) {
   exit();
 }
 
-// Handle booking status update
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_status'])) {
-  $booking_id = $_POST['booking_id'];
-  $new_status = $_POST['new_status'];
-  $admin_notes = $_POST['admin_notes'] ?? '';
+// Function to get taxi routes
+function getTaxiRoutes()
+{
+  global $conn;
+  $sql = "SELECT * FROM taxi_routes WHERE year = 2024 ORDER BY route_number";
+  $result = $conn->query($sql);
+  return $result->fetch_all(MYSQLI_ASSOC);
+}
 
-  $update_query = "UPDATE transportation_bookings SET 
-                   booking_status = ?, 
-                   admin_notes = ?,
-                   updated_at = NOW() 
-                   WHERE id = ?";
-  $stmt = $conn->prepare($update_query);
-  $stmt->bind_param("ssi", $new_status, $admin_notes, $booking_id);
+// Function to get rent a car routes
+function getRentacarRoutes()
+{
+  global $conn;
+  $sql = "SELECT * FROM rentacar_routes WHERE year = 2024 ORDER BY route_number";
+  $result = $conn->query($sql);
+  return $result->fetch_all(MYSQLI_ASSOC);
+}
 
+// Handling CRUD operations
+$success_message = '';
+$error_message = '';
+
+// ADD NEW TAXI ROUTE
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_taxi_route'])) {
+  $service_title = "Best Taxi Service for Umrah and Hajj in Makkah, Madinah and Jeddah";
+  $year = 2024;
+  $route_number = $_POST['route_number'];
+  $route_name = $_POST['route_name'];
+  $camry_sonata_price = $_POST['camry_sonata_price'];
+  $starex_staria_price = $_POST['starex_staria_price'];
+  $hiace_price = $_POST['hiace_price'];
+  
+  $sql = "INSERT INTO taxi_routes (service_title, year, route_number, route_name, camry_sonata_price, starex_staria_price, hiace_price, created_at) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
+  
+  $stmt = $conn->prepare($sql);
+  $stmt->bind_param("siisddd", $service_title, $year, $route_number, $route_name, $camry_sonata_price, $starex_staria_price, $hiace_price);
+  
   if ($stmt->execute()) {
-    $success_message = "Booking #" . $booking_id . " updated successfully!";
+    $success_message = "New taxi route added successfully!";
   } else {
-    $error_message = "Error updating booking: " . $conn->error;
+    $error_message = "Error adding taxi route: " . $conn->error;
   }
 }
 
-// Add search and filter functionality
-$search = isset($_GET['search']) ? $_GET['search'] : '';
-$status_filter = isset($_GET['status']) ? $_GET['status'] : '';
-$date_filter = isset($_GET['date']) ? $_GET['date'] : '';
-$service_filter = isset($_GET['service_type']) ? $_GET['service_type'] : '';
-
-// Build the query for bookings
-$query = "SELECT tb.*, u.full_name, u.email, u.phone_number 
-          FROM transportation_bookings tb
-          JOIN users u ON tb.user_id = u.id
-          WHERE 1=1";
-
-if ($search) {
-  $query .= " AND (tb.booking_reference LIKE '%$search%' 
-              OR tb.route_name LIKE '%$search%' 
-              OR u.full_name LIKE '%$search%' 
-              OR u.email LIKE '%$search%')";
+// ADD NEW RENTACAR ROUTE
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_rentacar_route'])) {
+  $service_title = "Best Umrah and Hajj Rent A Car in Makkah, Madinah and Jeddah";
+  $year = 2024;
+  $route_number = $_POST['route_number'];
+  $route_name = $_POST['route_name'];
+  $gmc_16_19_price = $_POST['gmc_16_19_price'];
+  $gmc_22_23_price = $_POST['gmc_22_23_price'];
+  $coaster_price = $_POST['coaster_price'];
+  
+  $sql = "INSERT INTO rentacar_routes (service_title, year, route_number, route_name, gmc_16_19_price, gmc_22_23_price, coaster_price, created_at) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
+  
+  $stmt = $conn->prepare($sql);
+  $stmt->bind_param("siisddd", $service_title, $year, $route_number, $route_name, $gmc_16_19_price, $gmc_22_23_price, $coaster_price);
+  
+  if ($stmt->execute()) {
+    $success_message = "New rent a car route added successfully!";
+  } else {
+    $error_message = "Error adding rent a car route: " . $conn->error;
+  }
 }
 
-if ($status_filter) {
-  $query .= " AND tb.booking_status = '$status_filter'";
+// UPDATE TAXI ROUTE
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_taxi_route'])) {
+  $id = $_POST['taxi_route_id'];
+  $route_number = $_POST['route_number'];
+  $route_name = $_POST['route_name'];
+  $camry_sonata_price = $_POST['camry_sonata_price'];
+  $starex_staria_price = $_POST['starex_staria_price'];
+  $hiace_price = $_POST['hiace_price'];
+  
+  $sql = "UPDATE taxi_routes SET 
+          route_number = ?, 
+          route_name = ?, 
+          camry_sonata_price = ?, 
+          starex_staria_price = ?, 
+          hiace_price = ?,
+          updated_at = NOW() 
+          WHERE id = ?";
+  
+  $stmt = $conn->prepare($sql);
+  $stmt->bind_param("isdddi", $route_number, $route_name, $camry_sonata_price, $starex_staria_price, $hiace_price, $id);
+  
+  if ($stmt->execute()) {
+    $success_message = "Taxi route updated successfully!";
+  } else {
+    $error_message = "Error updating taxi route: " . $conn->error;
+  }
 }
 
-if ($date_filter) {
-  $query .= " AND DATE(tb.booking_date) = '$date_filter'";
+// UPDATE RENTACAR ROUTE
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_rentacar_route'])) {
+  $id = $_POST['rentacar_route_id'];
+  $route_number = $_POST['route_number'];
+  $route_name = $_POST['route_name'];
+  $gmc_16_19_price = $_POST['gmc_16_19_price'];
+  $gmc_22_23_price = $_POST['gmc_22_23_price'];
+  $coaster_price = $_POST['coaster_price'];
+  
+  $sql = "UPDATE rentacar_routes SET 
+          route_number = ?, 
+          route_name = ?, 
+          gmc_16_19_price = ?, 
+          gmc_22_23_price = ?, 
+          coaster_price = ?,
+          updated_at = NOW() 
+          WHERE id = ?";
+  
+  $stmt = $conn->prepare($sql);
+  $stmt->bind_param("isdddi", $route_number, $route_name, $gmc_16_19_price, $gmc_22_23_price, $coaster_price, $id);
+  
+  if ($stmt->execute()) {
+    $success_message = "Rent a car route updated successfully!";
+  } else {
+    $error_message = "Error updating rent a car route: " . $conn->error;
+  }
 }
 
-if ($service_filter) {
-  $query .= " AND tb.service_type = '$service_filter'";
+// DELETE TAXI ROUTE
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_taxi_route'])) {
+  $id = $_POST['taxi_route_id'];
+  
+  $sql = "DELETE FROM taxi_routes WHERE id = ?";
+  $stmt = $conn->prepare($sql);
+  $stmt->bind_param("i", $id);
+  
+  if ($stmt->execute()) {
+    $success_message = "Taxi route deleted successfully!";
+  } else {
+    $error_message = "Error deleting taxi route: " . $conn->error;
+  }
 }
 
-$query .= " ORDER BY tb.created_at DESC";
-
-$result = mysqli_query($conn, $query);
-
-// Count bookings by status
-$status_counts = [];
-$count_query = "SELECT booking_status, COUNT(*) as count FROM transportation_bookings GROUP BY booking_status";
-$count_result = mysqli_query($conn, $count_query);
-while ($row = mysqli_fetch_assoc($count_result)) {
-  $status_counts[$row['booking_status']] = $row['count'];
+// DELETE RENTACAR ROUTE
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_rentacar_route'])) {
+  $id = $_POST['rentacar_route_id'];
+  
+  $sql = "DELETE FROM rentacar_routes WHERE id = ?";
+  $stmt = $conn->prepare($sql);
+  $stmt->bind_param("i", $id);
+  
+  if ($stmt->execute()) {
+    $success_message = "Rent a car route deleted successfully!";
+  } else {
+    $error_message = "Error deleting rent a car route: " . $conn->error;
+  }
 }
 
-$total_bookings = array_sum($status_counts);
+// Get data
+$taxi_routes = getTaxiRoutes();
+$rentacar_routes = getRentacarRoutes();
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
-<meta charset="UTF-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Panel</title>
+  <title>Transportation Management | Admin Panel</title>
   <link rel="stylesheet" href="../assets/css/output.css">
   <link rel="stylesheet" href="assets/css/output.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
-    .status-badge {
-      padding: 0.25rem 0.5rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
+    .tab-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .tab-btn {
+      padding: 10px 20px;
+      border-radius: 6px;
       font-weight: 600;
-      text-transform: capitalize;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
     }
 
-    .status-pending {
-      background-color: #FEF3C7;
-      color: #92400E;
+    .tab-btn.active {
+      background-color: #0d9488;
+      color: white;
     }
 
-    .status-confirmed {
-      background-color: #D1FAE5;
-      color: #065F46;
+    .tab-btn:not(.active) {
+      background-color: #e2e8f0;
+      color: #1e293b;
     }
 
-    .status-completed {
-      background-color: #DBEAFE;
-      color: #1E40AF;
+    .tab-btn:hover:not(.active) {
+      background-color: #cbd5e1;
     }
 
-    .status-cancelled {
-      background-color: #FEE2E2;
-      color: #991B1B;
+    .tab-content {
+      display: none;
     }
 
-    .payment-badge {
-      padding: 0.25rem 0.5rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.5s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .price-table {
+      border-collapse: separate;
+      border-spacing: 0;
+      width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      background-color: white;
+    }
+
+    .price-table th {
+      background-color: #0d9488;
+      color: white;
       font-weight: 600;
-      text-transform: capitalize;
+      text-align: center;
+      padding: 12px;
     }
 
-    .payment-unpaid {
-      background-color: #F3F4F6;
-      color: #4B5563;
+    .price-table td {
+      border-top: 1px solid #e2e8f0;
+      padding: 12px;
+      text-align: center;
     }
 
-    .payment-paid {
-      background-color: #D1FAE5;
-      color: #065F46;
+    .price-table tr:nth-child(even) {
+      background-color: #f8fafc;
     }
 
-    .payment-refunded {
-      background-color: #E0E7FF;
-      color: #4338CA;
+    .price-table tr:hover {
+      background-color: #e6fffa;
     }
 
-    .booking-details-row:nth-child(even) {
-      background-color: #F9FAFB;
+    .action-btn {
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-right: 5px;
+    }
+
+    .edit-btn {
+      background-color: #3b82f6;
+      color: white;
+    }
+
+    .edit-btn:hover {
+      background-color: #2563eb;
+    }
+
+    .delete-btn {
+      background-color: #ef4444;
+      color: white;
+    }
+
+    .delete-btn:hover {
+      background-color: #dc2626;
+    }
+
+    .add-btn {
+      background-color: #10b981;
+      color: white;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-weight: 500;
+      margin-bottom: 20px;
+    }
+
+    .add-btn:hover {
+      background-color: #059669;
+    }
+
+    /* Rentacar styles */
+    .rentacar-th {
+      background-color: #1d4ed8;
+    }
+
+    .rentacar-row:hover {
+      background-color: #eff6ff !important;
     }
   </style>
 </head>
@@ -150,13 +317,12 @@ $total_bookings = array_sum($status_counts);
   <div class="flex h-screen">
     <!-- Sidebar -->
     <?php include 'includes/sidebar.php'; ?>
-    <!-- Navbar -->
 
     <!-- Main Content -->
-    <div class="overflow-y-auto main flex-1 flex flex-col">
+    <div class="overflow-y-auto flex-1 flex flex-col">
       <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center">
         <h1 class="text-xl font-semibold">
-          <i class="text-teal-600 fas fa-ticket-alt mx-2"></i> Transportation Bookings
+          <i class="text-teal-600 fas fa-car mx-2"></i> Transportation Management
         </h1>
         <div class="flex items-center space-x-4">
           <button class="md:hidden text-gray-800" id="menu-btn">
@@ -166,621 +332,485 @@ $total_bookings = array_sum($status_counts);
       </div>
 
       <div class="container mx-auto px-4 py-8">
-        <?php if (isset($success_message)): ?>
-          <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6">
+        <?php if ($success_message): ?>
+          <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" id="success-alert">
             <p><?php echo $success_message; ?></p>
           </div>
+          <script>
+            setTimeout(() => {
+              document.getElementById('success-alert').style.display = 'none';
+            }, 5000);
+          </script>
         <?php endif; ?>
 
-        <?php if (isset($error_message)): ?>
-          <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
+        <?php if ($error_message): ?>
+          <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" id="error-alert">
             <p><?php echo $error_message; ?></p>
           </div>
+          <script>
+            setTimeout(() => {
+              document.getElementById('error-alert').style.display = 'none';
+            }, 5000);
+          </script>
         <?php endif; ?>
 
-        <!-- Dashboard Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div class="bg-white p-4 rounded-lg shadow flex items-center">
-            <div class="rounded-full bg-blue-100 p-3 mr-4">
-              <i class="fas fa-ticket-alt text-blue-600 text-xl"></i>
-            </div>
-            <div>
-              <p class="text-gray-500 text-sm">Total Bookings</p>
-              <p class="text-2xl font-bold"><?php echo $total_bookings; ?></p>
-            </div>
-          </div>
-
-          <div class="bg-white p-4 rounded-lg shadow flex items-center">
-            <div class="rounded-full bg-yellow-100 p-3 mr-4">
-              <i class="fas fa-clock text-yellow-600 text-xl"></i>
-            </div>
-            <div>
-              <p class="text-gray-500 text-sm">Pending</p>
-              <p class="text-2xl font-bold"><?php echo $status_counts['pending'] ?? 0; ?></p>
-            </div>
-          </div>
-
-          <div class="bg-white p-4 rounded-lg shadow flex items-center">
-            <div class="rounded-full bg-green-100 p-3 mr-4">
-              <i class="fas fa-check-circle text-green-600 text-xl"></i>
-            </div>
-            <div>
-              <p class="text-gray-500 text-sm">Confirmed</p>
-              <p class="text-2xl font-bold"><?php echo $status_counts['confirmed'] ?? 0; ?></p>
-            </div>
-          </div>
-
-          <div class="bg-white p-4 rounded-lg shadow flex items-center">
-            <div class="rounded-full bg-red-100 p-3 mr-4">
-              <i class="fas fa-ban text-red-600 text-xl"></i>
-            </div>
-            <div>
-              <p class="text-gray-500 text-sm">Cancelled</p>
-              <p class="text-2xl font-bold"><?php echo $status_counts['cancelled'] ?? 0; ?></p>
-            </div>
-          </div>
-        </div>
-
         <div class="bg-white p-6 rounded-lg shadow-lg">
-          <!-- Search and Filters -->
-          <div class="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label for="searchInput" class="block text-sm font-medium text-gray-700 mb-1">Search</label>
-              <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <i class="fas fa-search text-gray-400"></i>
-                </div>
-                <input id="searchInput" type="text" placeholder="Booking ID, Name, Email..."
-                  value="<?php echo htmlspecialchars($search); ?>"
-                  class="pl-10 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
-              </div>
+          <div class="tab-buttons flex justify-center">
+            <button class="tab-btn active" onclick="switchTab('taxi')">Taxi Routes</button>
+            <button class="tab-btn" onclick="switchTab('rentacar')">Rent A Car Routes</button>
+          </div>
+
+          <!-- Taxi Routes Tab -->
+          <div id="taxi-tab" class="tab-content active">
+            <div class="mb-6">
+              <h2 class="text-2xl font-bold">Taxi Routes Management</h2>
             </div>
 
-            <div>
-              <label for="statusFilter" class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select id="statusFilter" class="focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
-                <option value="">All Statuses</option>
-                <option value="pending" <?php echo $status_filter === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                <option value="confirmed" <?php echo $status_filter === 'confirmed' ? 'selected' : ''; ?>>Confirmed</option>
-                <option value="completed" <?php echo $status_filter === 'completed' ? 'selected' : ''; ?>>Completed</option>
-                <option value="cancelled" <?php echo $status_filter === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-              </select>
-            </div>
-
-            <div>
-              <label for="dateFilter" class="block text-sm font-medium text-gray-700 mb-1">Booking Date</label>
-              <input type="date" id="dateFilter"
-                value="<?php echo htmlspecialchars($date_filter); ?>"
-                class="focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
-            </div>
-
-            <div>
-              <label for="serviceFilter" class="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
-              <select id="serviceFilter" class="focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
-                <option value="">All Services</option>
-                <option value="taxi" <?php echo $service_filter === 'taxi' ? 'selected' : ''; ?>>Taxi</option>
-                <option value="rentacar" <?php echo $service_filter === 'rentacar' ? 'selected' : ''; ?>>Rent A Car</option>
-              </select>
+            <div class="overflow-x-auto">
+              <table class="price-table">
+                <thead>
+                  <tr>
+                    <th class="w-16">No.</th>
+                    <th class="text-left">Routes</th>
+                    <th>Camry / Sonata</th>
+                    <th>Starex / Staria</th>
+                    <th>Hiace</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php if (count($taxi_routes) > 0): ?>
+                    <?php foreach ($taxi_routes as $route): ?>
+                      <tr>
+                        <td><?php echo $route['route_number']; ?></td>
+                        <td class="text-left font-medium"><?php echo htmlspecialchars($route['route_name']); ?></td>
+                        <td><?php echo $route['camry_sonata_price']; ?> SR</td>
+                        <td><?php echo $route['starex_staria_price']; ?> SR</td>
+                        <td><?php echo $route['hiace_price']; ?> SR</td>
+                        <td>
+                          <button class="action-btn edit-btn" onclick="showEditTaxiRouteModal(
+                            <?php echo $route['id']; ?>, 
+                            <?php echo $route['route_number']; ?>, 
+                            '<?php echo addslashes(htmlspecialchars($route['route_name'])); ?>', 
+                            <?php echo $route['camry_sonata_price']; ?>, 
+                            <?php echo $route['starex_staria_price']; ?>, 
+                            <?php echo $route['hiace_price']; ?>
+                          )">
+                            <i class="fas fa-edit"></i> Edit
+                          </button>
+                          <button class="action-btn delete-btn" onclick="confirmDeleteTaxiRoute(<?php echo $route['id']; ?>)">
+                            <i class="fas fa-trash"></i> Delete
+                          </button>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  <?php else: ?>
+                    <tr>
+                      <td colspan="6" class="py-4 text-center text-gray-500">No taxi routes found</td>
+                    </tr>
+                  <?php endif; ?>
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <!-- Bookings Table -->
-          <div class="overflow-x-auto">
-            <table class="min-w-full">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Booking ID</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route & Vehicle</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                <?php if (mysqli_num_rows($result) > 0): ?>
-                  <?php while ($booking = mysqli_fetch_assoc($result)): ?>
-                    <tr class="hover:bg-gray-50">
-                      <td class="px-6 py-4">
-                        <div class="font-medium text-gray-900"><?php echo htmlspecialchars($booking['booking_reference']); ?></div>
-                        <div class="text-xs text-gray-500"><?php echo date('M j, Y', strtotime($booking['created_at'])); ?></div>
-                      </td>
+          <!-- Rent A Car Routes Tab -->
+          <div id="rentacar-tab" class="tab-content">
+            <div class="mb-6">
+              <h2 class="text-2xl font-bold">Rent A Car Routes Management</h2>
+            </div>
 
-                      <td class="px-6 py-4">
-                        <div class="font-medium text-gray-900"><?php echo htmlspecialchars($booking['full_name']); ?></div>
-                        <div class="text-xs text-gray-500"><?php echo htmlspecialchars($booking['email']); ?></div>
-                        <?php if (!empty($booking['phone_number'])): ?>
-                          <div class="text-xs text-gray-500"><?php echo htmlspecialchars($booking['phone_number']); ?></div>
-                        <?php endif; ?>
-                      </td>
-
-                      <td class="px-6 py-4">
-                        <div class="font-medium text-gray-900"><?php echo ucfirst($booking['service_type']); ?></div>
-                        <div class="text-xs text-gray-500">
-                          <span class="payment-badge 
-                          <?php echo 'payment-' . $booking['payment_status']; ?>">
-                            <?php echo ucfirst($booking['payment_status']); ?>
-                          </span>
-                        </div>
-                      </td>
-
-                      <td class="px-6 py-4">
-                        <div class="font-medium text-gray-900"><?php echo htmlspecialchars($booking['route_name'] ?? 'N/A'); ?></div>
-                        <div class="text-sm text-gray-500"><?php echo htmlspecialchars($booking['vehicle_name'] ?? 'N/A'); ?></div>
-                        <div class="text-xs text-gray-500"><?php echo $booking['price']; ?> SR</div>
-                      </td>
-
-                      <td class="px-6 py-4">
-                        <div class="font-medium text-gray-900">
-                          <?php echo date('M j, Y', strtotime($booking['booking_date'])); ?>
-                        </div>
-                        <div class="text-sm text-gray-500">
-                          <?php echo date('h:i A', strtotime($booking['booking_time'])); ?>
-                        </div>
-                        <div class="text-xs text-gray-500">
-                          <?php echo $booking['passengers']; ?> passengers
-                        </div>
-                      </td>
-
-                      <td class="px-6 py-4">
-                        <span class="status-badge 
-                        <?php echo 'status-' . $booking['booking_status']; ?>">
-                          <?php echo ucfirst($booking['booking_status']); ?>
-                        </span>
-                      </td>
-
-                      <td class="px-6 py-4">
-                        <div class="flex space-x-3">
-                          <button class="text-blue-600 hover:text-blue-900 view-details-btn"
-                            data-id="<?php echo $booking['id']; ?>">
-                            <i class="fas fa-eye"></i>
-                          </button>
-
-                          <?php if ($booking['booking_status'] == 'pending'): ?>
-                            <button class="text-green-600 hover:text-green-900 confirm-booking-btn"
-                              data-id="<?php echo $booking['id']; ?>"
-                              data-reference="<?php echo $booking['booking_reference']; ?>">
-                              <i class="fas fa-check"></i>
-                            </button>
-                          <?php endif; ?>
-
-                          <?php if ($booking['booking_status'] != 'cancelled' && $booking['booking_status'] != 'completed'): ?>
-                            <button class="text-red-600 hover:text-red-900 cancel-booking-btn"
-                              data-id="<?php echo $booking['id']; ?>"
-                              data-reference="<?php echo $booking['booking_reference']; ?>">
-                              <i class="fas fa-times"></i>
-                            </button>
-                          <?php endif; ?>
-
-                          <button class="text-gray-600 hover:text-gray-900 print-btn"
-                            data-id="<?php echo $booking['id']; ?>"
-                            data-reference="<?php echo $booking['booking_reference']; ?>">
-                            <i class="fas fa-print"></i>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  <?php endwhile; ?>
-                <?php else: ?>
+            <div class="overflow-x-auto">
+              <table class="price-table">
+                <thead>
                   <tr>
-                    <td colspan="7" class="px-6 py-4 text-center text-gray-500">No bookings found</td>
+                    <th class="w-16 rentacar-th">No.</th>
+                    <th class="text-left rentacar-th">Routes</th>
+                    <th class="rentacar-th">GMC 16-19</th>
+                    <th class="rentacar-th">GMC 22-23</th>
+                    <th class="rentacar-th">COASTER</th>
+                    <th class="rentacar-th">Actions</th>
                   </tr>
-                <?php endif; ?>
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  <?php if (count($rentacar_routes) > 0): ?>
+                    <?php foreach ($rentacar_routes as $route): ?>
+                      <tr class="rentacar-row">
+                        <td><?php echo $route['route_number']; ?></td>
+                        <td class="text-left font-medium"><?php echo htmlspecialchars($route['route_name']); ?></td>
+                        <td><?php echo $route['gmc_16_19_price']; ?> SR</td>
+                        <td><?php echo $route['gmc_22_23_price']; ?> SR</td>
+                        <td><?php echo $route['coaster_price']; ?> SR</td>
+                        <td>
+                          <button class="action-btn edit-btn" onclick="showEditRentacarRouteModal(
+                            <?php echo $route['id']; ?>, 
+                            <?php echo $route['route_number']; ?>, 
+                            '<?php echo addslashes(htmlspecialchars($route['route_name'])); ?>', 
+                            <?php echo $route['gmc_16_19_price']; ?>, 
+                            <?php echo $route['gmc_22_23_price']; ?>, 
+                            <?php echo $route['coaster_price']; ?>
+                          )">
+                            <i class="fas fa-edit"></i> Edit
+                          </button>
+                          <button class="action-btn delete-btn" onclick="confirmDeleteRentacarRoute(<?php echo $route['id']; ?>)">
+                            <i class="fas fa-trash"></i> Delete
+                          </button>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  <?php else: ?>
+                    <tr>
+                      <td colspan="6" class="py-4 text-center text-gray-500">No rent a car routes found</td>
+                    </tr>
+                  <?php endif; ?>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Booking Details Modal -->
-  <div id="bookingDetailsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-screen overflow-y-auto">
+  <!-- Add Taxi Route Modal -->
+  <div id="addTaxiRouteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
       <div class="flex justify-between items-center border-b px-6 py-4">
-        <h3 class="text-lg font-medium text-gray-900">Booking Details</h3>
-        <button id="closeModal" class="text-gray-400 hover:text-gray-500">
+        <h3 class="text-lg font-medium text-gray-900">Add New Taxi Route</h3>
+        <button onclick="closeAddTaxiRouteModal()" class="text-gray-400 hover:text-gray-500">
           <i class="fas fa-times"></i>
         </button>
       </div>
 
-      <div class="p-6" id="bookingDetailsContent">
-        <!-- Content will be loaded dynamically -->
-        <div class="animate-pulse">
-          <div class="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
-          <div class="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-          <div class="h-4 bg-gray-200 rounded w-5/6 mb-4"></div>
-          <div class="h-4 bg-gray-200 rounded w-2/3 mb-4"></div>
-        </div>
-      </div>
+      <form method="POST" action="">
+        <div class="p-6 space-y-4">
+          <div>
+            <label for="taxi_route_number" class="block text-sm font-medium text-gray-700 mb-1">Route Number</label>
+            <input type="number" id="taxi_route_number" name="route_number" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
+          </div>
 
-      <div class="border-t px-6 py-4 bg-gray-50 flex justify-end space-x-3" id="bookingDetailsActions">
-        <!-- Action buttons will be loaded dynamically -->
-      </div>
+          <div>
+            <label for="taxi_route_name" class="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
+            <input type="text" id="taxi_route_name" name="route_name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="taxi_camry_price" class="block text-sm font-medium text-gray-700 mb-1">Camry/Sonata Price (SR)</label>
+            <input type="number" id="taxi_camry_price" name="camry_sonata_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="taxi_starex_price" class="block text-sm font-medium text-gray-700 mb-1">Starex/Staria Price (SR)</label>
+            <input type="number" id="taxi_starex_price" name="starex_staria_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="taxi_hiace_price" class="block text-sm font-medium text-gray-700 mb-1">Hiace Price (SR)</label>
+            <input type="number" id="taxi_hiace_price" name="hiace_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
+          </div>
+        </div>
+
+        <div class="border-t px-6 py-4 bg-gray-50 flex justify-end">
+          <button type="button" onclick="closeAddTaxiRouteModal()" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 mr-2">
+            Cancel
+          </button>
+          <button type="submit" name="add_taxi_route" class="bg-teal-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
+            Add Route
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
+  <!-- Edit Taxi Route Modal -->
+  <div id="editTaxiRouteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div class="flex justify-between items-center border-b px-6 py-4">
+        <h3 class="text-lg font-medium text-gray-900">Edit Taxi Route</h3>
+        <button onclick="closeEditTaxiRouteModal()" class="text-gray-400 hover:text-gray-500">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <form method="POST" action="">
+        <input type="hidden" id="edit_taxi_route_id" name="taxi_route_id">
+        <div class="p-6 space-y-4">
+          <div>
+            <label for="edit_taxi_route_number" class="block text-sm font-medium text-gray-700 mb-1">Route Number</label>
+            <input type="number" id="edit_taxi_route_number" name="route_number" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="edit_taxi_route_name" class="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
+            <input type="text" id="edit_taxi_route_name" name="route_name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="edit_taxi_camry_price" class="block text-sm font-medium text-gray-700 mb-1">Camry/Sonata Price (SR)</label>
+            <input type="number" id="edit_taxi_camry_price" name="camry_sonata_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="edit_taxi_starex_price" class="block text-sm font-medium text-gray-700 mb-1">Starex/Staria Price (SR)</label>
+            <input type="number" id="edit_taxi_starex_price" name="starex_staria_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="edit_taxi_hiace_price" class="block text-sm font-medium text-gray-700 mb-1">Hiace Price (SR)</label>
+            <input type="number" id="edit_taxi_hiace_price" name="hiace_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
+          </div>
+        </div>
+
+        <div class="border-t px-6 py-4 bg-gray-50 flex justify-end">
+          <button type="button" onclick="closeEditTaxiRouteModal()" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 mr-2">
+            Cancel
+          </button>
+          <button type="submit" name="update_taxi_route" class="bg-teal-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
+            Update Route
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Rentacar Route Modal -->
+  <div id="addRentacarRouteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div class="flex justify-between items-center border-b px-6 py-4">
+        <h3 class="text-lg font-medium text-gray-900">Add New Rent A Car Route</h3>
+        <button onclick="closeAddRentacarRouteModal()" class="text-gray-400 hover:text-gray-500">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <form method="POST" action="">
+        <div class="p-6 space-y-4">
+          <div>
+            <label for="rentacar_route_number" class="block text-sm font-medium text-gray-700 mb-1">Route Number</label>
+            <input type="number" id="rentacar_route_number" name="route_number" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="rentacar_route_name" class="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
+            <input type="text" id="rentacar_route_name" name="route_name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="rentacar_gmc_16_19_price" class="block text-sm font-medium text-gray-700 mb-1">GMC 16-19 Price (SR)</label>
+            <input type="number" id="rentacar_gmc_16_19_price" name="gmc_16_19_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="rentacar_gmc_22_23_price" class="block text-sm font-medium text-gray-700 mb-1">GMC 22-23 Price (SR)</label>
+            <input type="number" id="rentacar_gmc_22_23_price" name="gmc_22_23_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="rentacar_coaster_price" class="block text-sm font-medium text-gray-700 mb-1">Coaster Price (SR)</label>
+            <input type="number" id="rentacar_coaster_price" name="coaster_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+          </div>
+        </div>
+
+        <div class="border-t px-6 py-4 bg-gray-50 flex justify-end">
+          <button type="button" onclick="closeAddRentacarRouteModal()" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 mr-2">
+            Cancel
+          </button>
+          <button type="submit" name="add_rentacar_route" class="bg-blue-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            Add Route
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit Rentacar Route Modal -->
+  <div id="editRentacarRouteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div class="flex justify-between items-center border-b px-6 py-4">
+        <h3 class="text-lg font-medium text-gray-900">Edit Rent A Car Route</h3>
+        <button onclick="closeEditRentacarRouteModal()" class="text-gray-400 hover:text-gray-500">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <form method="POST" action="">
+        <input type="hidden" id="edit_rentacar_route_id" name="rentacar_route_id">
+        <div class="p-6 space-y-4">
+          <div>
+            <label for="edit_rentacar_route_number" class="block text-sm font-medium text-gray-700 mb-1">Route Number</label>
+            <input type="number" id="edit_rentacar_route_number" name="route_number" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="edit_rentacar_route_name" class="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
+            <input type="text" id="edit_rentacar_route_name" name="route_name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="edit_rentacar_gmc_16_19_price" class="block text-sm font-medium text-gray-700 mb-1">GMC 16-19 Price (SR)</label>
+            <input type="number" id="edit_rentacar_gmc_16_19_price" name="gmc_16_19_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="edit_rentacar_gmc_22_23_price" class="block text-sm font-medium text-gray-700 mb-1">GMC 22-23 Price (SR)</label>
+            <input type="number" id="edit_rentacar_gmc_22_23_price" name="gmc_22_23_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+          </div>
+
+          <div>
+            <label for="edit_rentacar_coaster_price" class="block text-sm font-medium text-gray-700 mb-1">Coaster Price (SR)</label>
+            <input type="number" id="edit_rentacar_coaster_price" name="coaster_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+          </div>
+        </div>
+
+        <div class="border-t px-6 py-4 bg-gray-50 flex justify-end">
+          <button type="button" onclick="closeEditRentacarRouteModal()" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 mr-2">
+            Cancel
+          </button>
+          <button type="submit" name="update_rentacar_route" class="bg-blue-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            Update Route
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Taxi Route Form (Hidden) -->
+  <form id="deleteTaxiRouteForm" method="POST" action="" style="display: none;">
+    <input type="hidden" id="delete_taxi_route_id" name="taxi_route_id">
+    <input type="hidden" name="delete_taxi_route" value="1">
+  </form>
+
+  <!-- Delete Rentacar Route Form (Hidden) -->
+  <form id="deleteRentacarRouteForm" method="POST" action="" style="display: none;">
+    <input type="hidden" id="delete_rentacar_route_id" name="rentacar_route_id">
+    <input type="hidden" name="delete_rentacar_route" value="1">
+  </form>
+
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Search and Filter Implementation
-      const searchInput = document.getElementById('searchInput');
-      const statusFilter = document.getElementById('statusFilter');
-      const dateFilter = document.getElementById('dateFilter');
-      const serviceFilter = document.getElementById('serviceFilter');
-
-      function updateURL() {
-        const searchValue = searchInput.value;
-        const statusValue = statusFilter.value;
-        const dateValue = dateFilter.value;
-        const serviceValue = serviceFilter.value;
-        const url = new URL(window.location.href);
-
-        if (searchValue) url.searchParams.set('search', searchValue);
-        else url.searchParams.delete('search');
-
-        if (statusValue) url.searchParams.set('status', statusValue);
-        else url.searchParams.delete('status');
-
-        if (dateValue) url.searchParams.set('date', dateValue);
-        else url.searchParams.delete('date');
-
-        if (serviceValue) url.searchParams.set('service_type', serviceValue);
-        else url.searchParams.delete('service_type');
-
-        window.location.href = url.toString();
-      }
-
-      searchInput.addEventListener('keyup', function(e) {
-        if (e.key === 'Enter') updateURL();
+    // Tab switching
+    function switchTab(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
       });
 
-      statusFilter.addEventListener('change', updateURL);
-      dateFilter.addEventListener('change', updateURL);
-      serviceFilter.addEventListener('change', updateURL);
-
-      // View Booking Details
-      const detailsModal = document.getElementById('bookingDetailsModal');
-      const closeModal = document.getElementById('closeModal');
-      const detailsContent = document.getElementById('bookingDetailsContent');
-      const detailsActions = document.getElementById('bookingDetailsActions');
-
-      // Close modal when clicking close button or outside the modal
-      closeModal.addEventListener('click', function() {
-        detailsModal.classList.add('hidden');
+      // Remove active class from all buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
       });
 
-      window.addEventListener('click', function(e) {
-        if (e.target === detailsModal) {
-          detailsModal.classList.add('hidden');
+      // Show selected tab
+      document.getElementById(tabName + '-tab').classList.add('active');
+
+      // Add active class to clicked button
+      event.target.classList.add('active');
+    }
+
+    // Taxi Route Modal Functions
+    function showAddTaxiRouteModal() {
+      document.getElementById('addTaxiRouteModal').classList.remove('hidden');
+      document.getElementById('addTaxiRouteModal').classList.add('flex');
+    }
+
+    function closeAddTaxiRouteModal() {
+      document.getElementById('addTaxiRouteModal').classList.remove('flex');
+      document.getElementById('addTaxiRouteModal').classList.add('hidden');
+    }
+
+    function showEditTaxiRouteModal(id, routeNumber, routeName, camryPrice, starexPrice, hiacePrice) {
+      document.getElementById('edit_taxi_route_id').value = id;
+      document.getElementById('edit_taxi_route_number').value = routeNumber;
+      document.getElementById('edit_taxi_route_name').value = routeName;
+      document.getElementById('edit_taxi_camry_price').value = camryPrice;
+      document.getElementById('edit_taxi_starex_price').value = starexPrice;
+      document.getElementById('edit_taxi_hiace_price').value = hiacePrice;
+
+      document.getElementById('editTaxiRouteModal').classList.remove('hidden');
+      document.getElementById('editTaxiRouteModal').classList.add('flex');
+    }
+
+    function closeEditTaxiRouteModal() {
+      document.getElementById('editTaxiRouteModal').classList.remove('flex');
+      document.getElementById('editTaxiRouteModal').classList.add('hidden');
+    }
+
+    function confirmDeleteTaxiRoute(id) {
+      Swal.fire({
+        title: 'Are you sure?',
+        text: "This will permanently delete this taxi route!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#EF4444',
+        cancelButtonColor: '#6B7280',
+        confirmButtonText: 'Yes, delete it!'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          document.getElementById('delete_taxi_route_id').value = id;
+          document.getElementById('deleteTaxiRouteForm').submit();
         }
       });
+    }
 
-      // Show booking details
-      document.querySelectorAll('.view-details-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          const bookingId = this.getAttribute('data-id');
+    // Rentacar Route Modal Functions
+    function showAddRentacarRouteModal() {
+      document.getElementById('addRentacarRouteModal').classList.remove('hidden');
+      document.getElementById('addRentacarRouteModal').classList.add('flex');
+    }
 
-          // Show modal with loading state
-          detailsModal.classList.remove('hidden');
+    function closeAddRentacarRouteModal() {
+      document.getElementById('addRentacarRouteModal').classList.remove('flex');
+      document.getElementById('addRentacarRouteModal').classList.add('hidden');
+    }
 
-          // Load booking details
-          fetch(`get-booking-details.php?id=${bookingId}`)
-            .then(response => response.json())
-            .then(data => {
-              if (data.success) {
-                const booking = data.booking;
+    function showEditRentacarRouteModal(id, routeNumber, routeName, gmc16Price, gmc22Price, coasterPrice) {
+      document.getElementById('edit_rentacar_route_id').value = id;
+      document.getElementById('edit_rentacar_route_number').value = routeNumber;
+      document.getElementById('edit_rentacar_route_name').value = routeName;
+      document.getElementById('edit_rentacar_gmc_16_19_price').value = gmc16Price;
+      document.getElementById('edit_rentacar_gmc_22_23_price').value = gmc22Price;
+      document.getElementById('edit_rentacar_coaster_price').value = coasterPrice;
 
-                // Format dates
-                const bookingDate = new Date(booking.booking_date);
-                const formattedDate = new Intl.DateTimeFormat('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                }).format(bookingDate);
+      document.getElementById('editRentacarRouteModal').classList.remove('hidden');
+      document.getElementById('editRentacarRouteModal').classList.add('flex');
+    }
 
-                const bookingTime = new Date(`2000-01-01T${booking.booking_time}`);
-                const formattedTime = new Intl.DateTimeFormat('en-US', {
-                  hour: 'numeric',
-                  minute: 'numeric',
-                  hour12: true
-                }).format(bookingTime);
+    function closeEditRentacarRouteModal() {
+      document.getElementById('editRentacarRouteModal').classList.remove('flex');
+      document.getElementById('editRentacarRouteModal').classList.add('hidden');
+    }
 
-                // Determine status class
-                let statusClass = '';
-                switch (booking.booking_status) {
-                  case 'pending':
-                    statusClass = 'status-pending';
-                    break;
-                  case 'confirmed':
-                    statusClass = 'status-confirmed';
-                    break;
-                  case 'completed':
-                    statusClass = 'status-completed';
-                    break;
-                  case 'cancelled':
-                    statusClass = 'status-cancelled';
-                    break;
-                }
-
-                // Determine payment status class
-                let paymentClass = '';
-                switch (booking.payment_status) {
-                  case 'unpaid':
-                    paymentClass = 'payment-unpaid';
-                    break;
-                  case 'paid':
-                    paymentClass = 'payment-paid';
-                    break;
-                  case 'refunded':
-                    paymentClass = 'payment-refunded';
-                    break;
-                }
-
-                // Build details content
-                let content = `
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Booking Information -->
-                    <div>
-                      <h4 class="font-medium text-lg text-gray-900 mb-4">Booking Information</h4>
-                      <div class="space-y-3">
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Reference</div>
-                          <div class="text-sm font-medium">${booking.booking_reference}</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Service Type</div>
-                          <div class="text-sm font-medium">${booking.service_type.charAt(0).toUpperCase() + booking.service_type.slice(1)}</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Status</div>
-                          <div class="text-sm">
-                            <span class="status-badge ${statusClass}">
-                              ${booking.booking_status.charAt(0).toUpperCase() + booking.booking_status.slice(1)}
-                            </span>
-                          </div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Payment</div>
-                          <div class="text-sm">
-                            <span class="payment-badge ${paymentClass}">
-                              ${booking.payment_status.charAt(0).toUpperCase() + booking.payment_status.slice(1)}
-                            </span>
-                          </div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Price</div>
-                          <div class="text-sm font-medium">${booking.price} SR</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Booking Date</div>
-                          <div class="text-sm font-medium">${formattedDate}</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Pickup Time</div>
-                          <div class="text-sm font-medium">${formattedTime}</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Created</div>
-                          <div class="text-sm font-medium">${new Date(booking.created_at).toLocaleString()}</div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <!-- Trip & Customer Details -->
-                    <div>
-                      <h4 class="font-medium text-lg text-gray-900 mb-4">Trip & Customer Details</h4>
-                      <div class="space-y-3">
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Route</div>
-                          <div class="text-sm font-medium">${booking.route_name || 'N/A'}</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Vehicle</div>
-                          <div class="text-sm font-medium">${booking.vehicle_name || 'N/A'}</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Pickup Location</div>
-                          <div class="text-sm font-medium">${booking.pickup_location}</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Drop-off Location</div>
-                          <div class="text-sm font-medium">${booking.dropoff_location}</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Passengers</div>
-                          <div class="text-sm font-medium">${booking.passengers}</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Customer</div>
-                          <div class="text-sm font-medium">${booking.full_name}</div>
-                        </div>
-                        <div class="grid grid-cols-2 booking-details-row py-2">
-                          <div class="text-sm text-gray-500">Contact</div>
-                          <div class="text-sm">
-                            <div>${booking.email}</div>
-                            ${booking.phone_number ? `<div>${booking.phone_number}</div>` : ''}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                `;
-
-                // Add special requests if any
-                if (booking.special_requests) {
-                  content += `
-                    <div class="mt-6">
-                      <h4 class="font-medium text-lg text-gray-900 mb-2">Special Requests</h4>
-                      <p class="text-gray-700 bg-gray-50 p-3 rounded border">${booking.special_requests}</p>
-                    </div>
-                  `;
-                }
-
-                // Add admin notes section
-                content += `
-                  <div class="mt-6">
-                    <h4 class="font-medium text-lg text-gray-900 mb-2">Admin Notes</h4>
-                    <textarea id="adminNotes" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" 
-                      rows="3" placeholder="Add notes about this booking...">${booking.admin_notes || ''}</textarea>
-                  </div>
-                `;
-
-                // Update the modal content
-                detailsContent.innerHTML = content;
-
-                // Build action buttons based on status
-                let actions = `
-                  <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300" onclick="printBookingDetails(${booking.id}, '${booking.booking_reference}')">
-                    <i class="fas fa-print mr-2"></i> Print
-                  </button>
-                `;
-
-                if (booking.booking_status === 'pending') {
-                  actions += `
-                    <button class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" onclick="updateBookingStatus(${booking.id}, 'confirmed')">
-                      <i class="fas fa-check mr-2"></i> Confirm Booking
-                    </button>
-                  `;
-                }
-
-                if (booking.booking_status !== 'cancelled' && booking.booking_status !== 'completed') {
-                  actions += `
-                    <button class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700" onclick="updateBookingStatus(${booking.id}, 'cancelled')">
-                      <i class="fas fa-times mr-2"></i> Cancel Booking
-                    </button>
-                  `;
-                }
-
-                if (booking.booking_status === 'confirmed') {
-                  actions += `
-                    <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" onclick="updateBookingStatus(${booking.id}, 'completed')">
-                      <i class="fas fa-check-double mr-2"></i> Mark as Completed
-                    </button>
-                  `;
-                }
-
-                // Update action buttons
-                detailsActions.innerHTML = actions;
-              } else {
-                detailsContent.innerHTML = `
-                  <div class="text-center text-red-600">
-                    <i class="fas fa-exclamation-circle text-4xl mb-2"></i>
-                    <p>${data.message || 'Error loading booking details'}</p>
-                  </div>
-                `;
-                detailsActions.innerHTML = '';
-              }
-            })
-            .catch(error => {
-              console.error('Error fetching booking details:', error);
-              detailsContent.innerHTML = `
-                <div class="text-center text-red-600">
-                  <i class="fas fa-exclamation-circle text-4xl mb-2"></i>
-                  <p>Failed to load booking details. Please try again.</p>
-                </div>
-              `;
-              detailsActions.innerHTML = '';
-            });
-        });
+    function confirmDeleteRentacarRoute(id) {
+      Swal.fire({
+        title: 'Are you sure?',
+        text: "This will permanently delete this rent a car route!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#EF4444',
+        cancelButtonColor: '#6B7280',
+        confirmButtonText: 'Yes, delete it!'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          document.getElementById('delete_rentacar_route_id').value = id;
+          document.getElementById('deleteRentacarRouteForm').submit();
+        }
       });
+    }
 
-      // Confirm booking directly from list
-      document.querySelectorAll('.confirm-booking-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          const bookingId = this.getAttribute('data-id');
-          const reference = this.getAttribute('data-reference');
+    // Mobile menu toggle
+    document.addEventListener('DOMContentLoaded', function() {
+      const menuBtn = document.getElementById('menu-btn');
+      const sidebar = document.querySelector('.sidebar');
 
-          Swal.fire({
-            title: 'Confirm Booking?',
-            text: `Are you sure you want to confirm booking ${reference}?`,
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonColor: '#10B981',
-            cancelButtonColor: '#6B7280',
-            confirmButtonText: 'Yes, confirm it!'
-          }).then((result) => {
-            if (result.isConfirmed) {
-              updateBookingStatus(bookingId, 'confirmed');
-            }
-          });
+      if (menuBtn && sidebar) {
+        menuBtn.addEventListener('click', function() {
+          sidebar.classList.toggle('hidden');
+          sidebar.classList.toggle('flex');
         });
-      });
-
-      // Cancel booking directly from list
-      document.querySelectorAll('.cancel-booking-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          const bookingId = this.getAttribute('data-id');
-          const reference = this.getAttribute('data-reference');
-
-          Swal.fire({
-            title: 'Cancel Booking?',
-            text: `Are you sure you want to cancel booking ${reference}?`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#EF4444',
-            cancelButtonColor: '#6B7280',
-            confirmButtonText: 'Yes, cancel it!'
-          }).then((result) => {
-            if (result.isConfirmed) {
-              updateBookingStatus(bookingId, 'cancelled');
-            }
-          });
-        });
-      });
-
-      // Print booking directly from list
-      document.querySelectorAll('.print-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          const bookingId = this.getAttribute('data-id');
-          const reference = this.getAttribute('data-reference');
-          printBookingDetails(bookingId, reference);
-        });
-      });
+      }
     });
-
-    // Function to update booking status
-    function updateBookingStatus(bookingId, newStatus) {
-      // Get admin notes if modal is open
-      let adminNotes = '';
-      const notesElement = document.getElementById('adminNotes');
-      if (notesElement) {
-        adminNotes = notesElement.value;
-      }
-
-      // Create form data
-      const formData = new FormData();
-      formData.append('update_status', '1');
-      formData.append('booking_id', bookingId);
-      formData.append('new_status', newStatus);
-      formData.append('admin_notes', adminNotes);
-
-      // Submit form
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = '';
-
-      for (const [key, value] of formData.entries()) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = value;
-        form.appendChild(input);
-      }
-
-      document.body.appendChild(form);
-      form.submit();
-    }
-
-    // Function to print booking details
-    function printBookingDetails(bookingId, reference) {
-      window.open(`print-booking.php?id=${bookingId}&reference=${reference}`, '_blank');
-    }
   </script>
 
   <?php include 'includes/js-links.php'; ?>
-  <script src="assets/js/main.js"></script>
-
 </body>
 
 </html>
