@@ -31,116 +31,158 @@ function getRentacarRoutes()
 $success_message = '';
 $error_message = '';
 
-// ADD NEW TAXI ROUTE
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_taxi_route'])) {
-  $service_title = "Best Taxi Service for Umrah and Hajj in Makkah, Madinah and Jeddah";
-  $year = 2024;
-  $route_number = $_POST['route_number'];
-  $route_name = $_POST['route_name'];
-  $camry_sonata_price = $_POST['camry_sonata_price'];
-  $starex_staria_price = $_POST['starex_staria_price'];
-  $hiace_price = $_POST['hiace_price'];
-  
-  $sql = "INSERT INTO taxi_routes (service_title, year, route_number, route_name, camry_sonata_price, starex_staria_price, hiace_price, created_at) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
-  
-  $stmt = $conn->prepare($sql);
-  $stmt->bind_param("siisddd", $service_title, $year, $route_number, $route_name, $camry_sonata_price, $starex_staria_price, $hiace_price);
-  
-  if ($stmt->execute()) {
-    $success_message = "New taxi route added successfully!";
-  } else {
-    $error_message = "Error adding taxi route: " . $conn->error;
+// UPDATE TAXI ROUTES
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_taxi_routes'])) {
+  // Clear existing routes for the year if requested
+  if (isset($_POST['replace_existing']) && $_POST['replace_existing'] == 'yes') {
+    $year = $_POST['year'];
+    $delete_sql = "DELETE FROM taxi_routes WHERE year = $year";
+    if (!$conn->query($delete_sql)) {
+      $error_message = "Error clearing existing routes: " . $conn->error;
+    }
+  }
+
+  $service_title = $_POST['serviceTitle'];
+  $year = $_POST['year'];
+
+  // Handle updates for existing routes
+  if (isset($_POST['route_id']) && is_array($_POST['route_id'])) {
+    foreach ($_POST['route_id'] as $key => $id) {
+      if (empty($id)) continue; // Skip if no ID (means new route)
+
+      $route_name = $conn->real_escape_string($_POST['route_name'][$key]);
+      $route_number = $_POST['route_number'][$key];
+      $camry_price = $_POST['camry_price'][$key];
+      $starex_price = $_POST['starex_price'][$key];
+      $hiace_price = $_POST['hiace_price'][$key];
+
+      $update_sql = "UPDATE taxi_routes SET 
+                     route_name = '$route_name',
+                     route_number = $route_number,
+                     camry_sonata_price = $camry_price,
+                     starex_staria_price = $starex_price,
+                     hiace_price = $hiace_price,
+                     updated_at = NOW()
+                     WHERE id = $id";
+
+      if (!$conn->query($update_sql)) {
+        $error_message = "Error updating route: " . $conn->error;
+        break;
+      }
+    }
+  }
+
+  // Handle new routes
+  $new_routes = [];
+  if (isset($_POST['new_route_name']) && is_array($_POST['new_route_name'])) {
+    foreach ($_POST['new_route_name'] as $key => $route_name) {
+      if (empty($route_name)) continue;
+
+      $route_name = $conn->real_escape_string($route_name);
+      $route_number = $_POST['new_route_number'][$key];
+      $camry_price = $_POST['new_camry_price'][$key];
+      $starex_price = $_POST['new_starex_price'][$key];
+      $hiace_price = $_POST['new_hiace_price'][$key];
+
+      $new_routes[] = "('$service_title', $year, $route_number, '$route_name', $camry_price, $starex_price, $hiace_price, NOW())";
+    }
+  }
+
+  if (!empty($new_routes)) {
+    $insert_sql = "INSERT INTO taxi_routes 
+                  (service_title, year, route_number, route_name, camry_sonata_price, starex_staria_price, hiace_price, created_at) 
+                  VALUES " . implode(',', $new_routes);
+
+    if (!$conn->query($insert_sql)) {
+      $error_message = "Error adding new routes: " . $conn->error;
+    }
+  }
+
+  if (empty($error_message)) {
+    $success_message = "Taxi routes updated successfully!";
   }
 }
 
-// ADD NEW RENTACAR ROUTE
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_rentacar_route'])) {
-  $service_title = "Best Umrah and Hajj Rent A Car in Makkah, Madinah and Jeddah";
-  $year = 2024;
-  $route_number = $_POST['route_number'];
-  $route_name = $_POST['route_name'];
-  $gmc_16_19_price = $_POST['gmc_16_19_price'];
-  $gmc_22_23_price = $_POST['gmc_22_23_price'];
-  $coaster_price = $_POST['coaster_price'];
-  
-  $sql = "INSERT INTO rentacar_routes (service_title, year, route_number, route_name, gmc_16_19_price, gmc_22_23_price, coaster_price, created_at) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
-  
-  $stmt = $conn->prepare($sql);
-  $stmt->bind_param("siisddd", $service_title, $year, $route_number, $route_name, $gmc_16_19_price, $gmc_22_23_price, $coaster_price);
-  
-  if ($stmt->execute()) {
-    $success_message = "New rent a car route added successfully!";
-  } else {
-    $error_message = "Error adding rent a car route: " . $conn->error;
+// UPDATE RENTACAR ROUTES
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_rentacar_routes'])) {
+  // Clear existing routes for the year if requested
+  if (isset($_POST['replace_existing']) && $_POST['replace_existing'] == 'yes') {
+    $year = $_POST['year'];
+    $delete_sql = "DELETE FROM rentacar_routes WHERE year = $year";
+    if (!$conn->query($delete_sql)) {
+      $error_message = "Error clearing existing routes: " . $conn->error;
+    }
   }
-}
 
-// UPDATE TAXI ROUTE
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_taxi_route'])) {
-  $id = $_POST['taxi_route_id'];
-  $route_number = $_POST['route_number'];
-  $route_name = $_POST['route_name'];
-  $camry_sonata_price = $_POST['camry_sonata_price'];
-  $starex_staria_price = $_POST['starex_staria_price'];
-  $hiace_price = $_POST['hiace_price'];
-  
-  $sql = "UPDATE taxi_routes SET 
-          route_number = ?, 
-          route_name = ?, 
-          camry_sonata_price = ?, 
-          starex_staria_price = ?, 
-          hiace_price = ?,
-          updated_at = NOW() 
-          WHERE id = ?";
-  
-  $stmt = $conn->prepare($sql);
-  $stmt->bind_param("isdddi", $route_number, $route_name, $camry_sonata_price, $starex_staria_price, $hiace_price, $id);
-  
-  if ($stmt->execute()) {
-    $success_message = "Taxi route updated successfully!";
-  } else {
-    $error_message = "Error updating taxi route: " . $conn->error;
+  $service_title = $_POST['serviceTitle'];
+  $year = $_POST['year'];
+
+  // Handle updates for existing routes
+  if (isset($_POST['route_id']) && is_array($_POST['route_id'])) {
+    foreach ($_POST['route_id'] as $key => $id) {
+      if (empty($id)) continue; // Skip if no ID (means new route)
+
+      $route_name = $conn->real_escape_string($_POST['route_name'][$key]);
+      $route_number = $_POST['route_number'][$key];
+      $gmc_16_19_price = $_POST['gmc_16_19_price'][$key];
+      $gmc_22_23_price = $_POST['gmc_22_23_price'][$key];
+      $coaster_price = $_POST['coaster_price'][$key];
+
+      $update_sql = "UPDATE rentacar_routes SET 
+                     route_name = '$route_name',
+                     route_number = $route_number,
+                     gmc_16_19_price = $gmc_16_19_price,
+                     gmc_22_23_price = $gmc_22_23_price,
+                     coaster_price = $coaster_price,
+                     updated_at = NOW()
+                     WHERE id = $id";
+
+      if (!$conn->query($update_sql)) {
+        $error_message = "Error updating route: " . $conn->error;
+        break;
+      }
+    }
   }
-}
 
-// UPDATE RENTACAR ROUTE
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_rentacar_route'])) {
-  $id = $_POST['rentacar_route_id'];
-  $route_number = $_POST['route_number'];
-  $route_name = $_POST['route_name'];
-  $gmc_16_19_price = $_POST['gmc_16_19_price'];
-  $gmc_22_23_price = $_POST['gmc_22_23_price'];
-  $coaster_price = $_POST['coaster_price'];
-  
-  $sql = "UPDATE rentacar_routes SET 
-          route_number = ?, 
-          route_name = ?, 
-          gmc_16_19_price = ?, 
-          gmc_22_23_price = ?, 
-          coaster_price = ?,
-          updated_at = NOW() 
-          WHERE id = ?";
-  
-  $stmt = $conn->prepare($sql);
-  $stmt->bind_param("isdddi", $route_number, $route_name, $gmc_16_19_price, $gmc_22_23_price, $coaster_price, $id);
-  
-  if ($stmt->execute()) {
-    $success_message = "Rent a car route updated successfully!";
-  } else {
-    $error_message = "Error updating rent a car route: " . $conn->error;
+  // Handle new routes
+  $new_routes = [];
+  if (isset($_POST['new_route_name']) && is_array($_POST['new_route_name'])) {
+    foreach ($_POST['new_route_name'] as $key => $route_name) {
+      if (empty($route_name)) continue;
+
+      $route_name = $conn->real_escape_string($route_name);
+      $route_number = $_POST['new_route_number'][$key];
+      $gmc_16_19_price = $_POST['new_gmc_16_19_price'][$key];
+      $gmc_22_23_price = $_POST['new_gmc_22_23_price'][$key];
+      $coaster_price = $_POST['new_coaster_price'][$key];
+
+      $new_routes[] = "('$service_title', $year, $route_number, '$route_name', $gmc_16_19_price, $gmc_22_23_price, $coaster_price, NOW())";
+    }
+  }
+
+  if (!empty($new_routes)) {
+    $insert_sql = "INSERT INTO rentacar_routes 
+                  (service_title, year, route_number, route_name, gmc_16_19_price, gmc_22_23_price, coaster_price, created_at) 
+                  VALUES " . implode(',', $new_routes);
+
+    if (!$conn->query($insert_sql)) {
+      $error_message = "Error adding new routes: " . $conn->error;
+    }
+  }
+
+  if (empty($error_message)) {
+    $success_message = "Rent a car routes updated successfully!";
   }
 }
 
 // DELETE TAXI ROUTE
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_taxi_route'])) {
   $id = $_POST['taxi_route_id'];
-  
+
   $sql = "DELETE FROM taxi_routes WHERE id = ?";
   $stmt = $conn->prepare($sql);
   $stmt->bind_param("i", $id);
-  
+
   if ($stmt->execute()) {
     $success_message = "Taxi route deleted successfully!";
   } else {
@@ -151,11 +193,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_taxi_route'])) 
 // DELETE RENTACAR ROUTE
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_rentacar_route'])) {
   $id = $_POST['rentacar_route_id'];
-  
+
   $sql = "DELETE FROM rentacar_routes WHERE id = ?";
   $stmt = $conn->prepare($sql);
   $stmt->bind_param("i", $id);
-  
+
   if ($stmt->execute()) {
     $success_message = "Rent a car route deleted successfully!";
   } else {
@@ -310,6 +352,25 @@ $rentacar_routes = getRentacarRoutes();
     .rentacar-row:hover {
       background-color: #eff6ff !important;
     }
+
+    /* Input Fields */
+    .price-input {
+      width: 100%;
+      padding: 0.375rem 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
+    }
+
+    .price-input:focus {
+      outline: 2px solid #0d9488;
+      border-color: #0d9488;
+    }
+
+    .rentacar-input:focus {
+      outline: 2px solid #1d4ed8;
+      border-color: #1d4ed8;
+    }
   </style>
 </head>
 
@@ -364,313 +425,291 @@ $rentacar_routes = getRentacarRoutes();
           <div id="taxi-tab" class="tab-content active">
             <div class="mb-6">
               <h2 class="text-2xl font-bold">Taxi Routes Management</h2>
+              <p class="text-gray-600 mt-2">Manage your taxi service routes and prices</p>
             </div>
 
-            <div class="overflow-x-auto">
-              <table class="price-table">
-                <thead>
-                  <tr>
-                    <th class="w-16">No.</th>
-                    <th class="text-left">Routes</th>
-                    <th>Camry / Sonata</th>
-                    <th>Starex / Staria</th>
-                    <th>Hiace</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php if (count($taxi_routes) > 0): ?>
-                    <?php foreach ($taxi_routes as $route): ?>
-                      <tr>
-                        <td><?php echo $route['route_number']; ?></td>
-                        <td class="text-left font-medium"><?php echo htmlspecialchars($route['route_name']); ?></td>
-                        <td><?php echo $route['camry_sonata_price']; ?> SR</td>
-                        <td><?php echo $route['starex_staria_price']; ?> SR</td>
-                        <td><?php echo $route['hiace_price']; ?> SR</td>
-                        <td>
-                          <button class="action-btn edit-btn" onclick="showEditTaxiRouteModal(
-                            <?php echo $route['id']; ?>, 
-                            <?php echo $route['route_number']; ?>, 
-                            '<?php echo addslashes(htmlspecialchars($route['route_name'])); ?>', 
-                            <?php echo $route['camry_sonata_price']; ?>, 
-                            <?php echo $route['starex_staria_price']; ?>, 
-                            <?php echo $route['hiace_price']; ?>
-                          )">
-                            <i class="fas fa-edit"></i> Edit
-                          </button>
-                          <button class="action-btn delete-btn" onclick="confirmDeleteTaxiRoute(<?php echo $route['id']; ?>)">
-                            <i class="fas fa-trash"></i> Delete
-                          </button>
-                        </td>
-                      </tr>
-                    <?php endforeach; ?>
-                  <?php else: ?>
-                    <tr>
-                      <td colspan="6" class="py-4 text-center text-gray-500">No taxi routes found</td>
+            <form action="" method="POST" id="taxi-routes-form">
+              <input type="hidden" name="update_taxi_routes" value="1">
+
+              <!-- Service Title and Year -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi-service-title">
+                    Service Title
+                  </label>
+                  <input type="text" id="taxi-service-title" name="serviceTitle"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    value="Best Taxi Service for Umrah and Hajj in Makkah, Madinah and Jeddah" required>
+                </div>
+                <div>
+                  <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi-year">
+                    Year
+                  </label>
+                  <input type="number" id="taxi-year" name="year" min="2024" max="2030"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    value="2024" required>
+                </div>
+              </div>
+
+              <!-- Existing Routes Table -->
+              <div class="mb-6 overflow-x-auto">
+                <h3 class="font-semibold text-lg mb-3">Existing Routes</h3>
+
+                <table class="min-w-full bg-white border border-gray-300 mb-4">
+                  <thead>
+                    <tr class="bg-teal-600 text-white">
+                      <th class="py-2 px-4 border-b w-16 text-center">#</th>
+                      <th class="py-2 px-4 border-b text-left">Route</th>
+                      <th class="py-2 px-4 border-b text-center">Camry / Sonata</th>
+                      <th class="py-2 px-4 border-b text-center">Starex / Staria</th>
+                      <th class="py-2 px-4 border-b text-center">Hiace</th>
+                      <th class="py-2 px-4 border-b w-16 text-center">Action</th>
                     </tr>
-                  <?php endif; ?>
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody id="taxi-routes-body">
+                    <?php
+                    if (count($taxi_routes) > 0):
+                      foreach ($taxi_routes as $index => $route):
+                    ?>
+                        <tr>
+                          <td class="py-2 px-4 border-b text-center">
+                            <input type="hidden" name="route_id[<?php echo $index; ?>]" value="<?php echo $route['id']; ?>">
+                            <input type="number" name="route_number[<?php echo $index; ?>]" value="<?php echo $route['route_number']; ?>" class="price-input w-16 text-center" required>
+                          </td>
+                          <td class="py-2 px-4 border-b">
+                            <input type="text" name="route_name[<?php echo $index; ?>]" value="<?php echo htmlspecialchars($route['route_name']); ?>" class="price-input w-full" required>
+                          </td>
+                          <td class="py-2 px-4 border-b">
+                            <input type="number" name="camry_price[<?php echo $index; ?>]" value="<?php echo $route['camry_sonata_price']; ?>" min="0" step="0.01" class="price-input w-full text-center" required>
+                          </td>
+                          <td class="py-2 px-4 border-b">
+                            <input type="number" name="starex_price[<?php echo $index; ?>]" value="<?php echo $route['starex_staria_price']; ?>" min="0" step="0.01" class="price-input w-full text-center" required>
+                          </td>
+                          <td class="py-2 px-4 border-b">
+                            <input type="number" name="hiace_price[<?php echo $index; ?>]" value="<?php echo $route['hiace_price']; ?>" min="0" step="0.01" class="price-input w-full text-center" required>
+                          </td>
+                          <td class="py-2 px-4 border-b text-center">
+                            <button type="button" class="text-red-500 hover:text-red-700" onclick="confirmDeleteTaxiRoute(<?php echo $route['id']; ?>)">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      <?php
+                      endforeach;
+                    else:
+                      ?>
+                      <tr>
+                        <td colspan="6" class="py-4 text-center text-gray-500">No taxi routes found</td>
+                      </tr>
+                    <?php endif; ?>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Add New Routes Section -->
+              <div class="mb-6">
+                <h3 class="font-semibold text-lg mb-3">Add New Routes</h3>
+
+                <table class="min-w-full bg-white border border-gray-300 mb-4">
+                  <thead>
+                    <tr class="bg-teal-600 text-white">
+                      <th class="py-2 px-4 border-b w-16 text-center">#</th>
+                      <th class="py-2 px-4 border-b text-left">Route</th>
+                      <th class="py-2 px-4 border-b text-center">Camry / Sonata</th>
+                      <th class="py-2 px-4 border-b text-center">Starex / Staria</th>
+                      <th class="py-2 px-4 border-b text-center">Hiace</th>
+                      <th class="py-2 px-4 border-b w-16 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="new-taxi-routes-body">
+                    <tr>
+                      <td class="py-2 px-4 border-b text-center">
+                        <input type="number" name="new_route_number[0]" value="<?php echo count($taxi_routes) + 1; ?>" class="price-input w-16 text-center">
+                      </td>
+                      <td class="py-2 px-4 border-b">
+                        <input type="text" name="new_route_name[0]" placeholder="Enter route name" class="price-input w-full">
+                      </td>
+                      <td class="py-2 px-4 border-b">
+                        <input type="number" name="new_camry_price[0]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+                      </td>
+                      <td class="py-2 px-4 border-b">
+                        <input type="number" name="new_starex_price[0]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+                      </td>
+                      <td class="py-2 px-4 border-b">
+                        <input type="number" name="new_hiace_price[0]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+                      </td>
+                      <td class="py-2 px-4 border-b text-center">
+                        <button type="button" class="text-red-500 hover:text-red-700 delete-new-row" disabled>
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <!-- Add Row Button -->
+                <button type="button" id="add-taxi-row" class="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2">
+                  <i class="fas fa-plus-circle mr-2"></i> Add Another Route
+                </button>
+              </div>
+
+              <!-- Submit Buttons -->
+              <div class="flex flex-wrap gap-4">
+                <button type="submit" class="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700">
+                  <i class="fas fa-save mr-2"></i>Save All Changes
+                </button>
+                <a href="transportation-management.php" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 inline-flex items-center">
+                  <i class="fas fa-times mr-2"></i>Cancel
+                </a>
+              </div>
+            </form>
           </div>
 
           <!-- Rent A Car Routes Tab -->
           <div id="rentacar-tab" class="tab-content">
             <div class="mb-6">
               <h2 class="text-2xl font-bold">Rent A Car Routes Management</h2>
+              <p class="text-gray-600 mt-2">Manage your rent a car service routes and prices</p>
             </div>
 
-            <div class="overflow-x-auto">
-              <table class="price-table">
-                <thead>
-                  <tr>
-                    <th class="w-16 rentacar-th">No.</th>
-                    <th class="text-left rentacar-th">Routes</th>
-                    <th class="rentacar-th">GMC 16-19</th>
-                    <th class="rentacar-th">GMC 22-23</th>
-                    <th class="rentacar-th">COASTER</th>
-                    <th class="rentacar-th">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php if (count($rentacar_routes) > 0): ?>
-                    <?php foreach ($rentacar_routes as $route): ?>
-                      <tr class="rentacar-row">
-                        <td><?php echo $route['route_number']; ?></td>
-                        <td class="text-left font-medium"><?php echo htmlspecialchars($route['route_name']); ?></td>
-                        <td><?php echo $route['gmc_16_19_price']; ?> SR</td>
-                        <td><?php echo $route['gmc_22_23_price']; ?> SR</td>
-                        <td><?php echo $route['coaster_price']; ?> SR</td>
-                        <td>
-                          <button class="action-btn edit-btn" onclick="showEditRentacarRouteModal(
-                            <?php echo $route['id']; ?>, 
-                            <?php echo $route['route_number']; ?>, 
-                            '<?php echo addslashes(htmlspecialchars($route['route_name'])); ?>', 
-                            <?php echo $route['gmc_16_19_price']; ?>, 
-                            <?php echo $route['gmc_22_23_price']; ?>, 
-                            <?php echo $route['coaster_price']; ?>
-                          )">
-                            <i class="fas fa-edit"></i> Edit
-                          </button>
-                          <button class="action-btn delete-btn" onclick="confirmDeleteRentacarRoute(<?php echo $route['id']; ?>)">
-                            <i class="fas fa-trash"></i> Delete
-                          </button>
-                        </td>
-                      </tr>
-                    <?php endforeach; ?>
-                  <?php else: ?>
-                    <tr>
-                      <td colspan="6" class="py-4 text-center text-gray-500">No rent a car routes found</td>
+            <form action="" method="POST" id="rentacar-routes-form">
+              <input type="hidden" name="update_rentacar_routes" value="1">
+
+              <!-- Service Title and Year -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar-service-title">
+                    Service Title
+                  </label>
+                  <input type="text" id="rentacar-service-title" name="serviceTitle"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value="Best Umrah and Hajj Rent A Car in Makkah, Madinah and Jeddah" required>
+                </div>
+                <div>
+                  <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar-year">
+                    Year
+                  </label>
+                  <input type="number" id="rentacar-year" name="year" min="2024" max="2030"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value="2024" required>
+                </div>
+              </div>
+
+              <!-- Existing Routes Table -->
+              <div class="mb-6 overflow-x-auto">
+                <h3 class="font-semibold text-lg mb-3">Existing Routes</h3>
+
+                <table class="min-w-full bg-white border border-gray-300 mb-4">
+                  <thead>
+                    <tr class="bg-blue-600 text-white">
+                      <th class="py-2 px-4 border-b w-16 text-center">#</th>
+                      <th class="py-2 px-4 border-b text-left">Route</th>
+                      <th class="py-2 px-4 border-b text-center">GMC 16-19</th>
+                      <th class="py-2 px-4 border-b text-center">GMC 22-23</th>
+                      <th class="py-2 px-4 border-b text-center">COASTER</th>
+                      <th class="py-2 px-4 border-b w-16 text-center">Action</th>
                     </tr>
-                  <?php endif; ?>
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody id="rentacar-routes-body">
+                    <?php
+                    if (count($rentacar_routes) > 0):
+                      foreach ($rentacar_routes as $index => $route):
+                    ?>
+                        <tr>
+                          <td class="py-2 px-4 border-b text-center">
+                            <input type="hidden" name="route_id[<?php echo $index; ?>]" value="<?php echo $route['id']; ?>">
+                            <input type="number" name="route_number[<?php echo $index; ?>]" value="<?php echo $route['route_number']; ?>" class="price-input rentacar-input w-16 text-center" required>
+                          </td>
+                          <td class="py-2 px-4 border-b">
+                            <input type="text" name="route_name[<?php echo $index; ?>]" value="<?php echo htmlspecialchars($route['route_name']); ?>" class="price-input rentacar-input w-full" required>
+                          </td>
+                          <td class="py-2 px-4 border-b">
+                            <input type="number" name="gmc_16_19_price[<?php echo $index; ?>]" value="<?php echo $route['gmc_16_19_price']; ?>" min="0" step="0.01" class="price-input rentacar-input w-full text-center" required>
+                          </td>
+                          <td class="py-2 px-4 border-b">
+                            <input type="number" name="gmc_22_23_price[<?php echo $index; ?>]" value="<?php echo $route['gmc_22_23_price']; ?>" min="0" step="0.01" class="price-input rentacar-input w-full text-center" required>
+                          </td>
+                          <td class="py-2 px-4 border-b">
+                            <input type="number" name="coaster_price[<?php echo $index; ?>]" value="<?php echo $route['coaster_price']; ?>" min="0" step="0.01" class="price-input rentacar-input w-full text-center" required>
+                          </td>
+                          <td class="py-2 px-4 border-b text-center">
+                            <button type="button" class="text-red-500 hover:text-red-700" onclick="confirmDeleteRentacarRoute(<?php echo $route['id']; ?>)">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      <?php
+                      endforeach;
+                    else:
+                      ?>
+                      <tr>
+                        <td colspan="6" class="py-4 text-center text-gray-500">No rent a car routes found</td>
+                      </tr>
+                    <?php endif; ?>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Add New Routes Section -->
+              <div class="mb-6">
+                <h3 class="font-semibold text-lg mb-3">Add New Routes</h3>
+
+                <table class="min-w-full bg-white border border-gray-300 mb-4">
+                  <thead>
+                    <tr class="bg-blue-600 text-white">
+                      <th class="py-2 px-4 border-b w-16 text-center">#</th>
+                      <th class="py-2 px-4 border-b text-left">Route</th>
+                      <th class="py-2 px-4 border-b text-center">GMC 16-19</th>
+                      <th class="py-2 px-4 border-b text-center">GMC 22-23</th>
+                      <th class="py-2 px-4 border-b text-center">COASTER</th>
+                      <th class="py-2 px-4 border-b w-16 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="new-rentacar-routes-body">
+                    <tr>
+                      <td class="py-2 px-4 border-b text-center">
+                        <input type="number" name="new_route_number[0]" value="<?php echo count($rentacar_routes) + 1; ?>" class="price-input rentacar-input w-16 text-center">
+                      </td>
+                      <td class="py-2 px-4 border-b">
+                        <input type="text" name="new_route_name[0]" placeholder="Enter route name" class="price-input rentacar-input w-full">
+                      </td>
+                      <td class="py-2 px-4 border-b">
+                        <input type="number" name="new_gmc_16_19_price[0]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+                      </td>
+                      <td class="py-2 px-4 border-b">
+                        <input type="number" name="new_gmc_22_23_price[0]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+                      </td>
+                      <td class="py-2 px-4 border-b">
+                        <input type="number" name="new_coaster_price[0]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+                      </td>
+                      <td class="py-2 px-4 border-b text-center">
+                        <button type="button" class="text-red-500 hover:text-red-700 delete-new-row" disabled>
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <!-- Add Row Button -->
+                <button type="button" id="add-rentacar-row" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                  <i class="fas fa-plus-circle mr-2"></i> Add Another Route
+                </button>
+              </div>
+
+              <!-- Submit Buttons -->
+              <div class="flex flex-wrap gap-4">
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                  <i class="fas fa-save mr-2"></i>Save All Changes
+                </button>
+                <a href="transportation-management.php" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 inline-flex items-center">
+                  <i class="fas fa-times mr-2"></i>Cancel
+                </a>
+              </div>
+            </form>
           </div>
         </div>
       </div>
-    </div>
-  </div>
-
-  <!-- Add Taxi Route Modal -->
-  <div id="addTaxiRouteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
-      <div class="flex justify-between items-center border-b px-6 py-4">
-        <h3 class="text-lg font-medium text-gray-900">Add New Taxi Route</h3>
-        <button onclick="closeAddTaxiRouteModal()" class="text-gray-400 hover:text-gray-500">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-
-      <form method="POST" action="">
-        <div class="p-6 space-y-4">
-          <div>
-            <label for="taxi_route_number" class="block text-sm font-medium text-gray-700 mb-1">Route Number</label>
-            <input type="number" id="taxi_route_number" name="route_number" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="taxi_route_name" class="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
-            <input type="text" id="taxi_route_name" name="route_name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="taxi_camry_price" class="block text-sm font-medium text-gray-700 mb-1">Camry/Sonata Price (SR)</label>
-            <input type="number" id="taxi_camry_price" name="camry_sonata_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="taxi_starex_price" class="block text-sm font-medium text-gray-700 mb-1">Starex/Staria Price (SR)</label>
-            <input type="number" id="taxi_starex_price" name="starex_staria_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="taxi_hiace_price" class="block text-sm font-medium text-gray-700 mb-1">Hiace Price (SR)</label>
-            <input type="number" id="taxi_hiace_price" name="hiace_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
-          </div>
-        </div>
-
-        <div class="border-t px-6 py-4 bg-gray-50 flex justify-end">
-          <button type="button" onclick="closeAddTaxiRouteModal()" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 mr-2">
-            Cancel
-          </button>
-          <button type="submit" name="add_taxi_route" class="bg-teal-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
-            Add Route
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Edit Taxi Route Modal -->
-  <div id="editTaxiRouteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
-      <div class="flex justify-between items-center border-b px-6 py-4">
-        <h3 class="text-lg font-medium text-gray-900">Edit Taxi Route</h3>
-        <button onclick="closeEditTaxiRouteModal()" class="text-gray-400 hover:text-gray-500">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-
-      <form method="POST" action="">
-        <input type="hidden" id="edit_taxi_route_id" name="taxi_route_id">
-        <div class="p-6 space-y-4">
-          <div>
-            <label for="edit_taxi_route_number" class="block text-sm font-medium text-gray-700 mb-1">Route Number</label>
-            <input type="number" id="edit_taxi_route_number" name="route_number" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="edit_taxi_route_name" class="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
-            <input type="text" id="edit_taxi_route_name" name="route_name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="edit_taxi_camry_price" class="block text-sm font-medium text-gray-700 mb-1">Camry/Sonata Price (SR)</label>
-            <input type="number" id="edit_taxi_camry_price" name="camry_sonata_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="edit_taxi_starex_price" class="block text-sm font-medium text-gray-700 mb-1">Starex/Staria Price (SR)</label>
-            <input type="number" id="edit_taxi_starex_price" name="starex_staria_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="edit_taxi_hiace_price" class="block text-sm font-medium text-gray-700 mb-1">Hiace Price (SR)</label>
-            <input type="number" id="edit_taxi_hiace_price" name="hiace_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 sm:text-sm" required>
-          </div>
-        </div>
-
-        <div class="border-t px-6 py-4 bg-gray-50 flex justify-end">
-          <button type="button" onclick="closeEditTaxiRouteModal()" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 mr-2">
-            Cancel
-          </button>
-          <button type="submit" name="update_taxi_route" class="bg-teal-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
-            Update Route
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Add Rentacar Route Modal -->
-  <div id="addRentacarRouteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
-      <div class="flex justify-between items-center border-b px-6 py-4">
-        <h3 class="text-lg font-medium text-gray-900">Add New Rent A Car Route</h3>
-        <button onclick="closeAddRentacarRouteModal()" class="text-gray-400 hover:text-gray-500">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-
-      <form method="POST" action="">
-        <div class="p-6 space-y-4">
-          <div>
-            <label for="rentacar_route_number" class="block text-sm font-medium text-gray-700 mb-1">Route Number</label>
-            <input type="number" id="rentacar_route_number" name="route_number" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="rentacar_route_name" class="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
-            <input type="text" id="rentacar_route_name" name="route_name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="rentacar_gmc_16_19_price" class="block text-sm font-medium text-gray-700 mb-1">GMC 16-19 Price (SR)</label>
-            <input type="number" id="rentacar_gmc_16_19_price" name="gmc_16_19_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="rentacar_gmc_22_23_price" class="block text-sm font-medium text-gray-700 mb-1">GMC 22-23 Price (SR)</label>
-            <input type="number" id="rentacar_gmc_22_23_price" name="gmc_22_23_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="rentacar_coaster_price" class="block text-sm font-medium text-gray-700 mb-1">Coaster Price (SR)</label>
-            <input type="number" id="rentacar_coaster_price" name="coaster_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
-          </div>
-        </div>
-
-        <div class="border-t px-6 py-4 bg-gray-50 flex justify-end">
-          <button type="button" onclick="closeAddRentacarRouteModal()" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 mr-2">
-            Cancel
-          </button>
-          <button type="submit" name="add_rentacar_route" class="bg-blue-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-            Add Route
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Edit Rentacar Route Modal -->
-  <div id="editRentacarRouteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
-      <div class="flex justify-between items-center border-b px-6 py-4">
-        <h3 class="text-lg font-medium text-gray-900">Edit Rent A Car Route</h3>
-        <button onclick="closeEditRentacarRouteModal()" class="text-gray-400 hover:text-gray-500">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-
-      <form method="POST" action="">
-        <input type="hidden" id="edit_rentacar_route_id" name="rentacar_route_id">
-        <div class="p-6 space-y-4">
-          <div>
-            <label for="edit_rentacar_route_number" class="block text-sm font-medium text-gray-700 mb-1">Route Number</label>
-            <input type="number" id="edit_rentacar_route_number" name="route_number" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="edit_rentacar_route_name" class="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
-            <input type="text" id="edit_rentacar_route_name" name="route_name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="edit_rentacar_gmc_16_19_price" class="block text-sm font-medium text-gray-700 mb-1">GMC 16-19 Price (SR)</label>
-            <input type="number" id="edit_rentacar_gmc_16_19_price" name="gmc_16_19_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="edit_rentacar_gmc_22_23_price" class="block text-sm font-medium text-gray-700 mb-1">GMC 22-23 Price (SR)</label>
-            <input type="number" id="edit_rentacar_gmc_22_23_price" name="gmc_22_23_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
-          </div>
-
-          <div>
-            <label for="edit_rentacar_coaster_price" class="block text-sm font-medium text-gray-700 mb-1">Coaster Price (SR)</label>
-            <input type="number" id="edit_rentacar_coaster_price" name="coaster_price" step="0.01" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
-          </div>
-        </div>
-
-        <div class="border-t px-6 py-4 bg-gray-50 flex justify-end">
-          <button type="button" onclick="closeEditRentacarRouteModal()" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 mr-2">
-            Cancel
-          </button>
-          <button type="submit" name="update_rentacar_route" class="bg-blue-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-            Update Route
-          </button>
-        </div>
-      </form>
     </div>
   </div>
 
@@ -706,34 +745,99 @@ $rentacar_routes = getRentacarRoutes();
       event.target.classList.add('active');
     }
 
-    // Taxi Route Modal Functions
-    function showAddTaxiRouteModal() {
-      document.getElementById('addTaxiRouteModal').classList.remove('hidden');
-      document.getElementById('addTaxiRouteModal').classList.add('flex');
+    // Function to add new rows to taxi table
+    document.getElementById('add-taxi-row').addEventListener('click', function() {
+      const tbody = document.getElementById('new-taxi-routes-body');
+      const rowCount = tbody.rows.length;
+      const newIndex = rowCount;
+      const newRowNumber = <?php echo count($taxi_routes); ?> + 1 + rowCount;
+
+      const newRow = document.createElement('tr');
+      newRow.innerHTML = `
+        <td class="py-2 px-4 border-b text-center">
+          <input type="number" name="new_route_number[${newIndex}]" value="${newRowNumber}" class="price-input w-16 text-center">
+        </td>
+        <td class="py-2 px-4 border-b">
+          <input type="text" name="new_route_name[${newIndex}]" placeholder="Enter route name" class="price-input w-full">
+        </td>
+        <td class="py-2 px-4 border-b">
+          <input type="number" name="new_camry_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+        </td>
+        <td class="py-2 px-4 border-b">
+          <input type="number" name="new_starex_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+        </td>
+        <td class="py-2 px-4 border-b">
+          <input type="number" name="new_hiace_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+        </td>
+        <td class="py-2 px-4 border-b text-center">
+          <button type="button" class="text-red-500 hover:text-red-700 delete-new-row">
+            <i class="fas fa-trash"></i>
+          </button>
+        </td>
+      `;
+
+      tbody.appendChild(newRow);
+      setupDeleteHandlers();
+    });
+
+    // Function to add new rows to rentacar table
+    document.getElementById('add-rentacar-row').addEventListener('click', function() {
+      const tbody = document.getElementById('new-rentacar-routes-body');
+      const rowCount = tbody.rows.length;
+      const newIndex = rowCount;
+      const newRowNumber = <?php echo count($rentacar_routes); ?> + 1 + rowCount;
+
+      const newRow = document.createElement('tr');
+      newRow.innerHTML = `
+        <td class="py-2 px-4 border-b text-center">
+          <input type="number" name="new_route_number[${newIndex}]" value="${newRowNumber}" class="price-input rentacar-input w-16 text-center">
+        </td>
+        <td class="py-2 px-4 border-b">
+          <input type="text" name="new_route_name[${newIndex}]" placeholder="Enter route name" class="price-input rentacar-input w-full">
+        </td>
+        <td class="py-2 px-4 border-b">
+          <input type="number" name="new_gmc_16_19_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+        </td>
+        <td class="py-2 px-4 border-b">
+          <input type="number" name="new_gmc_22_23_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+        </td>
+        <td class="py-2 px-4 border-b">
+          <input type="number" name="new_coaster_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+        </td>
+        <td class="py-2 px-4 border-b text-center">
+          <button type="button" class="text-red-500 hover:text-red-700 delete-new-row">
+            <i class="fas fa-trash"></i>
+          </button>
+        </td>
+      `;
+
+      tbody.appendChild(newRow);
+      setupDeleteHandlers();
+    });
+
+    // Setup delete handlers for new rows
+    function setupDeleteHandlers() {
+      document.querySelectorAll('.delete-new-row').forEach(button => {
+        if (!button.hasAttribute('disabled')) {
+          button.addEventListener('click', function() {
+            const row = this.closest('tr');
+            const tbody = row.parentNode;
+            tbody.removeChild(row);
+
+            // Update row numbers
+            const rows = tbody.querySelectorAll('tr');
+            rows.forEach((row, index) => {
+              const input = row.querySelector('input[type="number"]');
+              if (input && input.name.includes('new_route_number')) {
+                input.value = <?php echo count($taxi_routes); ?> + 1 + index;
+              }
+            });
+          });
+        }
+      });
     }
 
-    function closeAddTaxiRouteModal() {
-      document.getElementById('addTaxiRouteModal').classList.remove('flex');
-      document.getElementById('addTaxiRouteModal').classList.add('hidden');
-    }
-
-    function showEditTaxiRouteModal(id, routeNumber, routeName, camryPrice, starexPrice, hiacePrice) {
-      document.getElementById('edit_taxi_route_id').value = id;
-      document.getElementById('edit_taxi_route_number').value = routeNumber;
-      document.getElementById('edit_taxi_route_name').value = routeName;
-      document.getElementById('edit_taxi_camry_price').value = camryPrice;
-      document.getElementById('edit_taxi_starex_price').value = starexPrice;
-      document.getElementById('edit_taxi_hiace_price').value = hiacePrice;
-
-      document.getElementById('editTaxiRouteModal').classList.remove('hidden');
-      document.getElementById('editTaxiRouteModal').classList.add('flex');
-    }
-
-    function closeEditTaxiRouteModal() {
-      document.getElementById('editTaxiRouteModal').classList.remove('flex');
-      document.getElementById('editTaxiRouteModal').classList.add('hidden');
-    }
-
+    // Delete existing taxi route
     function confirmDeleteTaxiRoute(id) {
       Swal.fire({
         title: 'Are you sure?',
@@ -751,34 +855,7 @@ $rentacar_routes = getRentacarRoutes();
       });
     }
 
-    // Rentacar Route Modal Functions
-    function showAddRentacarRouteModal() {
-      document.getElementById('addRentacarRouteModal').classList.remove('hidden');
-      document.getElementById('addRentacarRouteModal').classList.add('flex');
-    }
-
-    function closeAddRentacarRouteModal() {
-      document.getElementById('addRentacarRouteModal').classList.remove('flex');
-      document.getElementById('addRentacarRouteModal').classList.add('hidden');
-    }
-
-    function showEditRentacarRouteModal(id, routeNumber, routeName, gmc16Price, gmc22Price, coasterPrice) {
-      document.getElementById('edit_rentacar_route_id').value = id;
-      document.getElementById('edit_rentacar_route_number').value = routeNumber;
-      document.getElementById('edit_rentacar_route_name').value = routeName;
-      document.getElementById('edit_rentacar_gmc_16_19_price').value = gmc16Price;
-      document.getElementById('edit_rentacar_gmc_22_23_price').value = gmc22Price;
-      document.getElementById('edit_rentacar_coaster_price').value = coasterPrice;
-
-      document.getElementById('editRentacarRouteModal').classList.remove('hidden');
-      document.getElementById('editRentacarRouteModal').classList.add('flex');
-    }
-
-    function closeEditRentacarRouteModal() {
-      document.getElementById('editRentacarRouteModal').classList.remove('flex');
-      document.getElementById('editRentacarRouteModal').classList.add('hidden');
-    }
-
+    // Delete existing rentacar route
     function confirmDeleteRentacarRoute(id) {
       Swal.fire({
         title: 'Are you sure?',
@@ -807,6 +884,9 @@ $rentacar_routes = getRentacarRoutes();
           sidebar.classList.toggle('flex');
         });
       }
+
+      // Initial setup
+      setupDeleteHandlers();
     });
   </script>
 
