@@ -267,6 +267,82 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
   sortFlights($outbound_flights, 'price');
   sortFlights($return_flights, 'price');
 }
+
+
+// Validate seat availability before booking
+function checkSeatAvailability($conn, $flight_id, $cabin_class) {
+  $seat_info = getAvailableSeats($conn, $flight_id, $cabin_class);
+  return $seat_info['available'] > 0;
+}
+
+// Book a seat
+function bookSeat($conn, $flight_id, $user_id, $cabin_class, $passenger_details) {
+  // First, check seat availability
+  if (!checkSeatAvailability($conn, $flight_id, $cabin_class)) {
+      throw new Exception("No seats available in the selected class.");
+  }
+
+  // Begin transaction for data integrity
+  $conn->begin_transaction();
+
+  try {
+      // Insert booking details
+      $sql = "INSERT INTO flight_bookings 
+              (flight_id, user_id, passenger_name, passenger_email, 
+              passenger_phone, cabin_class, booking_date, booking_status) 
+              VALUES (?, ?, ?, ?, ?, ?, NOW(), 'pending')";
+      
+      $stmt = $conn->prepare($sql);
+      $stmt->bind_param(
+          "iissss", 
+          $flight_id, 
+          $user_id, 
+          $passenger_details['name'], 
+          $passenger_details['email'], 
+          $passenger_details['phone'], 
+          $cabin_class
+      );
+      
+      // Execute booking
+      if (!$stmt->execute()) {
+          throw new Exception("Failed to book seat: " . $stmt->error);
+      }
+
+      // Commit transaction
+      $conn->commit();
+
+      return true;
+  } catch (Exception $e) {
+      // Rollback transaction on error
+      $conn->rollback();
+      // Log error or handle appropriately
+      error_log($e->getMessage());
+      return false;
+  }
+}
+
+// Example usage in booking process
+try {
+  $flight_id = $_POST['flight_id'];
+  $cabin_class = $_POST['cabin_class'];
+  $user_id = $_SESSION['user_id']; // Assuming user is logged in
+
+  $passenger_details = [
+      'name' => $_POST['passenger_name'],
+      'email' => $_POST['passenger_email'],
+      'phone' => $_POST['passenger_phone']
+  ];
+
+  if (bookSeat($conn, $flight_id, $user_id, $cabin_class, $passenger_details)) {
+      // Booking successful
+      $_SESSION['booking_message'] = "Seat booked successfully!";
+  } else {
+      // Booking failed
+      $_SESSION['error_message'] = "Could not book the seat. Please try again.";
+  }
+} catch (Exception $e) {
+  $_SESSION['error_message'] = $e->getMessage();
+}
 ?>
 
 <!DOCTYPE html>
@@ -679,7 +755,14 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
                               </div>
                               <div class="flex justify-between items-center">
                                 <span class="text-sm text-gray-600">Available Seats:</span>
-                                <span class="font-medium"><?php echo isset($seats[$class_key]['count']) ? $seats[$class_key]['count'] : 'N/A'; ?></span>
+                                <span class="font-medium">
+                                  <?php
+                                  $total_seats = isset($seats[$class_key]['count']) ? $seats[$class_key]['count'] : 0;
+                                  $booked_seats = isset($seats[$class_key]['booked']) ? $seats[$class_key]['booked'] : 0;
+                                  $remaining_seats = $total_seats - $booked_seats;
+                                  echo $remaining_seats . ' of ' . $total_seats;
+                                  ?>
+                                </span>
                               </div>
                             </div>
 
@@ -1330,7 +1413,14 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
                               </div>
                               <div class="flex justify-between items-center">
                                 <span class="text-sm text-gray-600">Available Seats:</span>
-                                <span class="font-medium"><?php echo isset($seats[$class_key]['count']) ? $seats[$class_key]['count'] : 'N/A'; ?></span>
+                                <span class="font-medium">
+                                  <?php
+                                  $total_seats = isset($seats[$class_key]['count']) ? $seats[$class_key]['count'] : 0;
+                                  $booked_seats = isset($seats[$class_key]['booked']) ? $seats[$class_key]['booked'] : 0;
+                                  $remaining_seats = $total_seats - $booked_seats;
+                                  echo $remaining_seats . ' of ' . $total_seats;
+                                  ?>
+                                </span>
                               </div>
                             </div>
 
