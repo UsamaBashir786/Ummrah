@@ -1157,6 +1157,9 @@
   .max-h-96 {
     max-height: calc(var(--spacing) * 96);
   }
+  .max-h-\[90vh\] {
+    max-height: 90vh;
+  }
   .max-h-none {
     max-height: none;
   }
@@ -1237,6 +1240,9 @@
   }
   .w-full {
     width: 100%;
+  }
+  .w-px {
+    width: 1px;
   }
   .w-screen {
     width: 100vw;
@@ -2492,6 +2498,10 @@
     --tw-gradient-from: var(--color-yellow-400);
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
+  .from-yellow-500 {
+    --tw-gradient-from: var(--color-yellow-500);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
   .via-indigo-800 {
     --tw-gradient-via: var(--color-indigo-800);
     --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
@@ -2555,6 +2565,10 @@
   }
   .to-yellow-500 {
     --tw-gradient-to: var(--color-yellow-500);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+  .to-yellow-600 {
+    --tw-gradient-to: var(--color-yellow-600);
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
   .box-decoration-clone {
@@ -3128,6 +3142,9 @@
   .text-gray-900 {
     color: var(--color-gray-900);
   }
+  .text-green-100 {
+    color: var(--color-green-100);
+  }
   .text-green-500 {
     color: var(--color-green-500);
   }
@@ -3154,6 +3171,9 @@
   }
   .text-pink-700 {
     color: var(--color-pink-700);
+  }
+  .text-purple-100 {
+    color: var(--color-purple-100);
   }
   .text-purple-500 {
     color: var(--color-purple-500);
@@ -3202,6 +3222,9 @@
   }
   .text-white {
     color: var(--color-white);
+  }
+  .text-yellow-100 {
+    color: var(--color-yellow-100);
   }
   .text-yellow-400 {
     color: var(--color-yellow-400);
@@ -4164,6 +4187,13 @@
     &:hover {
       @media (hover: hover) {
         background-color: color-mix(in oklab, var(--color-white) 30%, transparent);
+      }
+    }
+  }
+  .hover\:bg-yellow-100 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-yellow-100);
       }
     }
   }
