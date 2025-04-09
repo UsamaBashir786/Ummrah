@@ -289,7 +289,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <button class="md:hidden text-gray-800" id="menu-btn">
           <i class="fas fa-bars"></i>
         </button>
-        <h1 class="text-xl font-semibold">
+        <h1 class="text-xl font-semibold ">
           <i class="text-teal-600 fas fa-plane mx-2"></i> Add New Flight
         </h1>
       </div>
