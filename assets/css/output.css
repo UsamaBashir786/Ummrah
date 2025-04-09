@@ -2169,6 +2169,9 @@
   .border-teal-500 {
     border-color: var(--color-teal-500);
   }
+  .border-transparent {
+    border-color: transparent;
+  }
   .border-white {
     border-color: var(--color-white);
   }
@@ -4455,6 +4458,11 @@
       --tw-ring-color: var(--color-green-500);
     }
   }
+  .focus\:ring-teal-200 {
+    &:focus {
+      --tw-ring-color: var(--color-teal-200);
+    }
+  }
   .focus\:ring-teal-300 {
     &:focus {
       --tw-ring-color: var(--color-teal-300);
@@ -4903,6 +4911,11 @@
   .lg\:col-span-2 {
     @media (width >= 64rem) {
       grid-column: span 2 / span 2;
+    }
+  }
+  .lg\:col-span-5 {
+    @media (width >= 64rem) {
+      grid-column: span 5 / span 5;
     }
   }
   .lg\:-mx-6 {
