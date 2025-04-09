@@ -276,65 +276,7 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
   <?php include 'includes/css-links.php'; ?>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
   <link rel="stylesheet" href="assets/css/flights.css">
-  <style>
-    /* Additional styles for return flight section */
-    .return-flight-badge {
-      background-color: #8b5cf6;
-      color: white;
-      padding: 0.25rem 0.75rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      position: absolute;
-      top: -10px;
-      left: 20px;
-    }
 
-    .return-flight-card {
-      border-left: 4px solid #8b5cf6;
-    }
-
-    .trip-type-selector {
-      margin-bottom: 1rem;
-      padding: 0.5rem;
-      background-color: rgba(255, 255, 255, 0.2);
-      border-radius: 9999px;
-      display: inline-flex;
-      align-items: center;
-    }
-
-    .trip-type-option {
-      padding: 0.5rem 1rem;
-      border-radius: 9999px;
-      cursor: pointer;
-      font-weight: 500;
-      transition: all 0.3s ease;
-      color: white;
-    }
-
-    .trip-type-option.active {
-      background-color: white;
-      color: #059669;
-    }
-
-    /* Date picker container */
-    .date-picker-container {
-      transition: all 0.3s ease;
-      overflow: hidden;
-    }
-
-    /* Flight type headers */
-    .flight-type-header {
-      background-color: #f3f4f6;
-      padding: 0.75rem 1rem;
-      border-radius: 0.5rem;
-      margin-bottom: 1rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      color: #1f2937;
-    }
-  </style>
 </head>
 
 <body class="bg-gray-50 min-h-screen">
@@ -741,12 +683,12 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
                               </div>
                             </div>
 
-                            <div class="mt-4">
+                            <!-- <div class="mt-4">
                               <a href="booking-flight.php?flight_id=<?php echo $flight['id']; ?>&cabin_class=<?php echo urlencode($class); ?>"
                                 class="block w-full text-center py-2 px-4 border border-emerald-600 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-colors text-sm font-medium">
                                 Select
                               </a>
-                            </div>
+                            </div> -->
                           </div>
                         <?php endforeach; ?>
                       </div>
