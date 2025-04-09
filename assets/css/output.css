@@ -3245,6 +3245,9 @@
   .text-white {
     color: var(--color-white);
   }
+  .text-white\/70 {
+    color: color-mix(in oklab, var(--color-white) 70%, transparent);
+  }
   .text-yellow-100 {
     color: var(--color-yellow-100);
   }
@@ -4918,6 +4921,11 @@
   .md\:grid-cols-4 {
     @media (width >= 48rem) {
       grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  .md\:grid-cols-5 {
+    @media (width >= 48rem) {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
     }
   }
   .md\:grid-cols-12 {
