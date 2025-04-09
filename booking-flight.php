@@ -2,35 +2,40 @@
 session_start();
 include 'connection/connection.php';
 
+// Security: Prevent session fixation
+if (!isset($_SESSION['initiated'])) {
+  session_regenerate_id(true);
+  $_SESSION['initiated'] = true;
+}
+
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
-  // Redirect to login page if not logged in
   header("Location: login.php");
   exit();
 }
 
-// Get user_id from session
-$user_id = $_SESSION['user_id'];
-
-// Check if flight ID is provided
-if (!isset($_GET['flight_id']) || empty($_GET['flight_id'])) {
+// Input sanitization for flight_id
+$flight_id = filter_input(INPUT_GET, 'flight_id', FILTER_VALIDATE_INT);
+if (!$flight_id) {
   header("Location: flights.php");
   exit();
 }
 
-// Fetch user details
-$user_details = null;
-$user_sql = "SELECT * FROM users WHERE id = ?";
-$user_stmt = $conn->prepare($user_sql);
-$user_stmt->bind_param("i", $user_id);
-$user_stmt->execute();
-$user_result = $user_stmt->get_result();
+$user_id = (int)$_SESSION['user_id'];
 
-if ($user_result->num_rows > 0) {
-  $user_details = $user_result->fetch_assoc();
+// Fetch user details with error handling
+try {
+  $user_stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
+  $user_stmt->bind_param("i", $user_id);
+  $user_stmt->execute();
+  $user_result = $user_stmt->get_result();
+  $user_details = $user_result->num_rows > 0 ? $user_result->fetch_assoc() : null;
+  $user_stmt->close();
+} catch (Exception $e) {
+  error_log("User fetch error: " . $e->getMessage());
+  $user_details = null;
 }
 
-$flight_id = $_GET['flight_id'];
 $error_message = "";
 $success_message = "";
 $info_message = "";
@@ -38,214 +43,118 @@ $flight_details = null;
 $seats_data = null;
 $booked_seats = [];
 
-// Check if user has already booked this flight
-$already_booked = false;
-$booking_exists_sql = "SELECT * FROM flight_bookings WHERE flight_id = ? AND user_id = ?";
-$booking_exists_stmt = $conn->prepare($booking_exists_sql);
-$booking_exists_stmt->bind_param("ii", $flight_id, $user_id);
-$booking_exists_stmt->execute();
-$booking_exists_result = $booking_exists_stmt->get_result();
+// Check existing booking
+try {
+  $booking_exists_stmt = $conn->prepare("SELECT * FROM flight_bookings WHERE flight_id = ? AND user_id = ?");
+  $booking_exists_stmt->bind_param("ii", $flight_id, $user_id);
+  $booking_exists_stmt->execute();
+  $booking_exists_result = $booking_exists_stmt->get_result();
 
-if ($booking_exists_result->num_rows > 0) {
-  $already_booked = true;
-  // Get booking details for display
-  $booking_details = $booking_exists_result->fetch_assoc();
-  $booked_seats_json = $booking_details['seats'];
-  $booked_seats_arr = json_decode($booked_seats_json, true);
-  $booked_seats_str = implode(', ', $booked_seats_arr);
-
-  // Create info message about existing booking
-  $info_message = "You have already booked this flight. Your booking includes seat(s): " . $booked_seats_str;
+  $already_booked = $booking_exists_result->num_rows > 0;
+  if ($already_booked) {
+    $booking_details = $booking_exists_result->fetch_assoc();
+    $booked_seats_arr = json_decode($booking_details['seats'], true) ?? [];
+    $booked_seats_str = implode(', ', $booked_seats_arr);
+    $info_message = "You have already booked this flight. Your booking includes seat(s): " . htmlspecialchars($booked_seats_str);
+  }
+  $booking_exists_stmt->close();
+} catch (Exception $e) {
+  error_log("Booking check error: " . $e->getMessage());
+  $already_booked = false;
 }
 
 // Fetch flight details
-$sql = "SELECT * FROM flights WHERE id = ?";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $flight_id);
-$stmt->execute();
-$result = $stmt->get_result();
+try {
+  $stmt = $conn->prepare("SELECT * FROM flights WHERE id = ?");
+  $stmt->bind_param("i", $flight_id);
+  $stmt->execute();
+  $result = $stmt->get_result();
 
-if ($result->num_rows > 0) {
-  $flight_details = $result->fetch_assoc();
+  if ($result->num_rows > 0) {
+    $flight_details = $result->fetch_assoc();
+    $seats_data = json_decode($flight_details['seats'], true) ?? [];
 
-  // Parse seats data directly from flights table
-  if (isset($flight_details['seats']) && !empty($flight_details['seats'])) {
-    $seats_data = json_decode($flight_details['seats'], true);
-  }
+    // Fetch booked seats
+    $booked_stmt = $conn->prepare("SELECT seats FROM flight_bookings WHERE flight_id = ?");
+    $booked_stmt->bind_param("i", $flight_id);
+    $booked_stmt->execute();
+    $booked_result = $booked_stmt->get_result();
 
-  // Check if flight_bookings table exists
-  $check_table = $conn->query("SHOW TABLES LIKE 'flight_bookings'");
-
-  if ($check_table->num_rows > 0) {
-    // Check if seats column exists
-    $check_seats_column = $conn->query("SHOW COLUMNS FROM flight_bookings LIKE 'seats'");
-
-    if ($check_seats_column->num_rows > 0) {
-      // Use new seats JSON column
-      $booked_sql = "SELECT seats FROM flight_bookings WHERE flight_id = ?";
-      $booked_stmt = $conn->prepare($booked_sql);
-      $booked_stmt->bind_param("i", $flight_id);
-      $booked_stmt->execute();
-      $booked_result = $booked_stmt->get_result();
-
-      $booked_seats = [];
-      while ($booked_row = $booked_result->fetch_assoc()) {
-        $seats = json_decode($booked_row['seats'], true);
-        $booked_seats = array_merge($booked_seats, $seats);
-      }
-    } else {
-      // Alter table to add seats column and migrate data
-      $alter_table_sql = "ALTER TABLE flight_bookings 
-            ADD COLUMN seats JSON NULL AFTER children_count";
-      $conn->query($alter_table_sql);
-
-      // Initialize empty booked_seats array since no seats are in JSON format yet
-      $booked_seats = [];
-
-      // Optionally, you could migrate existing seat_id data to JSON format:
-      $migrate_sql = "SELECT id, seat_id FROM flight_bookings WHERE flight_id = ? AND seat_id IS NOT NULL";
-      $migrate_stmt = $conn->prepare($migrate_sql);
-      $migrate_stmt->bind_param("i", $flight_id);
-      $migrate_stmt->execute();
-      $migrate_result = $migrate_stmt->get_result();
-
-      while ($row = $migrate_result->fetch_assoc()) {
-        $seats_array = [$row['seat_id']];
-        $seats_json = json_encode($seats_array);
-
-        $update_sql = "UPDATE flight_bookings SET seats = ? WHERE id = ?";
-        $update_stmt = $conn->prepare($update_sql);
-        $update_stmt->bind_param("si", $seats_json, $row['id']);
-        $update_stmt->execute();
-
-        $booked_seats[] = $row['seat_id'];
-      }
+    while ($booked_row = $booked_result->fetch_assoc()) {
+      $seats = json_decode($booked_row['seats'], true) ?? [];
+      $booked_seats = array_merge($booked_seats, $seats);
     }
+    $booked_stmt->close();
   } else {
     $error_message = "Flight not found.";
   }
+  $stmt->close();
+} catch (Exception $e) {
+  error_log("Flight fetch error: " . $e->getMessage());
+  $error_message = "Error fetching flight details.";
 }
 
 // Process booking form submission
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_flight'])) {
-  if ($already_booked) {
-    $error_message = "You have already booked this flight. You cannot book the same flight twice.";
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_flight']) && !$already_booked) {
+  // Validate CSRF token
+  if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+    $error_message = "Invalid CSRF token.";
   } else {
-    // Get form data
-    $passenger_name = isset($_POST['passenger_name']) ? $_POST['passenger_name'] : '';
-    $passenger_email = isset($_POST['passenger_email']) ? $_POST['passenger_email'] : '';
-    $passenger_phone = isset($_POST['passenger_phone']) ? $_POST['passenger_phone'] : '';
-    $selected_cabin = isset($_POST['cabin_class']) ? $_POST['cabin_class'] : '';
-    $adult_count = isset($_POST['adult_count']) ? intval($_POST['adult_count']) : 1;
-    $children_count = isset($_POST['children_count']) ? intval($_POST['children_count']) : 0;
-    $selected_seats = isset($_POST['selected_seats']) ? $_POST['selected_seats'] : [];
+    // Sanitize and validate inputs
+    $passenger_name = filter_input(INPUT_POST, 'passenger_name', FILTER_SANITIZE_STRING);
+    $passenger_email = filter_input(INPUT_POST, 'passenger_email', FILTER_VALIDATE_EMAIL);
+    $passenger_phone = filter_input(INPUT_POST, 'passenger_phone', FILTER_SANITIZE_STRING);
+    $selected_cabin = filter_input(INPUT_POST, 'cabin_class', FILTER_SANITIZE_STRING);
+    $adult_count = filter_input(INPUT_POST, 'adult_count', FILTER_VALIDATE_INT) ?: 1;
+    $children_count = filter_input(INPUT_POST, 'children_count', FILTER_VALIDATE_INT) ?: 0;
+    $selected_seats = isset($_POST['selected_seats']) ? array_map('trim', (array)$_POST['selected_seats']) : [];
 
     // Validate form data
-    if (empty($passenger_name) || empty($passenger_email) || empty($passenger_phone) || empty($selected_cabin)) {
+    if (empty($passenger_name) || !$passenger_email || empty($passenger_phone) || empty($selected_cabin)) {
       $error_message = "All passenger information fields are required.";
-    } elseif (empty($selected_seats) || count($selected_seats) != ($adult_count + $children_count)) {
+    } elseif (count($selected_seats) != ($adult_count + $children_count)) {
       $error_message = "Please select seats for all passengers.";
     } else {
-      // Start transaction
       $conn->begin_transaction();
       try {
-        // Verify selected seats exist in the flight's seats data
-        $seats_data = json_decode($flight_details['seats'], true);
+        // Validate seats
         $valid_seats = [];
         foreach ($seats_data as $cabin => $cabin_data) {
           $valid_seats = array_merge($valid_seats, $cabin_data['seat_ids']);
         }
 
-        // Validate that all selected seats are valid
         foreach ($selected_seats as $seat) {
           if (!in_array($seat, $valid_seats)) {
             throw new Exception("Invalid seat selection detected.");
           }
-        }
-
-        // Check if flight_bookings table exists
-        $check_table = $conn->query("SHOW TABLES LIKE 'flight_bookings'");
-
-        if ($check_table->num_rows == 0) {
-          // Create the flight_bookings table if it doesn't exist
-          $create_table_sql = "CREATE TABLE flight_bookings (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            flight_id INT NOT NULL,
-            user_id INT NOT NULL,
-            passenger_name VARCHAR(255) NOT NULL,
-            passenger_email VARCHAR(255) NOT NULL,
-            passenger_phone VARCHAR(50) NOT NULL,
-            cabin_class VARCHAR(50) NOT NULL,
-            adult_count INT NOT NULL DEFAULT 1,
-            children_count INT NOT NULL DEFAULT 0,
-            seats JSON NOT NULL,
-            return_flight_data JSON NULL,
-            booking_date DATETIME NOT NULL,
-            FOREIGN KEY (flight_id) REFERENCES flights(id),
-            FOREIGN KEY (user_id) REFERENCES users(id)
-          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-          $conn->query($create_table_sql);
-        } else {
-          // Check if return_flight_data column exists
-          $check_return_column = $conn->query("SHOW COLUMNS FROM flight_bookings LIKE 'return_flight_data'");
-
-          // Add return_flight_data column if it doesn't exist
-          if ($check_return_column->num_rows == 0) {
-            $alter_table_sql = "ALTER TABLE flight_bookings 
-                ADD COLUMN return_flight_data JSON NULL AFTER seats";
-            $conn->query($alter_table_sql);
+          if (in_array($seat, $booked_seats)) {
+            throw new Exception("Some selected seats have been booked by another user. Please try again.");
           }
         }
 
-        // Check if seats are still available
-        if (!empty($selected_seats)) {
-          $check_seats_sql = "SELECT seats FROM flight_bookings WHERE flight_id = ?";
-          $check_seats_stmt = $conn->prepare($check_seats_sql);
-          $check_seats_stmt->bind_param("i", $flight_id);
-          $check_seats_stmt->execute();
-          $check_result = $check_seats_stmt->get_result();
+        // Calculate price
+        $prices = json_decode($flight_details['prices'], true);
+        $cabin_price = isset($prices[$selected_cabin]) ? (float)$prices[$selected_cabin] : 0;
 
-          $booked_seats = [];
-          while ($row = $check_result->fetch_assoc()) {
-            $seats = json_decode($row['seats'], true);
-            $booked_seats = array_merge($booked_seats, $seats);
-          }
+        // Assuming children get a 50% discount (adjust as needed)
+        $adult_price = $cabin_price;
+        $child_price = $cabin_price * 0.5; // 50% discount for children
+        $total_price = ($adult_count * $adult_price) + ($children_count * $child_price);
 
-          // Check if any selected seat is already booked
-          foreach ($selected_seats as $seat) {
-            if (in_array($seat, $booked_seats)) {
-              throw new Exception("Some selected seats have been booked by another user. Please try again.");
-            }
-          }
-        }
-
-        // Get return flight data from original flight
-        $return_flight_data = null;
-        if (isset($flight_details['return_flight_data']) && !empty($flight_details['return_flight_data'])) {
-          $return_flight_data = $flight_details['return_flight_data'];
-        }
-
-        // Instead of looping through seats, create one booking with all seats
+        // Prepare booking data
         $seats_json = json_encode($selected_seats);
+        $return_flight_data = $flight_details['return_flight_data'] ?? null;
 
-        // Updated SQL query to include return_flight_data
+        // Update the SQL query to set booking_status as 'pending'
         $booking_sql = "INSERT INTO flight_bookings (
-          flight_id, 
-          user_id,
-          passenger_name, 
-          passenger_email, 
-          passenger_phone, 
-          cabin_class, 
-          adult_count, 
-          children_count, 
-          seats, 
-          return_flight_data,
-          booking_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                    flight_id, user_id, passenger_name, passenger_email, passenger_phone,
+                    cabin_class, adult_count, children_count, seats, return_flight_data,
+                    booking_date, price, booking_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 'pending')";
 
         $booking_stmt = $conn->prepare($booking_sql);
         $booking_stmt->bind_param(
-          "iissssisss",
+          "iissssiissd",
           $flight_id,
           $user_id,
           $passenger_name,
@@ -255,75 +164,84 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_flight'])) {
           $adult_count,
           $children_count,
           $seats_json,
-          $return_flight_data  // Add return flight data to the prepared statement
+          $return_flight_data,
+          $total_price
         );
         $booking_stmt->execute();
+        $booking_stmt->close();
 
-        // Commit transaction
         $conn->commit();
-        $success_message = "Flight booked successfully!";
-
-        // Redirect to thank-you page with booking details
+        $success_message = "Flight booking submitted successfully! Your booking is pending confirmation.";
         header("Location: thankyou.php?flight_id=" . $flight_id);
         exit();
       } catch (Exception $e) {
-        // Rollback transaction on error
         $conn->rollback();
         $error_message = "Error booking flight: " . $e->getMessage();
+        error_log("Booking error: " . $e->getMessage());
       }
     }
   }
 }
 
-// Calculate flight duration
-function calculateFlightDuration($departure_time, $arrival_time)
+// Generate CSRF token
+$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
+// Helper functions
+function calculateArrivalTime($departure_time, $flight_duration)
 {
+  if (empty($departure_time) || empty($flight_duration)) {
+    return null;
+  }
+
   try {
     $departure = new DateTime($departure_time);
-    $arrival = new DateTime($arrival_time);
-    $interval = $departure->diff($arrival);
-
-    $hours = $interval->h + ($interval->days * 24);
-    $minutes = $interval->i;
-
-    return $hours . 'h ' . $minutes . 'm';
+    // Flight duration is in hours (e.g., "5" for 5 hours)
+    $duration_hours = (float)$flight_duration;
+    $departure->modify("+{$duration_hours} hours");
+    return $departure->format('H:i:s');
   } catch (Exception $e) {
-    return 'N/A';
+    error_log("Error calculating arrival time: " . $e->getMessage());
+    return null;
   }
 }
 
-// Format date to be more readable
 function formatDate($date)
 {
   try {
     $dateObj = new DateTime($date);
-    return $dateObj->format('D, M j, Y'); // e.g., Mon, Jan 15, 2025
+    return $dateObj->format('D, M j, Y');
   } catch (Exception $e) {
     return $date;
   }
 }
 
-// Format time to be more readable
 function formatTime($time)
 {
+  if (empty($time)) {
+    return 'N/A';
+  }
+
   try {
     $timeObj = new DateTime($time);
-    return $timeObj->format('g:i A'); // e.g., 2:30 PM
+    return $timeObj->format('g:i A');
   } catch (Exception $e) {
     return $time;
   }
 }
 
-// Determine the flight duration if available
-$flight_duration = '';
-if (isset($flight_details['departure_time']) && isset($flight_details['arrival_time'])) {
-  $flight_duration = calculateFlightDuration($flight_details['departure_time'], $flight_details['arrival_time']);
+// Calculate arrival time and format dates/times
+if ($flight_details) {
+  $arrival_time = calculateArrivalTime($flight_details['departure_time'], $flight_details['flight_duration']);
+  $flight_duration = $flight_details['flight_duration'] ? $flight_details['flight_duration'] . 'h' : 'N/A';
+  $departure_date_formatted = formatDate($flight_details['departure_date']);
+  $departure_time_formatted = formatTime($flight_details['departure_time']);
+  $arrival_time_formatted = formatTime($arrival_time);
+} else {
+  $flight_duration = 'N/A';
+  $departure_date_formatted = '';
+  $departure_time_formatted = '';
+  $arrival_time_formatted = '';
 }
-
-// Format dates for display
-$departure_date_formatted = isset($flight_details['departure_date']) ? formatDate($flight_details['departure_date']) : '';
-$departure_time_formatted = isset($flight_details['departure_time']) ? formatTime($flight_details['departure_time']) : '';
-$arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($flight_details['arrival_time']) : '';
 ?>
 
 <!DOCTYPE html>
@@ -332,1264 +250,381 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
 <head>
   <?php include 'includes/css-links.php'; ?>
   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    input {
-      color: black !important;
-      border: 1px solid black !important;
-    }
-
-    .progress-bar {
-      height: 4px;
-      background-color: #e5e7eb;
-      width: 100%;
-      overflow: hidden;
-    }
-
-    .progress {
-      height: 100%;
-      background-color: #3b82f6;
-      transition: width 0.3s ease;
-    }
-
-    .section-heading {
-      position: relative;
-      padding-left: 15px;
-      margin-bottom: 1rem;
-    }
-
-    .section-heading::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      height: 100%;
-      width: 4px;
-      background-color: #3b82f6;
+    .seat {
+      background: #a48d8d;
+      padding: 5px;
+      cursor: pointer;
+      color: white;
       border-radius: 2px;
     }
 
+    .seat:hover {
+      background-color: #462c2c;
+    }
+
+    /* Updated styles for the seat selection section */
+    .seat-selection-section {
+      @apply p-6 bg-gray-50 rounded-lg shadow-sm;
+    }
+
     .seat {
-      width: 45px;
-      height: 45px;
-      margin: 5px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      background-color: #f9fafb;
-      transition: all 0.2s ease;
-      font-weight: 500;
+      @apply w-14 h-14 m-2 flex items-center justify-center cursor-pointer border-2 rounded-xl transition-all duration-300 font-medium text-sm;
     }
 
     .seat.available {
-      border-color: #10b981;
-      background-color: #ecfdf5;
+      @apply border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-400;
     }
 
     .seat.selected {
-      background-color: #10b981;
-      color: white;
-      border-color: #059669;
-      transform: scale(1.05);
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      @apply border-blue-600 bg-blue-600 text-white shadow-lg transform scale-105;
     }
 
     .seat.booked {
-      background-color: #f3f4f6;
-      color: #9ca3af;
-      border-color: #d1d5db;
-      cursor: not-allowed;
-      text-decoration: line-through;
-    }
-
-    .seat.first_class {
-      background-color: #eff6ff;
-      border-color: #93c5fd;
-    }
-
-    .seat.business {
-      background-color: #eef2ff;
-      border-color: #a5b4fc;
-    }
-
-    .seat.economy {
-      background-color: #f0fdfa;
-      border-color: #99f6e4;
-    }
-
-    .seat.first_class.selected {
-      background-color: #3b82f6;
-      border-color: #2563eb;
-      color: white;
-    }
-
-    .seat.business.selected {
-      background-color: #6366f1;
-      border-color: #4f46e5;
-      color: white;
-    }
-
-    .seat.economy.selected {
-      background-color: #14b8a6;
-      border-color: #0d9488;
-      color: white;
-    }
-
-    .tooltip {
-      position: relative;
-    }
-
-    .tooltip .tooltip-text {
-      visibility: hidden;
-      width: 120px;
-      background-color: #333;
-      color: #fff;
-      text-align: center;
-      border-radius: 6px;
-      padding: 5px;
-      position: absolute;
-      z-index: 1;
-      bottom: 125%;
-      left: 50%;
-      transform: translateX(-50%);
-      opacity: 0;
-      transition: opacity 0.3s;
-      font-size: 12px;
-      pointer-events: none;
-    }
-
-    .tooltip:hover .tooltip-text {
-      visibility: visible;
-      opacity: 1;
-    }
-
-    .flight-card {
-      border-radius: 12px;
-      overflow: hidden;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    }
-
-    .flight-card:hover {
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-      transform: translateY(-2px);
+      @apply border-gray-300 bg-gray-200 text-gray-500 cursor-not-allowed opacity-50 line-through;
     }
 
     .cabin-tab {
-      padding: 10px 20px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s ease;
+      @apply px-5 py-2 rounded-full cursor-pointer transition-all duration-200 font-medium text-sm;
     }
 
     .cabin-tab.active {
-      background-color: #3b82f6;
-      color: white;
-      font-weight: 500;
+      @apply bg-blue-600 text-white shadow-md;
     }
 
-    .form-input {
-      transition: all 0.3s ease;
-      border-radius: 8px;
+    .cabin-tab:not(.active) {
+      @apply bg-gray-200 text-gray-700 hover:bg-gray-300;
     }
 
-    .form-input:focus {
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
-      border-color: #3b82f6;
+    .seat-cabin {
+      @apply mt-4 p-6 bg-white rounded-xl shadow-md;
     }
 
-    .flight-path-line {
-      position: absolute;
-      left: 20px;
-      top: 30px;
-      bottom: 30px;
-      width: 2px;
-      background-color: #e5e7eb;
-      z-index: 0;
+    .selected-seats-chips .chip {
+      @apply px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center space-x-2;
     }
 
-    .flight-path-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background-color: #3b82f6;
-      position: absolute;
-      left: 15px;
-      z-index: 1;
+    .selected-seats-chips .chip button {
+      @apply text-blue-600 hover:text-blue-800;
     }
 
-    .flight-path-dot.departure {
-      top: 30px;
-    }
-
-    .flight-path-dot.arrival {
-      bottom: 30px;
-    }
-
-    .fancy-checkbox {
-      display: flex;
-      align-items: center;
-      cursor: pointer;
-    }
-
-    .fancy-checkbox input {
-      position: absolute;
-      opacity: 0;
-      cursor: pointer;
-      height: 0;
-      width: 0;
-    }
-
-    .checkmark {
-      height: 22px;
-      width: 22px;
-      background-color: #fff;
-      border: 2px solid #d1d5db;
-      border-radius: 4px;
-      margin-right: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s ease;
-    }
-
-    .fancy-checkbox:hover .checkmark {
-      border-color: #3b82f6;
-    }
-
-    .fancy-checkbox input:checked~.checkmark {
-      background-color: #3b82f6;
-      border-color: #3b82f6;
-    }
-
-    .checkmark:after {
-      content: "";
-      display: none;
-      width: 5px;
-      height: 10px;
-      border: solid white;
-      border-width: 0 2px 2px 0;
-      transform: rotate(45deg);
-    }
-
-    .fancy-checkbox input:checked~.checkmark:after {
-      display: block;
-    }
-
-    .number-input {
-      display: flex;
-      align-items: center;
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid #d1d5db;
-    }
-
-    .number-input button {
-      width: 40px;
-      height: 40px;
-      background-color: #f3f4f6;
-      border: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .number-input button:hover {
-      background-color: #e5e7eb;
-    }
-
-    .number-input input {
-      width: 60px;
-      height: 40px;
-      border: none;
-      text-align: center;
-      font-weight: 500;
-    }
-
-    .card-flip {
-      perspective: 1000px;
-    }
-
-    .card-flip-inner {
-      transition: transform 0.6s;
-      transform-style: preserve-3d;
-    }
-
-    .card-flip.flipped .card-flip-inner {
-      transform: rotateY(180deg);
-    }
-
-    .card-front,
-    .card-back {
-      backface-visibility: hidden;
-    }
-
-    .card-back {
-      transform: rotateY(180deg);
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-    }
-
-    /* Improved booking steps styling */
-    .booking-steps {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 30px;
-      position: relative;
-    }
-
-    .booking-step {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      z-index: 2;
-      flex: 1;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .booking-step:hover .step-number {
-      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
-    }
-
-    .step-number {
-      width: 35px;
-      height: 35px;
-      border-radius: 50%;
-      background-color: #e5e7eb;
-      color: #6b7280;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      margin-bottom: 8px;
-      transition: all 0.3s ease;
-      position: relative;
-      z-index: 2;
-    }
-
-    .step-title {
-      font-size: 14px;
-      color: #6b7280;
-      font-weight: 500;
-      transition: all 0.3s ease;
-    }
-
-    .booking-step.active .step-number {
-      background-color: #3b82f6;
-      color: white;
-      transform: scale(1.1);
-      box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.2);
-    }
-
-    .booking-step.active .step-title {
-      color: #3b82f6;
-      font-weight: 600;
-    }
-
-    .booking-step.completed .step-number {
-      background-color: #10b981;
-      color: white;
-    }
-
-    .booking-step.completed .step-number::after {
-      content: '✓';
-      position: absolute;
-      font-weight: bold;
-    }
-
-    .step-line {
-      position: absolute;
-      top: 17px;
-      left: 50px;
-      right: 50px;
-      height: 2px;
-      background-color: #e5e7eb;
-      z-index: 1;
-    }
-
-    /* Animation effects */
-    @keyframes pulse-attention {
-      0% {
-        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
-      }
-
-      70% {
-        box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
-      }
-
-      100% {
-        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-      }
-    }
-
-    .pulse-attention {
-      animation: pulse-attention 1.5s infinite;
-    }
-
-    @keyframes highlight-text {
-      0% {
-        color: #3b82f6;
-        transform: scale(1);
-      }
-
-      50% {
-        color: #2563eb;
-        transform: scale(1.2);
-      }
-
-      100% {
-        color: #3b82f6;
-        transform: scale(1);
-      }
-    }
-
-    .highlight-text {
-      animation: highlight-text 1.5s;
-    }
-
-    @keyframes shake {
-
-      0%,
-      100% {
-        transform: translateX(0);
-      }
-
-      10%,
-      30%,
-      50%,
-      70%,
-      90% {
-        transform: translateX(-5px);
-      }
-
-      20%,
-      40%,
-      60%,
-      80% {
-        transform: translateX(5px);
-      }
-    }
-
-    .shake-effect {
-      animation: shake 0.5s;
-    }
-
-    /* Smooth transitions between steps */
-    #flight-details-section,
-    #passenger-info-section,
-    #seat-selection-section,
-    #confirmation-section {
-      opacity: 1;
-      transform: translateX(0);
-    }
-
-    /* Form feedback styles */
-    .form-input:focus {
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
-      border-color: #3b82f6;
-    }
-
-    /* Button improvements */
-    .next-step,
-    .prev-step {
-      transition: all 0.3s ease;
-    }
-
-    .next-step:hover {
-      transform: translateX(3px);
-    }
-
-    .prev-step:hover {
-      transform: translateX(-3px);
-    }
-
-    /* Progress indicator for steps */
-    .step-progress {
-      position: absolute;
-      height: 2px;
-      background-color: #3b82f6;
-      top: 17px;
-      left: 35px;
-      transition: width 0.5s ease-in-out;
-      z-index: 1;
-    }
-
-    /* Clickable steps when appropriate */
-    .booking-step.completed .step-number,
-    .booking-step.active .step-number {
-      cursor: pointer;
-    }
-
-    /* Toast notification style */
     .toast-notification {
-      position: fixed;
-      top: 24px;
-      right: 24px;
-      padding: 16px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      z-index: 9999;
-      transform: translateX(150%);
-      transition: transform 0.3s ease-out;
+      @apply fixed top-6 right-6 p-4 rounded-lg shadow-lg z-50 transition-transform duration-300;
     }
 
     .toast-notification.show {
-      transform: translateX(0);
-    }
-
-    .toast-notification.success {
-      background-color: #10b981;
-      color: white;
-    }
-
-    .toast-notification.error {
-      background-color: #ef4444;
-      color: white;
-    }
-
-    .toast-notification.info {
-      background-color: #3b82f6;
-      color: white;
+      @apply translate-x-0;
     }
   </style>
 </head>
 
-<body class="bg-gray-50 min-h-screen py-6">
+<body class="bg-gray-100 min-h-screen py-6">
   <?php include 'includes/navbar.php'; ?>
 
-  <div class="max-w-5xl mx-auto">
-    <br><br><br>
-    <br><br><br>
-
-    <!-- Enhanced Booking Steps -->
-    <div class="booking-steps mb-8 px-4">
-      <div class="step-line"></div>
-      <div class="booking-step active" id="step1">
-        <div class="step-number">1</div>
-        <div class="step-title">Flight Details</div>
-        <div class="step-status hidden">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-          </svg>
+  <div class="max-w-5xl mx-auto px-4">
+    <!-- Booking Steps -->
+    <div class="flex justify-between mb-8 relative">
+      <div class="absolute top-4 left-12 right-12 h-0.5 bg-gray-200 z-0"></div>
+      <?php
+      $steps = ['Flight Details', 'Passenger Info', 'Seat Selection', 'Confirmation'];
+      foreach ($steps as $index => $step):
+      ?>
+        <div class="booking-step flex flex-col items-center z-10 <?php echo $index === 0 ? 'active' : ''; ?>" id="step<?php echo $index + 1; ?>">
+          <div class="step-number w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-semibold mb-2 transition-all">
+            <?php echo $index + 1; ?>
+          </div>
+          <div class="step-title text-sm text-gray-600"><?php echo $step; ?></div>
         </div>
-      </div>
-      <div class="booking-step" id="step2">
-        <div class="step-number">2</div>
-        <div class="step-title">Passenger Info</div>
-        <div class="step-status hidden">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-          </svg>
-        </div>
-      </div>
-      <div class="booking-step" id="step3">
-        <div class="step-number">3</div>
-        <div class="step-title">Seat Selection</div>
-        <div class="step-status hidden">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-          </svg>
-        </div>
-      </div>
-      <div class="booking-step" id="step4">
-        <div class="step-number">4</div>
-        <div class="step-title">Confirmation</div>
-        <div class="step-status hidden">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500" viewBox="0 0 20 20" fillcurrentColor">
-            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-          </svg>
-        </div>
-      </div>
+      <?php endforeach; ?>
     </div>
 
-    <!-- Add progress tracker below the steps -->
-    <div class="max-w-xl mx-auto mb-8 px-4 hidden" id="booking-progress">
-      <div class="flex justify-between items-center text-sm text-gray-600">
-        <span>Progress</span>
-        <span id="progress-percentage">25%</span>
-      </div>
-      <div class="mt-1 h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-        <div id="progress-bar" class="h-full bg-blue-600 rounded-full transition-all duration-500" style="width: 25%"></div>
-      </div>
-    </div>
-
-    <!-- Toast container for notifications -->
+    <!-- Toast Container -->
     <div id="toast-container" class="fixed top-24 right-4 z-50"></div>
 
-    <?php if (!empty($error_message)): ?>
-      <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg mb-6 shadow-sm animate__animated animate__fadeIn">
-        <div class="flex">
-          <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-9v4a1 1 0 11-2 0v-4a1 1 0 112 0zm-1-5a1 1 0 100 2 1 1 0 000-2z" clip-rule="evenodd" />
-            </svg>
-          </div>
-          <div class="ml-3">
-            <p class="text-sm text-red-700"><?php echo htmlspecialchars($error_message); ?></p>
-          </div>
-        </div>
+    <!-- Messages -->
+    <?php if ($error_message): ?>
+      <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg mb-6">
+        <p class="text-sm text-red-700"><?php echo htmlspecialchars($error_message); ?></p>
       </div>
     <?php endif; ?>
 
-    <?php if (!empty($success_message)): ?>
-      <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg mb-6 shadow-sm animate__animated animate__fadeIn">
-        <div class="flex">
-          <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-            </svg>
-          </div>
-          <div class="ml-3">
-            <p class="text-sm text-green-700"><?php echo htmlspecialchars($success_message); ?></p>
-          </div>
-        </div>
+    <?php if ($success_message): ?>
+      <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg mb-6">
+        <p class="text-sm text-green-700"><?php echo htmlspecialchars($success_message); ?></p>
       </div>
     <?php endif; ?>
 
-    <?php if (isset($already_booked) && $already_booked): ?>
-      <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg mb-6 shadow-sm animate__animated animate__fadeIn">
-        <div class="flex">
-          <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-            </svg>
-          </div>
-          <div class="ml-3">
-            <p class="text-sm text-amber-700"><?php echo htmlspecialchars($info_message); ?></p>
-            <p class="text-sm text-amber-700 mt-2">
-              <a href="my_bookings.php" class="font-medium underline hover:text-amber-800">
-                View your bookings
-              </a>
-            </p>
-          </div>
-        </div>
+    <?php if ($already_booked): ?>
+      <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-lg mb-6">
+        <p class="text-sm text-yellow-700"><?php echo htmlspecialchars($info_message); ?></p>
+        <a href="my_bookings.php" class="text-sm text-yellow-700 underline hover:text-yellow-800 mt-2 inline-block">
+          View your bookings
+        </a>
       </div>
     <?php endif; ?>
 
     <?php if ($flight_details): ?>
-      <!-- Multistep Form Container -->
-      <div class="bg-white shadow-md rounded-xl overflow-hidden">
-        <!-- Step 1: Flight Details (Always visible) -->
+      <div class="bg-white rounded-xl shadow-md overflow-hidden">
+        <!-- Step 1: Flight Details -->
         <div id="flight-details-section" class="p-6 border-b border-gray-200">
-          <h2 class="section-heading text-xl font-semibold text-gray-900 mb-4">Flight Details</h2>
-
-          <div class="flight-card bg-white border border-gray-200 rounded-lg p-4">
-            <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">Flight Details</h2>
+          <!-- Flight details display -->
+          <div class="bg-white shadow-md rounded-lg p-4">
+            <div class="flex items-center justify-between mb-2">
               <div class="flex items-center">
-                <div class="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-blue-100 rounded-full">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <div class="ml-3">
-                  <p class="text-lg font-semibold text-gray-900"><?php echo htmlspecialchars($flight_details['airline'] ?? 'Airline'); ?></p>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 mr-2 text-blue-500">
+                  <path fill-rule="evenodd" d="M1.5 6a2.25 2.25 0 012.25-2.25h16.5A2.25 2.25 0 0122.5 6v12a2.25 2.25 0 01-2.25 2.25H3.75A2.25 2.25 0 011.5 18V6zM4.5 7.5A.75.75 0 015.25 6.75h3.975a.75.75 0 01.75.75v1.5a.75.75 0 01-.75.75H5.25a.75.75 0 01-.75-.75v-1.5zm0 5.25a.75.75 0 01.75-.75h3.975a.75.75 0 01.75.75v1.5a.75.75 0 01-.75.75H5.25a.75.75 0 01-.75-.75v-1.5zm0 5.25a.75.75 0 01.75-.75h3.975a.75.75 0 01.75.75v1.5a.75.75 0 01-.75.75H5.25a.75.75 0 01-.75-.75v-1.5zM15 9.75a.75.75 0 01.75-.75h2.25a.75.75 0 010 1.5H15.75a.75.75 0 01-.75-.75zm.75 2.25a.75.75 0 00-.75.75v1.5a.75.75 0 00.75.75h2.25a.75.75 0 000-1.5H15.75v-1.5zm0 5.25a.75.75 0 01.75-.75h2.25a.75.75 0 010 1.5H15.75a.75.75 0 01-.75-.75v-1.5z" clip-rule="evenodd" />
+                </svg>
+                <div>
+                  <p class="font-semibold text-lg"><?php echo htmlspecialchars($flight_details['airline_name'] ?? 'N/A'); ?></p>
                   <p class="text-sm text-gray-600">Flight #<?php echo htmlspecialchars($flight_details['flight_number']); ?></p>
                 </div>
               </div>
-              <?php if (!empty($flight_details['stops'])): ?>
-                <?php
-                $stops = json_decode($flight_details['stops'], true);
-                $stop_count = is_array($stops) ? count($stops) : 0;
-                ?>
-                <div class="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm font-medium">
-                  <?php echo $stop_count . ' ' . ($stop_count == 1 ? 'Stop' : 'Stops'); ?>
-                </div>
-              <?php else: ?>
-                <div class="px-3 py-1 rounded-full bg-green-50 text-green-700 text-sm font-medium">
-                  Direct Flight
-                </div>
-              <?php endif; ?>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <!-- Departure -->
-              <div class="col-span-1">
-                <p class="text-sm text-gray-500 mb-1">Departure</p>
-                <div class="flex items-center">
-                  <div class="text-xl font-bold"><?php echo $departure_time_formatted; ?></div>
-                  <div class="mx-2 text-gray-400">•</div>
-                  <div class="text-gray-600"><?php echo $departure_date_formatted; ?></div>
-                </div>
-                <p class="text-gray-700 mt-1"><?php echo htmlspecialchars($flight_details['departure_city']); ?></p>
-              </div>
-
-              <!-- Flight Duration -->
-              <div class="col-span-1 flex flex-col items-center justify-center">
-                <p class="text-sm text-gray-500 mb-1">Duration</p>
-                <div class="flex items-center">
-                  <div class="h-1 w-2 bg-gray-300 rounded-full"></div>
-                  <div class="h-1 flex-1 mx-1 bg-gray-300"></div>
-                  <div>✈️</div>
-                  <div class="h-1 flex-1 mx-1 bg-gray-300"></div>
-                  <div class="h-1 w-2 bg-gray-300 rounded-full"></div>
-                </div>
-                <p class="text-gray-600"><?php echo htmlspecialchars($flight_details['flight_duration'] ?? 'N/A'); ?> hours</p>
-              </div>
-
-              <!-- Arrival -->
-              <div class="col-span-1 text-right">
-                <p class="text-sm text-gray-500 mb-1">Arrival</p>
-                <div class="flex items-center justify-end">
-                  <div class="text-xl font-bold"><?php echo $arrival_time_formatted; ?></div>
-                  <div class="mx-2 text-gray-400">•</div>
-                  <div class="text-gray-600"><?php echo $departure_date_formatted; ?></div>
-                </div>
-                <p class="text-gray-700 mt-1"><?php echo htmlspecialchars($flight_details['arrival_city']); ?></p>
-              </div>
-            </div>
-
-            <!-- Cabin Classes & Prices -->
-            <div class="mt-6 p-4 bg-gray-50 rounded-lg">
-              <h3 class="text-lg font-medium text-gray-800 mb-3">Available Fares</h3>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <?php
-                if (isset($flight_details['prices']) && !empty($flight_details['prices'])) {
-                  $prices = json_decode($flight_details['prices'], true);
-                  if (is_array($prices)) {
-                    foreach ($prices as $class => $price) {
-                      $display_class = ucwords(str_replace('_', ' ', $class));
-                      $class_icon = '';
-                      $bg_color = '';
-                      $text_color = '';
-
-                      if ($class == 'economy') {
-                        $class_icon = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>';
-                        $bg_color = 'bg-green-50';
-                        $text_color = 'text-green-700';
-                      } else if ($class == 'business') {
-                        $class_icon = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>';
-                        $bg_color = 'bg-purple-50';
-                        $text_color = 'text-purple-700';
-                      } else if ($class == 'first_class') {
-                        $class_icon = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>';
-                        $bg_color = 'bg-blue-50';
-                        $text_color = 'text-blue-700';
-                      }
-                ?>
-                      <div class="<?php echo $bg_color; ?> p-3 rounded-lg border border-gray-200 transition-transform transform hover:scale-105 hover:shadow-sm">
-                        <div class="flex justify-between items-center">
-                          <div class="flex items-center">
-                            <div class="mr-2 <?php echo $text_color; ?>">
-                              <?php echo $class_icon; ?>
-                            </div>
-                            <span class="font-medium"><?php echo htmlspecialchars($display_class); ?></span>
-                          </div>
-                          <span class="text-lg font-bold <?php echo $text_color; ?>">$<?php echo htmlspecialchars($price); ?></span>
-                        </div>
-                      </div>
-                <?php
-                    }
-                  }
-                }
-                ?>
+              <div class="text-right">
+                <p class="text-sm text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 inline-block align-middle mr-1">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>Departure: <?php echo htmlspecialchars($flight_details['departure_city']); ?>, <?php echo $departure_time_formatted; ?></p>
+                <p class="text-sm text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 inline-block align-middle mr-1">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>Arrival: <?php echo htmlspecialchars($flight_details['arrival_city']); ?>, <?php echo $arrival_time_formatted; ?></p>
+                <p class="text-sm text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 inline-block align-middle mr-1">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12.75 15l3-3m0 0l-3-3m3 3h-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>Duration: <?php echo $flight_duration; ?></p>
               </div>
             </div>
           </div>
 
           <div class="mt-6 flex justify-end">
-            <button type="button" class="next-step px-6 py-2 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors <?php if (isset($already_booked) && $already_booked): ?>opacity-50 cursor-not-allowed<?php endif; ?>" data-next="passenger-info-section" <?php if (isset($already_booked) && $already_booked): ?>disabled<?php endif; ?>>
+            <button type="button" class="next-step px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors <?php echo $already_booked ? 'opacity-50 cursor-not-allowed' : ''; ?>"
+              data-next="passenger-info-section" <?php echo $already_booked ? 'disabled' : ''; ?>>
               Continue to Passenger Information
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block ml-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
             </button>
           </div>
         </div>
 
         <!-- Booking Form -->
         <form method="post" action="" id="booking-form" class="divide-y divide-gray-200">
+          <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+
           <!-- Step 2: Passenger Information -->
           <div id="passenger-info-section" class="p-6 hidden">
-            <h2 class="section-heading text-xl font-semibold text-gray-900 mb-6">Passenger Information</h2>
+            <h2 class="text-xl font-semibold text-gray-900 mb-6">Passenger Information</h2>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label for="passenger_name" class="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                <input
-                  type="text"
-                  id="passenger_name"
-                  name="passenger_name"
-                  required
-                  placeholder="Enter your full name"
-                  value="<?php echo htmlspecialchars($user_details['name'] ?? $user_details['full_name'] ?? ''); ?>"
-                  class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none">
+                <input type="text" id="passenger_name" name="passenger_name" required
+                  value="<?php echo htmlspecialchars($user_details['full_name'] ?? ''); ?>"
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
               </div>
 
               <div>
                 <label for="passenger_email" class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                <input
-                  type="email"
-                  id="passenger_email"
-                  name="passenger_email"
-                  required
-                  placeholder="your.email@example.com"
+                <input type="email" id="passenger_email" name="passenger_email" required
                   value="<?php echo htmlspecialchars($user_details['email'] ?? ''); ?>"
-                  class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none">
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
               </div>
 
               <div>
                 <label for="passenger_phone" class="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-                <input
-                  type="tel"
-                  id="passenger_phone"
-                  name="passenger_phone"
-                  required
-                  placeholder="(123) 456-7890"
-                  value="<?php echo htmlspecialchars($user_details['phone'] ?? $user_details['phone_number'] ?? ''); ?>"
-                  class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none">
+                <input type="tel" id="passenger_phone" name="passenger_phone" required
+                  value="<?php echo htmlspecialchars($user_details['phone_number'] ?? ''); ?>"
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
               </div>
 
               <div>
                 <label for="cabin_class" class="block text-sm font-medium text-gray-700 mb-2">Select Cabin Class</label>
-                <select
-                  id="cabin_class"
-                  name="cabin_class"
-                  required
-                  class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none">
+                <select id="cabin_class" name="cabin_class" required
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <?php
-                  if (isset($flight_details['prices']) && !empty($flight_details['prices'])) {
-                    $prices = json_decode($flight_details['prices'], true);
-                    if (is_array($prices)) {
-                      foreach ($prices as $class => $price) {
-                        if (is_string($class) && is_numeric($price)) {
-                          $display_class = ucwords(str_replace('_', ' ', $class));
-                          echo "<option value=\"" . htmlspecialchars($class) . "\">" . htmlspecialchars($display_class) . " ($" . htmlspecialchars($price) . ")</option>";
-                        }
-                      }
-                    }
-                  } else {
-                    echo "<option value=\"economy\">Economy</option>";
-                    echo "<option value=\"business\">Business</option>";
-                    echo "<option value=\"first_class\">First Class</option>";
-                  }
+                  $prices = json_decode($flight_details['prices'] ?? '{}', true);
+                  foreach ($prices as $class => $price):
+                    $display_class = ucwords(str_replace('_', ' ', $class));
                   ?>
+                    <option value="<?php echo htmlspecialchars($class); ?>" data-price="<?php echo htmlspecialchars($price); ?>">
+                      <?php echo htmlspecialchars($display_class . " ($" . $price . ")"); ?>
+                    </option>
+                  <?php endforeach; ?>
                 </select>
               </div>
             </div>
 
-            <!-- Passenger Counter Section -->
+            <!-- Passenger Counter -->
             <div class="mt-8">
               <h3 class="text-lg font-medium text-gray-800 mb-4">Number of Passengers</h3>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Adults Counter -->
                 <div class="p-4 bg-gray-50 rounded-lg">
                   <label class="block text-sm font-medium text-gray-700 mb-3">Adults (12+ years)</label>
-                  <div class="number-input">
-                    <button type="button" class="decrease-adults">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
-                      </svg>
-                    </button>
-                    <input
-                      type="number"
-                      name="adult_count"
-                      id="adult_count"
-                      value="1"
-                      min="1"
-                      max="8"
-                      readonly>
-                    <button type="button" class="increase-adults">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-                      </svg>
-                    </button>
+                  <div class="flex items-center space-x-2">
+                    <button type="button" class="decrease-adults px-3 py-1 bg-gray-200 rounded">-</button>
+                    <input type="number" name="adult_count" id="adult_count" value="1" min="1" max="8" readonly
+                      class="w-16 text-center border border-gray-300 rounded-lg">
+                    <button type="button" class="increase-adults px-3 py-1 bg-gray-200 rounded">+</button>
                   </div>
                 </div>
 
-                <!-- Children Counter -->
                 <div class="p-4 bg-gray-50 rounded-lg">
                   <label class="block text-sm font-medium text-gray-700 mb-3">Children (2-11 years)</label>
-                  <div class="number-input">
-                    <button type="button" class="decrease-children">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
-                      </svg>
-                    </button>
-                    <input
-                      type="number"
-                      name="children_count"
-                      id="children_count"
-                      value="0"
-                      min="0"
-                      max="8"
-                      readonly>
-                    <button type="button" class="increase-children">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-                      </svg>
-                    </button>
+                  <div class="flex items-center space-x-2">
+                    <button type="button" class="decrease-children px-3 py-1 bg-gray-200 rounded">-</button>
+                    <input type="number" name="children_count" id="children_count" value="0" min="0" max="8" readonly
+                      class="w-16 text-center border border-gray-300 rounded-lg">
+                    <button type="button" class="increase-children px-3 py-1 bg-gray-200 rounded">+</button>
                   </div>
                 </div>
               </div>
-              <p class="text-sm text-gray-500 mt-2">Maximum 8 passengers per booking.</p>
             </div>
 
             <div class="mt-8 flex justify-between">
-              <button type="button" class="prev-step px-6 py-2 bg-gray-200 text-gray-700 rounded-lg shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50 transition-colors" data-prev="flight-details-section">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
-                </svg>
+              <button type="button" class="prev-step px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors" data-prev="flight-details-section">
                 Back
               </button>
-              <button type="button" class="next-step px-6 py-2 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors" data-next="seat-selection-section">
+              <button type="button" class="next-step px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors" data-next="seat-selection-section">
                 Continue to Seat Selection
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block ml-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-                </svg>
               </button>
             </div>
           </div>
 
           <!-- Step 3: Seat Selection -->
-          <div id="seat-selection-section" class="p-6 hidden">
-            <h2 class="section-heading text-xl font-semibold text-gray-900 mb-4">Seat Selection</h2>
-            <div class="bg-blue-50 p-4 rounded-lg mb-6">
-              <div class="flex items-start">
-                <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                  </svg>
+          <div id="seat-selection-section" class="p-6 hidden seat-selection-section">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Seat Selection</h2>
+            <p class="mb-4">Please select <span id="seats-to-select" class="font-bold">1</span> seat(s).</p>
+
+            <div class="mb-6" id="cabin-tabs">
+              <?php foreach (array_keys($seats_data) as $index => $cabin_class): ?>
+                <div class="cabin-tab <?php echo $index === 0 ? 'active' : ''; ?>" data-cabin="<?php echo htmlspecialchars($cabin_class); ?>">
+                  <?php echo ucwords(str_replace('_', ' ', $cabin_class)); ?> Cabin
                 </div>
-                <div class="ml-3">
-                  <p class="text-sm text-blue-700">Please select <span id="seats-to-select" class="font-bold">1</span> seat(s) for your passengers.</p>
-                </div>
-              </div>
+              <?php endforeach; ?>
             </div>
 
-            <!-- Cabin Class Tabs -->
-            <div class="mb-6">
-              <div class="flex space-x-4 overflow-x-auto pb-2">
-                <?php if ($seats_data): ?>
-                  <?php foreach (array_keys($seats_data) as $index => $cabin_class): ?>
-                    <div class="cabin-tab <?php echo $index === 0 ? 'active' : ''; ?>" data-cabin="<?php echo htmlspecialchars($cabin_class); ?>">
-                      <?php echo ucwords(str_replace('_', ' ', $cabin_class)); ?>
-                    </div>
-                  <?php endforeach; ?>
-                <?php endif; ?>
-              </div>
-            </div>
-
-            <!-- Seat Legend -->
-            <div class="mb-6 flex flex-wrap gap-4 bg-gray-50 p-4 rounded-lg">
-              <div class="flex items-center">
-                <div class="w-5 h-5 bg-gray-100 border border-gray-300 rounded mr-2"></div>
-                <span class="text-sm">Unavailable</span>
-              </div>
-              <div class="flex items-center">
-                <div class="w-5 h-5 bg-f0fdfa border border-99f6e4 rounded mr-2"></div>
-                <span class="text-sm">Economy</span>
-              </div>
-              <div class="flex items-center">
-                <div class="w-5 h-5 bg-eef2ff border border-a5b4fc rounded mr-2"></div>
-                <span class="text-sm">Business</span>
-              </div>
-              <div class="flex items-center">
-                <div class="w-5 h-5 bg-eff6ff border border-93c5fd rounded mr-2"></div>
-                <span class="text-sm">First Class</span>
-              </div>
-              <div class="flex items-center">
-                <div class="w-5 h-5 bg-green-500 border border-green-600 rounded mr-2"></div>
-                <span class="text-sm">Selected</span>
-              </div>
-            </div>
-
-            <!-- Seat Map Container -->
-            <div id="seats-container" class="mb-8">
-              <?php if ($seats_data): ?>
-                <?php foreach ($seats_data as $cabin_class => $cabin_data): ?>
-                  <div class="seat-cabin <?php echo $cabin_class !== array_key_first($seats_data) ? 'hidden' : ''; ?>" data-cabin="<?php echo htmlspecialchars($cabin_class); ?>">
-                    <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
-                      <h4 class="font-medium text-lg text-gray-800 mb-4"><?php echo ucwords(str_replace('_', ' ', $cabin_class)); ?> Cabin</h4>
-
-                      <div class="flex flex-wrap justify-center">
-                        <?php foreach ($cabin_data['seat_ids'] as $seat_id): ?>
-                          <?php
-                          $is_booked = in_array($seat_id, $booked_seats);
-                          $seat_status = $is_booked ? 'booked' : 'available';
-                          ?>
-                          <div
-                            class="seat <?php echo $seat_status; ?> <?php echo $cabin_class; ?> tooltip"
-                            data-seat-id="<?php echo htmlspecialchars($seat_id); ?>"
-                            data-cabin-class="<?php echo htmlspecialchars($cabin_class); ?>"
-                            <?php if ($is_booked): ?>disabled<?php endif; ?>>
-                            <?php echo htmlspecialchars($seat_id); ?>
-                            <span class="tooltip-text"><?php echo $is_booked ? 'Booked' : 'Available'; ?></span>
-                          </div>
-                        <?php endforeach; ?>
+            <div id="seats-container">
+              <?php foreach ($seats_data as $cabin_class => $cabin_data): ?>
+                <div class="seat-cabin <?php echo $cabin_class !== array_key_first($seats_data) ? 'hidden' : ''; ?>" data-cabin="<?php echo htmlspecialchars($cabin_class); ?>">
+                  <div class="flex flex-wrap gap-2 p-4 bg-white rounded-lg shadow-sm">
+                    <?php foreach ($cabin_data['seat_ids'] as $seat_id):
+                      $is_booked = in_array($seat_id, $booked_seats);
+                      $seat_status = $is_booked ? 'booked' : 'available';
+                    ?>
+                      <div class="seat <?php echo $seat_status; ?>"
+                        data-seat-id="<?php echo htmlspecialchars($seat_id); ?>"
+                        data-cabin-class="<?php echo htmlspecialchars($cabin_class); ?>"
+                        <?php echo $is_booked ? 'disabled' : ''; ?>>
+                        <?php echo htmlspecialchars($seat_id); ?>
                       </div>
-                    </div>
+                    <?php endforeach; ?>
                   </div>
-                <?php endforeach; ?>
-              <?php else: ?>
-                <div class="text-center p-8 bg-red-50 rounded-lg">
-                  <svg class="h-12 w-12 text-red-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <p class="text-red-500 font-medium">Seat information not available.</p>
                 </div>
-              <?php endif; ?>
+              <?php endforeach; ?>
             </div>
 
-            <!-- Selected Seats Summary -->
-            <div class="mb-6 bg-gray-50 p-4 rounded-lg">
-              <h4 class="font-medium text-gray-800 mb-2">Your Selected Seats</h4>
-              <div id="selected-seats-chips" class="flex flex-wrap gap-2">
+            <div class="mt-6">
+              <h4 class="font-medium text-gray-800 mb-2">Selected Seats</h4>
+              <div id="selected-seats-chips" class="flex flex-wrap gap-2 selected-seats-chips">
                 <span id="no-seats-selected" class="text-gray-500">No seats selected yet</span>
               </div>
-              <!-- Hidden inputs for selected seats -->
               <div id="selected-seats-inputs"></div>
             </div>
 
             <div class="mt-8 flex justify-between">
-              <button type="button" class="prev-step px-6 py-2 bg-gray-200 text-gray-700 rounded-lg shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50 transition-colors" data-prev="passenger-info-section">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
-                </svg>
+              <button type="button" class="prev-step px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors" data-prev="passenger-info-section">
                 Back
               </button>
-              <button type="button" class="next-step px-6 py-2 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors" data-next="confirmation-section" id="to-confirmation-btn">
+              <button type="button" class="next-step px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors" data-next="confirmation-section">
                 Continue to Confirmation
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block ml-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-                </svg>
               </button>
             </div>
           </div>
 
           <!-- Step 4: Confirmation -->
           <div id="confirmation-section" class="p-6 hidden">
-            <h2 class="section-heading text-xl font-semibold text-gray-900 mb-6">Booking Confirmation</h2>
+            <h2 class="text-xl font-semibold text-gray-900 mb-6">Booking Confirmation</h2>
 
-            <div class="p-6 bg-gray-50 rounded-lg mb-6">
+            <div class="p-6 bg-gray-50 rounded-lg">
               <h3 class="text-lg font-medium text-gray-800 mb-4">Flight Summary</h3>
-
-              <div class="bg-white rounded-lg p-4 mb-4 shadow-sm">
-                <div class="flex justify-between items-center mb-2">
-                  <div class="font-bold"><?php echo htmlspecialchars($flight_details['airline_name'] ?? 'Airline'); ?></div>
-                  <div class="text-sm text-gray-500">Flight #<?php echo htmlspecialchars($flight_details['flight_number']); ?></div>
-                </div>
-
-                <div class="flex items-start space-x-4">
-                  <div class="w-2/5">
-                    <div class="text-sm text-gray-500">From</div>
-                    <div class="font-medium"><?php echo htmlspecialchars($flight_details['departure_city']); ?></div>
-                    <div class="text-sm"><?php echo $departure_time_formatted; ?>, <?php echo $departure_date_formatted; ?></div>
+              <div class="bg-white rounded-lg p-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <p class="text-sm text-gray-500">From</p>
+                    <p class="font-medium"><?php echo htmlspecialchars($flight_details['departure_city']); ?></p>
+                    <p class="text-sm"><?php echo $departure_time_formatted; ?>, <?php echo $departure_date_formatted; ?></p>
                   </div>
-
-                  <div class="w-1/5 flex flex-col items-center justify-center">
-                    <div class="text-sm text-gray-500">Duration</div>
-                    <p class="text-gray-600"><?php echo htmlspecialchars($flight_details['flight_duration'] ?? 'N/A'); ?> hours</p>
+                  <div class="text-center">
+                    <p class="text-sm text-gray-500">Duration</p>
+                    <p><?php echo $flight_duration; ?></p>
                   </div>
-
-                  <div class="w-2/5 text-right">
-                    <div class="text-sm text-gray-500">To</div>
-                    <div class="font-medium"><?php echo htmlspecialchars($flight_details['arrival_city']); ?></div>
-                    <div class="text-sm"><?php echo $arrival_time_formatted; ?>, <?php echo $departure_date_formatted; ?></div>
+                  <div class="text-right">
+                    <p class="text-sm text-gray-500">To</p>
+                    <p class="font-medium"><?php echo htmlspecialchars($flight_details['arrival_city']); ?></p>
+                    <p class="text-sm"><?php echo $arrival_time_formatted; ?>, <?php echo $departure_date_formatted; ?></p>
                   </div>
                 </div>
-
-                <?php
-                // Display stops information if available
-                $stops = json_decode($flight_details['stops'] ?? '{}', true);
-                if (is_array($stops) && !empty($stops)):
-                ?>
-                  <div class="mt-3 pt-3 border-t border-gray-200">
-                    <div class="text-sm text-gray-500 mb-2">Stops:</div>
-                    <div class="flex flex-wrap gap-2">
-                      <?php foreach ($stops as $stop): ?>
-                        <span class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs">
-                          <?php echo htmlspecialchars($stop['city']); ?> (<?php echo htmlspecialchars($stop['duration']); ?> hrs)
-                        </span>
-                      <?php endforeach; ?>
-                    </div>
-                  </div>
-                <?php endif; ?>
-
-                <?php if (isset($flight_details['distance']) && !empty($flight_details['distance'])): ?>
-                  <div class="mt-3 pt-3 border-t border-gray-200">
-                    <div class="text-sm text-gray-500">Distance:</div>
-                    <div class="font-medium"><?php echo htmlspecialchars($flight_details['distance']); ?> km</div>
-                  </div>
-                <?php endif; ?>
               </div>
 
-              <!-- Return Flight Summary (if available) -->
-              <?php if (isset($flight_details['return_flight_data']) && !empty($flight_details['return_flight_data'])):
-                $return_data = json_decode($flight_details['return_flight_data'], true);
-                if (isset($return_data['has_return']) && $return_data['has_return'] == 1):
-              ?>
-                  <h3 class="text-lg font-medium text-gray-800 mb-4 mt-6">Return Flight Summary</h3>
-                  <div class="bg-white rounded-lg p-4 mb-4 shadow-sm border-l-4 border-purple-500">
-                    <div class="flex justify-between items-center mb-2">
-                      <div class="font-bold"><?php echo htmlspecialchars($return_data['return_airline'] ?? 'Airline'); ?></div>
-                      <div class="text-sm text-gray-500">Flight #<?php echo htmlspecialchars($return_data['return_flight_number']); ?></div>
-                    </div>
-
-                    <div class="flex items-start space-x-4">
-                      <div class="w-2/5">
-                        <div class="text-sm text-gray-500">From</div>
-                        <div class="font-medium"><?php echo htmlspecialchars($flight_details['arrival_city']); ?></div>
-                        <div class="text-sm">
-                          <?php
-                          $return_time_formatted = isset($return_data['return_time']) ?
-                            date('g:i A', strtotime($return_data['return_time'])) : 'N/A';
-                          $return_date_formatted = isset($return_data['return_date']) ?
-                            date('D, M j, Y', strtotime($return_data['return_date'])) : 'N/A';
-                          echo $return_time_formatted . ', ' . $return_date_formatted;
-                          ?>
-                        </div>
-                      </div>
-
-                      <div class="w-1/5 flex flex-col items-center justify-center">
-                        <div class="text-sm text-gray-500">Duration</div>
-                        <p class="text-gray-600"><?php echo htmlspecialchars($return_data['return_flight_duration'] ?? 'N/A'); ?> hours</p>
-                      </div>
-
-                      <div class="w-2/5 text-right">
-                        <div class="text-sm text-gray-500">To</div>
-                        <div class="font-medium"><?php echo htmlspecialchars($flight_details['departure_city']); ?></div>
-                        <div class="text-sm"><?php echo $return_date_formatted; ?></div>
-                      </div>
-                    </div>
-
-                    <!-- Return Flight Stops (if any) -->
-                    <?php
-                    if (isset($return_data['return_stops']) && $return_data['return_stops'] != '"direct"'):
-                      $return_stops = json_decode($return_data['return_stops'], true);
-                      if (is_array($return_stops) && !empty($return_stops)):
-                    ?>
-                        <div class="mt-3 pt-3 border-t border-gray-200">
-                          <div class="text-sm text-gray-500 mb-2">Stops:</div>
-                          <div class="flex flex-wrap gap-2">
-                            <?php foreach ($return_stops as $stop): ?>
-                              <span class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs">
-                                <?php echo htmlspecialchars($stop['city']); ?> (<?php echo htmlspecialchars($stop['duration']); ?> hrs)
-                              </span>
-                            <?php endforeach; ?>
-                          </div>
-                        </div>
-                      <?php endif; ?>
-                    <?php endif; ?>
-                  </div>
-                <?php endif; ?>
-              <?php endif; ?>
-
-              <h3 class="text-lg font-medium text-gray-800 mb-4">Passenger Information</h3>
-
-              <div class="bg-white rounded-lg p-4 mb-4 shadow-sm">
+              <h3 class="text-lg font-medium text-gray-800 mt-6 mb-4">Passenger Information</h3>
+              <div class="bg-white rounded-lg p-4">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <div class="text-sm text-gray-500">Passenger</div>
-                    <div class="font-medium" id="summary-passenger-name">-</div>
+                    <p class="text-sm text-gray-500">Adults</p>
+                    <p class="font-medium" id="summary-adult-count"><?php echo htmlspecialchars($adult_count ?? '1'); ?></p>
                   </div>
-
                   <div>
-                    <div class="text-sm text-gray-500">Email</div>
-                    <div class="font-medium" id="summary-passenger-email">-</div>
+                    <p class="text-sm text-gray-500">Children</p>
+                    <p class="font-medium" id="summary-children-count"><?php echo htmlspecialchars($children_count ?? '0'); ?></p>
                   </div>
-
                   <div>
-                    <div class="text-sm text-gray-500">Phone</div>
-                    <div class="font-medium" id="summary-passenger-phone">-</div>
-                  </div>
-
-                  <div>
-                    <div class="text-sm text-gray-500">Cabin Class</div>
-                    <div class="font-medium" id="summary-cabin-class">-</div>
+                    <p class="text-sm text-gray-500">Selected Seats</p>
+                    <p class="font-medium" id="summary-selected-seats">-</p>
                   </div>
                 </div>
               </div>
 
-              <h3 class="text-lg font-medium text-gray-800 mb-4">Seat Information</h3>
-
-              <div class="bg-white rounded-lg p-4 shadow-sm">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <div class="text-sm text-gray-500">Adults</div>
-                    <div class="font-medium" id="summary-adult-count">1</div>
+              <!-- Cost Summary -->
+              <h3 class="text-lg font-medium text-gray-800 mt-6 mb-4">Cost Summary</h3>
+              <div class="bg-white rounded-lg p-4">
+                <div class="grid grid-cols-1 gap-2">
+                  <div class="flex justify-between">
+                    <p class="text-sm text-gray-500">Base Price per Adult (Cabin: <span id="summary-cabin-class-name">-</span>)</p>
+                    <p class="font-medium" id="summary-adult-price">-</p>
                   </div>
-
-                  <div>
-                    <div class="text-sm text-gray-500">Children</div>
-                    <div class="font-medium" id="summary-children-count">0</div>
+                  <div class="flex justify-between">
+                    <p class="text-sm text-gray-500">Base Price per Child (50% discount)</p>
+                    <p class="font-medium" id="summary-child-price">-</p>
                   </div>
-                </div>
-
-                <div class="mt-4">
-                  <div class="text-sm text-gray-500">Selected Seats</div>
-                  <div class="font-medium" id="summary-selected-seats">-</div>
+                  <div class="flex justify-between">
+                    <p class="text-sm text-gray-500">Adults (<span id="summary-adult-count-cost"><?php echo htmlspecialchars($adult_count ?? '1'); ?></span> x <span id="summary-adult-price-unit">-</span>)</p>
+                    <p class="font-medium" id="summary-adult-total">-</p>
+                  </div>
+                  <div class="flex justify-between">
+                    <p class="text-sm text-gray-500">Children (<span id="summary-children-count-cost"><?php echo htmlspecialchars($children_count ?? '0'); ?></span> x <span id="summary-child-price-unit">-</span>)</p>
+                    <p class="font-medium" id="summary-children-total">-</p>
+                  </div>
+                  <div class="flex justify-between border-t pt-2 mt-2">
+                    <p class="text-sm font-semibold text-gray-700">Total Cost</p>
+                    <p class="font-semibold text-green-600" id="summary-total-cost">-</p>
+                  </div>
                 </div>
               </div>
-
-              <?php if (isset($flight_details['return_flight_data']) && !empty($flight_details['return_flight_data'])):
-                $return_data = json_decode($flight_details['return_flight_data'], true);
-                if (isset($return_data['has_return']) && $return_data['has_return'] == 1):
-              ?>
-                  <div class="bg-purple-50 p-4 rounded-lg mt-4">
-                    <p class="text-sm text-purple-700">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                      </svg>
-                      You're booking a round-trip flight. Your selected seats will be reserved for the outbound journey.
-                    </p>
-                  </div>
-                <?php endif; ?>
-              <?php endif; ?>
             </div>
 
             <div class="mt-8 flex justify-between">
-              <button type="button" class="prev-step px-6 py-2 bg-gray-200 text-gray-700 rounded-lg shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50 transition-colors" data-prev="seat-selection-section">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
-                </svg>
+              <button type="button" class="prev-step px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors" data-prev="seat-selection-section">
                 Back
               </button>
-              <button
-                type="submit"
-                name="book_flight"
-                class="px-6 py-2 bg-green-600 text-white rounded-lg shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-colors <?php if (isset($already_booked) && $already_booked): ?>opacity-50 cursor-not-allowed<?php endif; ?>"
-                id="confirm-booking-btn"
-                <?php if (isset($already_booked) && $already_booked): ?>disabled<?php endif; ?>>
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
-                </svg>
-                <?php echo (isset($already_booked) && $already_booked) ? 'Already Booked' : 'Confirm and Pay'; ?>
+              <button type="submit" name="book_flight"
+                class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors <?php echo $already_booked ? 'opacity-50 cursor-not-allowed' : ''; ?>"
+                <?php echo $already_booked ? 'disabled' : ''; ?>>
+                Confirm and Pay
               </button>
             </div>
           </div>
         </form>
       </div>
-
-      <div class="text-center mt-8">
-        <a
-          href="flights.php"
-          class="text-blue-600 hover:text-blue-800 text-sm transition-colors flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-          </svg>
-          Back to Flight Search
-        </a>
-      </div>
-      <br><br>
     <?php else: ?>
       <div class="text-center p-12 bg-white rounded-xl shadow-md">
-        <svg class="h-16 w-16 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
         <p class="text-red-600 font-bold text-xl mb-2">Flight not found</p>
-        <p class="text-gray-600 mb-8">We couldn't find the flight you're looking for. Please try searching again.</p>
-        <a href="flights.php" class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-          </svg>
+        <a href="flights.php" class="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
           Return to Flight Search
         </a>
       </div>
@@ -1598,791 +633,379 @@ $arrival_time_formatted = isset($flight_details['arrival_time']) ? formatTime($f
 
   <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Check if flight is already booked
-      const alreadyBooked = false; // Replace with your PHP variable
+    // Pass PHP data to JavaScript
+    const seatsData = <?php echo json_encode($seats_data); ?>;
+    const bookedSeats = <?php echo json_encode($booked_seats); ?>;
+    const alreadyBooked = <?php echo json_encode($already_booked); ?>;
 
-      // Initialize step navigation
-      const nextButtons = document.querySelectorAll('.next-step');
-      const prevButtons = document.querySelectorAll('.prev-step');
+    document.addEventListener('DOMContentLoaded', function() {
       const steps = ['step1', 'step2', 'step3', 'step4'];
       const sections = ['flight-details-section', 'passenger-info-section', 'seat-selection-section', 'confirmation-section'];
       let currentStep = 0;
 
-      // Counter variables
+      // Elements
       const adultCount = document.getElementById('adult_count');
       const childrenCount = document.getElementById('children_count');
       const seatsToSelect = document.getElementById('seats-to-select');
-      const increaseAdults = document.querySelector('.increase-adults');
-      const decreaseAdults = document.querySelector('.decrease-adults');
-      const increaseChildren = document.querySelector('.increase-children');
-      const decreaseChildren = document.querySelector('.decrease-children');
-
-      // Seat selection variables
+      const cabinTabsContainer = document.getElementById('cabin-tabs');
       const cabinTabs = document.querySelectorAll('.cabin-tab');
       const seatCabins = document.querySelectorAll('.seat-cabin');
       const availableSeats = document.querySelectorAll('.seat.available');
       const selectedSeatsInputs = document.getElementById('selected-seats-inputs');
       const selectedSeatsChips = document.getElementById('selected-seats-chips');
       const noSeatsSelected = document.getElementById('no-seats-selected');
-
-      // Summary elements
-      const summaryPassengerName = document.getElementById('summary-passenger-name');
-      const summaryPassengerEmail = document.getElementById('summary-passenger-email');
-      const summaryPassengerPhone = document.getElementById('summary-passenger-phone');
-      const summaryCabinClass = document.getElementById('summary-cabin-class');
-      const summaryAdultCount = document.getElementById('summary-adult-count');
-      const summaryChildrenCount = document.getElementById('summary-children-count');
-      const summarySelectedSeats = document.getElementById('summary-selected-seats');
-
-      // Form elements
       const passengerNameInput = document.getElementById('passenger_name');
       const passengerEmailInput = document.getElementById('passenger_email');
       const passengerPhoneInput = document.getElementById('passenger_phone');
       const cabinClassSelect = document.getElementById('cabin_class');
+      const summaryAdultCount = document.getElementById('summary-adult-count');
+      const summaryChildrenCount = document.getElementById('summary-children-count');
+      const summarySelectedSeats = document.getElementById('summary-selected-seats');
+      const summaryAdultPrice = document.getElementById('summary-adult-price');
+      const summaryChildPrice = document.getElementById('summary-child-price');
+      const summaryAdultTotal = document.getElementById('summary-adult-total');
+      const summaryChildrenTotal = document.getElementById('summary-children-total');
+      const summaryTotalCost = document.getElementById('summary-total-cost');
+      const summaryAdultCountCost = document.getElementById('summary-adult-count-cost');
+      const summaryChildrenCountCost = document.getElementById('summary-children-count-cost');
+      const summaryAdultPriceUnit = document.getElementById('summary-adult-price-unit');
+      const summaryChildPriceUnit = document.getElementById('summary-child-price-unit');
+      const summaryCabinClassName = document.getElementById('summary-cabin-class-name');
 
-      // Track the last counts to detect changes
-      let lastAdultCount = parseInt(adultCount.value) || 1;
-      let lastChildCount = parseInt(childrenCount.value) || 0;
-
-      // Selected seats array
       let selectedSeats = [];
 
-      // Progress animations for steps
-      function animateProgress(fromStep, toStep) {
-        // First update the completed steps
-        for (let i = 0; i <= fromStep; i++) {
-          if (i < toStep) {
-            document.getElementById(steps[i]).classList.add('completed');
-            document.getElementById(steps[i]).classList.remove('active');
-          }
-        }
-
-        // Then activate the current step
-        document.getElementById(steps[toStep]).classList.add('active');
-
-        // Animate progress bar
-        const progressBar = document.querySelector('#progress-bar');
-        if (progressBar) {
-          // Calculate progress percentage
-          const progress = (toStep / (steps.length - 1)) * 100;
-          progressBar.style.width = `${progress}%`;
-
-          const progressPercentage = document.querySelector('#progress-percentage');
-          if (progressPercentage) {
-            progressPercentage.textContent = `${Math.round(progress)}%`;
-          }
-        }
-      }
-
-      // Function to show a specific step with enhanced transitions
       function showStep(stepIndex) {
         if (stepIndex === currentStep) return;
 
-        // Direction of transition
-        const isForward = stepIndex > currentStep;
-
-        // Get current and next sections
         const currentSection = document.getElementById(sections[currentStep]);
         const nextSection = document.getElementById(sections[stepIndex]);
 
-        // Prepare for animation
-        currentSection.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
-        nextSection.style.transition = 'opacity 0.3s ease-in, transform 0.3s ease-in';
-
-        // Set initial states
-        if (isForward) {
-          nextSection.style.transform = 'translateX(20px)';
-          currentSection.style.transform = 'translateX(0)';
-        } else {
-          nextSection.style.transform = 'translateX(-20px)';
-          currentSection.style.transform = 'translateX(0)';
-        }
-
-        nextSection.style.opacity = '0';
+        currentSection.classList.add('hidden');
         nextSection.classList.remove('hidden');
 
-        // Animate out current section
-        currentSection.style.opacity = '0';
-        currentSection.style.transform = isForward ? 'translateX(-20px)' : 'translateX(20px)';
+        steps.forEach((step, index) => {
+          const stepElement = document.getElementById(step);
+          stepElement.classList.remove('active');
+          if (index < stepIndex) stepElement.classList.add('completed');
+          if (index === stepIndex) stepElement.classList.add('active');
+        });
 
-        // Animate in next section after short delay
-        setTimeout(() => {
-          nextSection.style.opacity = '1';
-          nextSection.style.transform = 'translateX(0)';
+        currentStep = stepIndex;
+        window.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
 
-          // Update progress visualization
-          animateProgress(currentStep, stepIndex);
+        if (stepIndex === 2) {
+          filterSeatsByCabinClass();
+          if (!validatePassengerCountAgainstSeats()) return;
+        }
 
-          // Update current step
-          currentStep = stepIndex;
-
-          // Hide previous section after animation completes
-          setTimeout(() => {
-            currentSection.classList.add('hidden');
-
-            // If we're on the confirmation step, update the summary
-            if (stepIndex === 3) {
-              updateSummary();
-            }
-
-            // If we're moving to seat selection, apply the currently selected cabin class
-            if (stepIndex === 2 && cabinClassSelect) {
-              // Get the selected cabin class value
-              const selectedCabinClass = cabinClassSelect.value;
-              // Apply the cabin class filter to show appropriate seats
-              filterSeatsByCabinClass(selectedCabinClass);
-            }
-          }, 300);
-
-          // Scroll to top
-          window.scrollTo({
-            top: 0,
-            behavior: 'smooth'
-          });
-        }, 150);
+        if (stepIndex === 3) {
+          updateConfirmationDetails();
+        }
       }
 
-      // Function to update the number of seats to select
+      function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast-notification px-4 py-3 rounded-lg shadow-lg text-white transform transition-transform duration-300 ease-in-out translate-x-full`;
+        toast.classList.add(type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-green-500' : 'bg-blue-500');
+        toast.innerHTML = `
+        <div class="flex items-center">
+          <span>${message}</span>
+          <button class="ml-4" onclick="this.parentNode.parentNode.remove()">
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      `;
+
+        document.getElementById('toast-container').appendChild(toast);
+        setTimeout(() => toast.classList.remove('translate-x-full'), 10);
+        setTimeout(() => {
+          toast.classList.add('translate-x-full');
+          setTimeout(() => toast.remove(), 300);
+        }, 4000);
+      }
+
+      // Navigation
+      document.querySelectorAll('.next-step').forEach(button => {
+        button.addEventListener('click', function() {
+          if (alreadyBooked) {
+            showToast('You have already booked this flight.', 'error');
+            return;
+          }
+
+          const nextSection = this.dataset.next;
+          const nextIndex = sections.indexOf(nextSection);
+
+          if (nextIndex === 2 && !validatePassengerInfo()) return;
+          if (nextIndex === 2 && !validatePassengerCountAgainstSeats()) {
+            showStep(1); // Stay on passenger info step
+            return;
+          }
+          if (nextIndex === 3 && !validateSeatSelection()) return;
+
+          showStep(nextIndex);
+        });
+      });
+
+      document.querySelectorAll('.prev-step').forEach(button => {
+        button.addEventListener('click', function() {
+          const prevSection = this.dataset.prev;
+          showStep(sections.indexOf(prevSection));
+        });
+      });
+
+      // Passenger counter
+      document.querySelector('.increase-adults')?.addEventListener('click', () => {
+        if (parseInt(adultCount.value) < 8) {
+          adultCount.value = parseInt(adultCount.value) + 1;
+          updateSeatsToSelect();
+          resetSeatSelections();
+          validatePassengerCountAgainstSeats();
+          updateConfirmationDetails();
+        }
+      });
+
+      document.querySelector('.decrease-adults')?.addEventListener('click', () => {
+        if (parseInt(adultCount.value) > 1) {
+          adultCount.value = parseInt(adultCount.value) - 1;
+          updateSeatsToSelect();
+          resetSeatSelections();
+          validatePassengerCountAgainstSeats();
+          updateConfirmationDetails();
+        }
+      });
+
+      document.querySelector('.increase-children')?.addEventListener('click', () => {
+        if (parseInt(childrenCount.value) < 8) {
+          childrenCount.value = parseInt(childrenCount.value) + 1;
+          updateSeatsToSelect();
+          resetSeatSelections();
+          validatePassengerCountAgainstSeats();
+          updateConfirmationDetails();
+        }
+      });
+
+      document.querySelector('.decrease-children')?.addEventListener('click', () => {
+        if (parseInt(childrenCount.value) > 0) {
+          childrenCount.value = parseInt(childrenCount.value) - 1;
+          updateSeatsToSelect();
+          resetSeatSelections();
+          validatePassengerCountAgainstSeats();
+          updateConfirmationDetails();
+        }
+      });
+
       function updateSeatsToSelect() {
         const total = parseInt(adultCount.value) + parseInt(childrenCount.value);
-        if (seatsToSelect) {
-          seatsToSelect.textContent = total;
-        }
+        seatsToSelect.textContent = total;
       }
 
-      // Function to reset all seat selections
       function resetSeatSelections() {
-        // Clear the selected seats array
         selectedSeats = [];
-
-        // Remove the 'selected' class from all seats
-        document.querySelectorAll('.seat.selected').forEach(seat => {
-          seat.classList.remove('selected');
-        });
-
-        // Update the UI to show no seats selected
+        document.querySelectorAll('.seat.selected').forEach(seat => seat.classList.remove('selected'));
         updateSelectedSeatsUI();
-
-        // Show a toast notification that seats have been reset
-        showToast('Passenger count changed. Your seat selection has been reset.', 'info');
+        showToast('Seat selection reset due to passenger count change.', 'info');
       }
 
-      // Disable navigation to next steps if already booked
-      if (alreadyBooked) {
-        nextButtons.forEach(button => {
-          button.disabled = true;
-          button.classList.add('opacity-50', 'cursor-not-allowed');
-        });
-
-        // Add a message at the top of the page
-        const container = document.querySelector('.max-w-5xl');
-        if (container) {
-          const message = document.createElement('div');
-          message.className = 'bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg mb-6 shadow-sm mt-6';
-          message.innerHTML = `
-    <div class="flex">
-      <div class="flex-shrink-0">
-        <svg class="h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-        </svg>
-      </div>
-      <div class="ml-3">
-        <p class="text-sm text-amber-700 font-medium">You have already booked this flight.</p>
-        <p class="text-sm text-amber-700 mt-1">You cannot make duplicate bookings for the same flight.</p>
-      </div>
-    </div>
-  `;
-
-          // Insert after the navbar and before the first child of the container
-          const firstElement = container.querySelector(':first-child');
-          if (firstElement) {
-            container.insertBefore(message, firstElement);
-          } else {
-            container.appendChild(message);
-          }
-        }
-      }
-      // Filter seats based on selected cabin class
-      function filterSeatsByCabinClass(selectedCabinClass) {
-        if (!selectedCabinClass) return;
-
-        console.log("Filtering seats for cabin class:", selectedCabinClass);
-
-        // Hide all cabin tabs container
-        const cabinTabsContainer = document.querySelector('.cabin-tab').parentNode;
-        if (cabinTabsContainer) {
-          cabinTabsContainer.style.display = 'none';
-        }
-
-        // Then show only the matching cabin's seats and hide others
-        seatCabins.forEach(cabin => {
-          if (cabin.dataset.cabin === selectedCabinClass) {
-            cabin.classList.remove('hidden');
-          } else {
-            cabin.classList.add('hidden');
-          }
-        });
-      }
-
-      // Add a change event listener to the cabin class select element
-      if (cabinClassSelect) {
-        cabinClassSelect.addEventListener('change', function() {
-          const selectedCabinClass = this.value;
-
-          // If we have a valid cabin class selected
-          if (selectedCabinClass) {
-            // Also deselect any seats that don't belong to this cabin class
-            selectedSeats = selectedSeats.filter(seatId => {
-              const seatElement = document.querySelector(`.seat[data-seat-id="${seatId}"]`);
-              if (seatElement && seatElement.dataset.cabinClass !== selectedCabinClass) {
-                seatElement.classList.remove('selected');
-                return false;
-              }
-              return true;
-            });
-
-            // Update the UI for selected seats
-            updateSelectedSeatsUI();
-          }
-        });
-      }
-
-      // Add enhanced validation with visual feedback
-      function validateWithFeedback(inputElement) {
-        if (!inputElement.value.trim()) {
-          // Shake effect for invalid input
-          inputElement.classList.add('shake-effect');
-          inputElement.style.borderColor = '#ef4444';
-
-          // Focus the input
-          inputElement.focus();
-
-          // Remove shake after animation completes
-          setTimeout(() => {
-            inputElement.classList.remove('shake-effect');
-          }, 500);
-
-          return false;
-        }
-
-        // Show success state
-        inputElement.style.borderColor = '#10b981';
-        return true;
-      }
-
-      // Validate email format
-      function isValidEmail(email) {
-        const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-        return re.test(email.toLowerCase());
-      }
-
-      // Validate phone format (simple validation)
-      function isValidPhone(phone) {
-        const re = /^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/;
-        return re.test(phone);
-      }
-
-      // Enhanced validation for passenger info
       function validatePassengerInfo() {
-        if (alreadyBooked) {
-          showToast('You have already booked this flight. You cannot book it again.', 'error');
-          return false;
-        }
+        const isValid = [
+          passengerNameInput.value.trim(),
+          isValidEmail(passengerEmailInput.value),
+          passengerPhoneInput.value.trim()
+        ].every(Boolean);
 
-        let isValid = true;
-
-        // Validate each field with visual feedback
-        isValid = validateWithFeedback(passengerNameInput) && isValid;
-        isValid = validateWithFeedback(passengerEmailInput) && isValid;
-        isValid = validateWithFeedback(passengerPhoneInput) && isValid;
-
-        // Email validation
-        if (passengerEmailInput.value && !isValidEmail(passengerEmailInput.value)) {
-          passengerEmailInput.classList.add('shake-effect');
-          passengerEmailInput.style.borderColor = '#ef4444';
-
-          // Add error message
-          const errorMessage = document.createElement('p');
-          errorMessage.className = 'text-red-500 text-sm mt-1';
-          errorMessage.textContent = 'Please enter a valid email address';
-
-          // Remove existing error message if any
-          const existingError = passengerEmailInput.parentNode.querySelector('.text-red-500');
-          if (existingError) {
-            existingError.remove();
-          }
-
-          passengerEmailInput.parentNode.appendChild(errorMessage);
-
-          isValid = false;
-        }
-
-        // Phone validation
-        if (passengerPhoneInput.value && !isValidPhone(passengerPhoneInput.value)) {
-          passengerPhoneInput.classList.add('shake-effect');
-          passengerPhoneInput.style.borderColor = '#ef4444';
-
-          // Add error message
-          const errorMessage = document.createElement('p');
-          errorMessage.className = 'text-red-500 text-sm mt-1';
-          errorMessage.textContent = 'Please enter a valid phone number';
-
-          // Remove existing error message if any
-          const existingError = passengerPhoneInput.parentNode.querySelector('.text-red-500');
-          if (existingError) {
-            existingError.remove();
-          }
-
-          passengerPhoneInput.parentNode.appendChild(errorMessage);
-
-          isValid = false;
+        if (!isValid) {
+          showToast('Please fill in all passenger information correctly.', 'error');
         }
 
         return isValid;
       }
 
-      // Enhanced seat selection validation with feedback
-      function validateSeatSelection() {
-        if (alreadyBooked) {
-          showToast('You have already booked this flight. You cannot book it again.', 'error');
-          return false;
-        }
+      function isValidEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      }
 
-        const requiredSeats = parseInt(adultCount.value) + parseInt(childrenCount.value);
+      function getAvailableSeatsForCabin(cabinClass) {
+        if (!seatsData[cabinClass]) return 0;
+        const totalSeats = seatsData[cabinClass].seat_ids.length;
+        const bookedInCabin = bookedSeats.filter(seat => seatsData[cabinClass].seat_ids.includes(seat)).length;
+        return totalSeats - bookedInCabin;
+      }
 
-        if (selectedSeats.length !== requiredSeats) {
-          // Show error toast notification
-          showToast(`Please select exactly ${requiredSeats} seat(s) for your passengers.`, 'error');
-
-          // Highlight the seats container
-          const seatsContainer = document.getElementById('seats-container');
-          seatsContainer.classList.add('pulse-attention');
-          seatsContainer.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center'
-          });
-
-          setTimeout(() => {
-            seatsContainer.classList.remove('pulse-attention');
-          }, 1500);
-
-          return false;
-        }
-
-        // Additional check: ensure all selected seats belong to the selected cabin class
+      function validatePassengerCountAgainstSeats() {
         const selectedCabinClass = cabinClassSelect.value;
+        const totalPassengers = parseInt(adultCount.value) + parseInt(childrenCount.value);
+        const availableSeats = getAvailableSeatsForCabin(selectedCabinClass);
 
-        // Check each selected seat
-        for (const seatId of selectedSeats) {
-          const seatElement = document.querySelector(`.seat[data-seat-id="${seatId}"]`);
-          if (!seatElement || seatElement.dataset.cabinClass !== selectedCabinClass) {
-            showToast(`Seat ${seatId} is not in the ${selectedCabinClass} cabin. Please select seats from your chosen cabin class.`, 'error');
-            return false;
-          }
+        if (totalPassengers > availableSeats) {
+          showToast(
+            `Only ${availableSeats} seat(s) available in ${selectedCabinClass.replace('_', ' ').toUpperCase()} cabin. Please adjust the number of passengers.`,
+            'error'
+          );
+          return false;
         }
-
-        // Show success toast
-        showToast('Seats selected successfully!', 'success');
         return true;
       }
 
-      // Toast notification system
-      function showToast(message, type = 'info') {
-        // Remove any existing toasts
-        const existingToasts = document.querySelectorAll('.toast-notification');
-        existingToasts.forEach(toast => {
-          toast.remove();
+      function validateSeatSelection() {
+        const requiredSeats = parseInt(adultCount.value) + parseInt(childrenCount.value);
+        if (selectedSeats.length !== requiredSeats) {
+          showToast(`Please select exactly ${requiredSeats} seat(s).`, 'error');
+          return false;
+        }
+
+        const selectedCabinClass = cabinClassSelect.value;
+        const allSeatsValid = selectedSeats.every(seatId => {
+          const seat = document.querySelector(`.seat[data-seat-id="${seatId}"]`);
+          return seat && seat.dataset.cabinClass === selectedCabinClass;
         });
 
-        // Create toast element
-        const toast = document.createElement('div');
-        toast.className = `toast-notification fixed top-24 right-4 px-4 py-3 rounded-lg shadow-lg z-50 transform transition-transform duration-300 ease-in-out translate-x-full`;
+        if (!allSeatsValid) {
+          showToast('Selected seats must match the chosen cabin class.', 'error');
+          return false;
+        }
 
-        // Set appropriate styling based on type
-        if (type === 'error') {
-          toast.classList.add('bg-red-500', 'text-white');
-        } else if (type === 'success') {
-          toast.classList.add('bg-green-500', 'text-white');
+        return true;
+      }
+
+      function filterSeatsByCabinClass() {
+        const selectedCabinClass = cabinClassSelect.value;
+
+        cabinTabs.forEach(tab => {
+          tab.classList.add('hidden');
+          tab.classList.remove('active');
+        });
+        seatCabins.forEach(cabin => {
+          cabin.classList.add('hidden');
+        });
+
+        const selectedTab = document.querySelector(`.cabin-tab[data-cabin="${selectedCabinClass}"]`);
+        const selectedCabin = document.querySelector(`.seat-cabin[data-cabin="${selectedCabinClass}"]`);
+
+        if (selectedTab && selectedCabin) {
+          selectedTab.classList.remove('hidden');
+          selectedTab.classList.add('active');
+          selectedCabin.classList.remove('hidden');
         } else {
-          toast.classList.add('bg-blue-500', 'text-white');
+          showToast('No seats available for the selected cabin class.', 'error');
         }
 
-        // Set content
-        toast.innerHTML = `
-  <div class="flex items-center">
-    <span class="mr-2">
-      ${type === 'error' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>' : ''}
-      ${type === 'success' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>' : ''}
-      ${type === 'info' ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>' : ''}
-    </span>
-    <span>${message}</span>
-    <button class="ml-4 text-white hover:text-gray-200 focus:outline-none" onclick="this.parentNode.parentNode.remove()">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-      </svg>
-    </button>
-  </div>
-`;
-
-        // Add to DOM
-        document.body.appendChild(toast);
-
-        // Animate in
-        setTimeout(() => {
-          toast.classList.remove('translate-x-full');
-        }, 10);
-
-        // Auto-dismiss after 4 seconds
-        setTimeout(() => {
-          toast.classList.add('translate-x-full');
-          setTimeout(() => {
-            toast.remove();
-          }, 300);
-        }, 4000);
+        resetSeatSelections();
       }
 
-      // Handle counter buttons with reset
-      if (increaseAdults) {
-        increaseAdults.addEventListener('click', function() {
-          const current = parseInt(adultCount.value);
-          if (current < 8) {
-            adultCount.value = current + 1;
-            updateSeatsToSelect();
-            // Mark that passenger count has changed
-            lastAdultCount = current + 1;
-            // Important: We've changed passenger count, so we should reset seat selections
-            resetSeatSelections();
-          }
-        });
-      }
-
-      if (decreaseAdults) {
-        decreaseAdults.addEventListener('click', function() {
-          const current = parseInt(adultCount.value);
-          if (current > 1) {
-            adultCount.value = current - 1;
-            updateSeatsToSelect();
-            // Mark that passenger count has changed
-            lastAdultCount = current - 1;
-            // Important: We've changed passenger count, so we should reset seat selections
-            resetSeatSelections();
-          }
-        });
-      }
-
-      if (increaseChildren) {
-        increaseChildren.addEventListener('click', function() {
-          const current = parseInt(childrenCount.value);
-          if (current < 8) {
-            childrenCount.value = current + 1;
-            updateSeatsToSelect();
-            // Mark that passenger count has changed
-            lastChildCount = current + 1;
-            // Important: We've changed passenger count, so we should reset seat selections
-            resetSeatSelections();
-          }
-        });
-      }
-
-      if (decreaseChildren) {
-        decreaseChildren.addEventListener('click', function() {
-          const current = parseInt(childrenCount.value);
-          if (current > 0) {
-            childrenCount.value = current - 1;
-            updateSeatsToSelect();
-            // Mark that passenger count has changed
-            lastChildCount = current - 1;
-            // Important: We've changed passenger count, so we should reset seat selections
-            resetSeatSelections();
-          }
-        });
-      }
-
-      // Navigation event listeners with improved validation flow
-      nextButtons.forEach(button => {
-        button.addEventListener('click', function() {
-          const nextSection = this.dataset.next;
-          const nextIndex = sections.indexOf(nextSection);
-
-          // If we're returning to seat selection from passenger info
-          if (nextSection === 'seat-selection-section' && currentStep === 1) {
-            // Check if total passenger count has changed
-            const currentAdultCount = parseInt(adultCount.value);
-            const currentChildCount = parseInt(childrenCount.value);
-
-            // If counts have changed, we should have already reset seats
-            // This check is mostly for redundancy
-            if (currentAdultCount !== lastAdultCount || currentChildCount !== lastChildCount) {
-              resetSeatSelections();
-              lastAdultCount = currentAdultCount;
-              lastChildCount = currentChildCount;
-            }
-          }
-
-          // Validate before proceeding
-          if (nextIndex === 2) { // Before seat selection
-            if (validatePassengerInfo()) {
-              showStep(nextIndex);
-              // Update steps-to-select text with animation
-              const stepsToSelect = document.getElementById('seats-to-select');
-              if (stepsToSelect) {
-                stepsToSelect.classList.add('highlight-text');
-                setTimeout(() => {
-                  stepsToSelect.classList.remove('highlight-text');
-                }, 1500);
-              }
-            }
-          } else if (nextIndex === 3) { // Before confirmation
-            if (validateSeatSelection()) {
-              showStep(nextIndex);
-            }
-          } else {
-            showStep(nextIndex);
-          }
-        });
-      });
-
-      // Previous step with seat preservation
-      prevButtons.forEach(button => {
-        button.addEventListener('click', function() {
-          const prevSection = this.dataset.prev;
-          const prevIndex = sections.indexOf(prevSection);
-
-          // If we're going from seat selection back to passenger info
-          if (prevSection === 'passenger-info-section' && currentStep === 2) {
-            // Store current counts to compare later
-            lastAdultCount = parseInt(adultCount.value);
-            lastChildCount = parseInt(childrenCount.value);
-          }
-
-          showStep(prevIndex);
-        });
-      });
-
-      // Directly clickable step indicators (only if appropriate)
-      steps.forEach((step, index) => {
-        const stepElement = document.getElementById(step);
-        if (stepElement) {
-          stepElement.addEventListener('click', function() {
-            // Only allow clicking to steps that are completed or the next one
-            if (index <= currentStep + 1 && !alreadyBooked) {
-              // Validate before allowing skips forward
-              if (index > currentStep) {
-                if (currentStep === 0 && index === 2) {
-                  // Trying to skip passenger info to seat selection
-                  if (validatePassengerInfo()) {
-                    showStep(index);
-                  }
-                } else if (currentStep === 0 && index === 3) {
-                  // Trying to skip to confirmation
-                  if (validatePassengerInfo()) {
-                    // First go to seat selection
-                    showStep(2);
-                    // Then validate seat selection before allowing final step
-                    setTimeout(() => {
-                      if (validateSeatSelection()) {
-                        showStep(index);
-                      }
-                    }, 500);
-                  }
-                } else if (currentStep === 1 && index === 3) {
-                  // Trying to skip seat selection to confirmation
-                  if (validateSeatSelection()) {
-                    showStep(index);
-                  }
-                } else {
-                  showStep(index);
-                }
-              } else {
-                // Going backward is always allowed
-                showStep(index);
-              }
-            }
-          });
-        }
-      });
-
-      // Switch cabin tabs
-      cabinTabs.forEach(tab => {
-        tab.addEventListener('click', function() {
-          const cabinClass = this.dataset.cabin;
-          filterSeatsByCabinClass(cabinClass);
-        });
-      });
-
-      // Handle seat selection
       availableSeats.forEach(seat => {
         seat.addEventListener('click', function() {
-          if (alreadyBooked) {
-            showToast('You have already booked this flight. You cannot select seats.', 'error');
-            return;
-          }
+          if (alreadyBooked) return;
 
           const seatId = this.dataset.seatId;
-          const cabinClass = this.dataset.cabinClass;
           const requiredSeats = parseInt(adultCount.value) + parseInt(childrenCount.value);
 
           if (this.classList.contains('selected')) {
-            // Deselect seat
             this.classList.remove('selected');
             selectedSeats = selectedSeats.filter(id => id !== seatId);
-          } else {
-            // Check if we already have enough seats
-            if (selectedSeats.length >= requiredSeats) {
-              // Remove the first selected seat
-              const firstSelected = document.querySelector(`.seat[data-seat-id="${selectedSeats[0]}"]`);
-              if (firstSelected) {
-                firstSelected.classList.remove('selected');
-              }
-              selectedSeats.shift();
-            }
-
-            // Select the new seat
+          } else if (selectedSeats.length < requiredSeats) {
             this.classList.add('selected');
             selectedSeats.push(seatId);
+          } else {
+            showToast('You have selected the maximum number of seats.', 'error');
           }
 
-          // Update selected seats UI
           updateSelectedSeatsUI();
         });
       });
 
-      // Update selected seats UI
       function updateSelectedSeatsUI() {
-        // Update hidden inputs for form submission
-        if (selectedSeatsInputs) {
-          selectedSeatsInputs.innerHTML = '';
-          selectedSeats.forEach(id => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'selected_seats[]';
-            input.value = id;
-            selectedSeatsInputs.appendChild(input);
-          });
-        }
+        selectedSeatsInputs.innerHTML = selectedSeats.map(id =>
+          `<input type="hidden" name="selected_seats[]" value="${id}">`
+        ).join('');
 
-        // Update visible chips
-        if (selectedSeatsChips) {
-          selectedSeatsChips.innerHTML = '';
-          if (selectedSeats.length > 0) {
-            if (noSeatsSelected) {
-              noSeatsSelected.style.display = 'none';
-            }
-            selectedSeats.forEach(id => {
-              const chip = document.createElement('div');
-              chip.className = 'px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium flex items-center';
-              chip.innerHTML = `
-        ${id}
-        <button type="button" class="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none" data-seat-id="${id}">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-          </svg>
-        </button>
-      `;
-              selectedSeatsChips.appendChild(chip);
+        selectedSeatsChips.innerHTML = selectedSeats.length > 0 ?
+          selectedSeats.map(id => `
+          <div class="chip">
+            ${id}
+            <button type="button" data-seat-id="${id}">
+              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        `).join('') :
+          '<span id="no-seats-selected" class="text-gray-500">No seats selected yet</span>';
 
-              // Add click event to remove button
-              const removeButton = chip.querySelector('button');
-              removeButton.addEventListener('click', function() {
-                const seatId = this.dataset.seatId;
-                const seat = document.querySelector(`.seat[data-seat-id="${seatId}"]`);
-                if (seat) {
-                  seat.classList.remove('selected');
-                }
-                selectedSeats = selectedSeats.filter(id => id !== seatId);
-                updateSelectedSeatsUI();
-              });
-            });
-          } else {
-            if (noSeatsSelected) {
-              noSeatsSelected.style.display = 'block';
-              selectedSeatsChips.appendChild(noSeatsSelected);
-            }
-          }
-        }
-      }
-
-      // Update summary
-      function updateSummary() {
-        if (summaryPassengerName) {
-          summaryPassengerName.textContent = passengerNameInput.value || '-';
-        }
-        if (summaryPassengerEmail) {
-          summaryPassengerEmail.textContent = passengerEmailInput.value || '-';
-        }
-        if (summaryPassengerPhone) {
-          summaryPassengerPhone.textContent = passengerPhoneInput.value || '-';
-        }
-
-        if (summaryCabinClass && cabinClassSelect) {
-          const cabinClassText = cabinClassSelect.options[cabinClassSelect.selectedIndex].text;
-          summaryCabinClass.textContent = cabinClassText || '-';
-        }
-
-        if (summaryAdultCount) {
-          summaryAdultCount.textContent = adultCount.value || '0';
-        }
-        if (summaryChildrenCount) {
-          summaryChildrenCount.textContent = childrenCount.value || '0';
-        }
-
-        if (summarySelectedSeats) {
-          if (selectedSeats.length > 0) {
-            summarySelectedSeats.textContent = selectedSeats.join(', ');
-          } else {
-            summarySelectedSeats.textContent = '-';
-          }
-        }
-      }
-
-      // Form validation
-      const bookingForm = document.getElementById('booking-form');
-      if (bookingForm) {
-        bookingForm.addEventListener('submit', function(e) {
-          if (alreadyBooked) {
-            e.preventDefault();
-            showToast('You have already booked this flight. You cannot make another booking.', 'error');
-            return false;
-          }
-
-          if (!validatePassengerInfo() || !validateSeatSelection()) {
-            e.preventDefault();
-            return false;
-          }
-
-          // Show loading overlay
-          const loadingOverlay = document.createElement('div');
-          loadingOverlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-          loadingOverlay.innerHTML = `
-    <div class="bg-white p-5 rounded-lg shadow-lg flex flex-col items-center">
-      <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p class="text-gray-700 font-medium">Processing your booking...</p>
-    </div>
-  `;
-          document.body.appendChild(loadingOverlay);
-
-          return true;
-        });
-      }
-
-      // Initialize Select2 for cabin class
-      if (typeof $ !== 'undefined' && $.fn.select2) {
-        $(document).ready(function() {
-          $('#cabin_class').select2({
-            placeholder: 'Select cabin class',
-            width: '100%'
+        selectedSeatsChips.querySelectorAll('button').forEach(btn => {
+          btn.addEventListener('click', function() {
+            const seatId = this.dataset.seatId;
+            const seat = document.querySelector(`.seat[data-seat-id="${seatId}"]`);
+            seat.classList.remove('selected');
+            selectedSeats = selectedSeats.filter(id => id !== seatId);
+            updateSelectedSeatsUI();
           });
         });
+
+        summarySelectedSeats.textContent = selectedSeats.join(', ') || '-';
       }
 
-      // Make progress bar visible
-      const bookingProgress = document.getElementById('booking-progress');
-      if (bookingProgress) {
-        bookingProgress.classList.remove('hidden');
+      function updateConfirmationDetails() {
+        const adults = parseInt(adultCount.value);
+        const children = parseInt(childrenCount.value);
+        const selectedCabinClass = cabinClassSelect.value;
+        const cabinPrice = parseFloat(cabinClassSelect.options[cabinClassSelect.selectedIndex].dataset.price);
+
+        summaryAdultCount.textContent = adults;
+        summaryChildrenCount.textContent = children;
+        summaryAdultCountCost.textContent = adults;
+        summaryChildrenCountCost.textContent = children;
+
+        const adultPrice = cabinPrice;
+        const childPrice = cabinPrice * 0.5;
+        const adultTotal = adultPrice * adults;
+        const childTotal = childPrice * children;
+        const totalCost = adultTotal + childTotal;
+
+        summaryCabinClassName.textContent = selectedCabinClass.charAt(0).toUpperCase() + selectedCabinClass.slice(1).replace('_', ' ');
+        summaryAdultPrice.textContent = `$${adultPrice.toFixed(2)}`;
+        summaryChildPrice.textContent = `$${childPrice.toFixed(2)}`;
+        summaryAdultTotal.textContent = `$${adultTotal.toFixed(2)}`;
+        summaryChildrenTotal.textContent = `$${childTotal.toFixed(2)}`;
+        summaryTotalCost.textContent = `$${totalCost.toFixed(2)}`;
+        summaryAdultPriceUnit.textContent = `$${adultPrice.toFixed(2)}`;
+        summaryChildPriceUnit.textContent = `$${childPrice.toFixed(2)}`;
       }
 
-      // Initial setup
+      cabinClassSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (currentStep === 2 || currentStep === 3) {
+          filterSeatsByCabinClass();
+          validatePassengerCountAgainstSeats();
+        }
+        if (currentStep === 3) updateConfirmationDetails();
+      });
+
+      adultCount.addEventListener('input', function() {
+        if (currentStep === 3) updateConfirmationDetails();
+      });
+
+      childrenCount.addEventListener('input', function() {
+        if (currentStep === 3) updateConfirmationDetails();
+      });
+
+      $(document).ready(function() {
+        $('#cabin_class').select2({
+          width: '100%'
+        }).on('change', function() {
+          const selectedOption = this.options[this.selectedIndex];
+          if (currentStep === 2 || currentStep === 3) {
+            filterSeatsByCabinClass();
+            validatePassengerCountAgainstSeats();
+          }
+          if (currentStep === 3) updateConfirmationDetails();
+        });
+      });
+
       updateSeatsToSelect();
     });
   </script>
