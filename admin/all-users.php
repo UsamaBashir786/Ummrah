@@ -1,12 +1,21 @@
 <?php
 require_once 'connection/connection.php';
 
-// Fetch all users with city information
-$sql = "SELECT u.*, c.name as city_name 
-        FROM users u 
-        LEFT JOIN cities c ON u.city_id = c.id 
-        ORDER BY u.created_at DESC";
+// Fetch all users
+$sql = "SELECT * FROM users ORDER BY created_at DESC";
 $result = $conn->query($sql);
+
+// Get all unique cities for filtering
+$cities = array();
+if ($result && $result->num_rows > 0) {
+  $temp_result = $conn->query($sql);
+  while ($row = $temp_result->fetch_assoc()) {
+    if (!empty($row['city']) && !in_array($row['city'], $cities)) {
+      $cities[] = $row['city'];
+    }
+  }
+  sort($cities);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -79,20 +88,36 @@ $result = $conn->query($sql);
     <!-- Main Content -->
     <div class="main flex-1 flex flex-col overflow-hidden">
       <!-- Navbar -->
-      <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center">
+      <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center no-print">
         <button class="md:hidden text-gray-800" id="menu-btn">
           <i class="fas fa-bars"></i>
         </button>
-        <h1 class="text-xl font-semibold"><i class="text-teal-600 fa fa-user mx-2"></i> User Management</h1>
+        <div class="flex items-center">
+          <h1 class="text-xl font-semibold"><i class="text-teal-600 fa fa-user mx-2"></i> User Management</h1>
+          <?php
+          // Get total users count
+          $totalUsersQuery = "SELECT COUNT(*) as total FROM users";
+          $totalResult = $conn->query($totalUsersQuery);
+          $totalUsers = 0;
+
+          if ($totalResult && $totalResult->num_rows > 0) {
+            $row = $totalResult->fetch_assoc();
+            $totalUsers = $row['total'];
+          }
+          ?>
+          <div class="ml-4 bg-gray-100 px-3 py-1 rounded-full flex items-center">
+            <i class="fas fa-users text-teal-600 mr-2"></i>
+            <span class="text-sm font-medium"><?php echo $totalUsers; ?> Users</span>
+          </div>
+        </div>
         <div class="flex items-center">
           <a href="add-user.php" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center">
             <i class="fas fa-plus mr-2"></i> Add User
           </a>
         </div>
       </div>
-
       <!-- Search and Filter Controls -->
-      <div class="bg-white border-b border-gray-200 p-4">
+      <div class="bg-white border-b border-gray-200 p-4 no-print">
         <div class="flex flex-col md:flex-row gap-3 mb-3">
           <div class="flex-1">
             <input type="text" id="searchInput" placeholder="Search users..."
@@ -101,19 +126,9 @@ $result = $conn->query($sql);
           <div class="flex flex-wrap gap-2">
             <select id="filterCity" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-transparent">
               <option value="">All Cities</option>
-              <?php
-              // Reset the result pointer
-              if ($result && $result->num_rows > 0) {
-                $cities = array();
-                $result->data_seek(0);
-                while ($row = $result->fetch_assoc()) {
-                  if (!empty($row['city_name']) && !in_array($row['city_name'], $cities)) {
-                    $cities[] = $row['city_name'];
-                    echo '<option value="' . htmlspecialchars($row['city_name']) . '">' . htmlspecialchars($row['city_name']) . '</option>';
-                  }
-                }
-              }
-              ?>
+              <?php foreach ($cities as $city): ?>
+                <option value="<?php echo htmlspecialchars($city); ?>"><?php echo htmlspecialchars($city); ?></option>
+              <?php endforeach; ?>
             </select>
             <select id="filterGender" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-transparent">
               <option value="">All Genders</option>
@@ -130,6 +145,7 @@ $result = $conn->query($sql);
 
       <div class="flex-1 overflow-auto custom-scrollbar">
         <div class="container mx-auto p-4">
+          <!-- Mobile view - Cards -->
           <div class="grid grid-cols-1 md:hidden gap-4">
             <?php if ($result && $result->num_rows > 0): ?>
               <?php
@@ -155,9 +171,9 @@ $result = $conn->query($sql);
                           <?php echo isset($user['email']) ? htmlspecialchars($user['email']) : 'No email'; ?>
                         </div>
                         <div class="flex gap-1 mt-1 flex-wrap">
-                          <?php if (!empty($user['city_name'])): ?>
+                          <?php if (!empty($user['city'])): ?>
                             <span class="badge badge-city">
-                              <i class="fas fa-map-marker-alt mr-1"></i> <?php echo htmlspecialchars($user['city_name']); ?>
+                              <i class="fas fa-map-marker-alt mr-1"></i> <?php echo htmlspecialchars($user['city']); ?>
                             </span>
                           <?php endif; ?>
                           <?php if (!empty($user['gender'])): ?>
@@ -218,7 +234,7 @@ $result = $conn->query($sql);
             <?php endif; ?>
           </div>
 
-          <!-- Table for medium screens and up -->
+          <!-- Desktop view - Table -->
           <div class="hidden md:block overflow-hidden bg-white rounded-lg shadow">
             <table class="min-w-full divide-y divide-gray-200">
               <thead class="bg-gray-50 sticky top-0">
@@ -270,9 +286,9 @@ $result = $conn->query($sql);
                       </td>
                       <td class="px-6 py-4">
                         <div class="text-sm text-gray-900">
-                          <?php if (!empty($user['city_name'])): ?>
+                          <?php if (!empty($user['city'])): ?>
                             <span class="badge badge-city">
-                              <?php echo htmlspecialchars($user['city_name']); ?>
+                              <?php echo htmlspecialchars($user['city']); ?>
                             </span>
                           <?php else: ?>
                             <span class="text-gray-500">No city</span>
@@ -351,33 +367,43 @@ $result = $conn->query($sql);
       const tableRows = document.querySelectorAll('tbody tr');
 
       function applyFilters() {
-        const searchTerm = searchInput.value.toLowerCase();
-        const cityFilter = filterCity.value.toLowerCase();
-        const genderFilter = filterGender.value.toLowerCase();
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        const cityFilter = filterCity.value.toLowerCase().trim();
+        const genderFilter = filterGender.value.toLowerCase().trim();
 
         // Filter mobile cards
         userCards.forEach(card => {
-          const fullName = card.querySelector('h3').textContent.toLowerCase();
-          const email = card.querySelector('.text-gray-600 i.far.fa-envelope').nextSibling.textContent.toLowerCase();
-          const phone = card.querySelector('.text-gray-600 i.fas.fa-phone').nextSibling.textContent.toLowerCase();
+          // Extract all text content from the card for search
+          const cardText = card.textContent.toLowerCase();
 
-          // Get city if it exists
-          let city = '';
+          // Get full name
+          const fullName = card.querySelector('h3')?.textContent.toLowerCase().trim() || '';
+
+          // Get email - fixing the selector
+          const emailEl = card.querySelector('.text-gray-600 i.far.fa-envelope');
+          const email = emailEl ? emailEl.parentNode.textContent.toLowerCase().trim() : '';
+
+          // Get phone - fixing the selector
+          const phoneEl = card.querySelector('.text-gray-600 i.fas.fa-phone');
+          const phone = phoneEl ? phoneEl.parentNode.textContent.toLowerCase().trim() : '';
+
+          // Get city if it exists - extract just the text content
           const cityBadge = card.querySelector('.badge-city');
-          if (cityBadge) {
-            city = cityBadge.textContent.toLowerCase();
-          }
+          const city = cityBadge ? cityBadge.textContent.toLowerCase().trim() : '';
 
-          // Get gender if it exists
-          let gender = '';
+          // Get gender if it exists - extract just the text content
           const genderBadge = card.querySelector('.badge-gender');
-          if (genderBadge) {
-            gender = genderBadge.textContent.trim().toLowerCase();
-          }
+          const gender = genderBadge ? genderBadge.textContent.toLowerCase().trim() : '';
 
-          const matchesSearch = fullName.includes(searchTerm) || email.includes(searchTerm) || phone.includes(searchTerm);
+          // Check if card matches all filters
+          const matchesSearch = searchTerm === '' ||
+            fullName.includes(searchTerm) ||
+            email.includes(searchTerm) ||
+            phone.includes(searchTerm) ||
+            cardText.includes(searchTerm);
+
           const matchesCity = cityFilter === '' || city.includes(cityFilter);
-          const matchesGender = genderFilter === '' || gender === genderFilter.toLowerCase();
+          const matchesGender = genderFilter === '' || gender === genderFilter;
 
           if (matchesSearch && matchesCity && matchesGender) {
             card.style.display = '';
@@ -391,27 +417,43 @@ $result = $conn->query($sql);
           // Skip the "No users found" row
           if (row.cells.length === 1) return;
 
-          const fullName = row.querySelector('.text-gray-900').textContent.toLowerCase();
-          const email = row.querySelector('.far.fa-envelope').nextSibling.textContent.toLowerCase();
-          const phone = row.querySelector('.fas.fa-phone').nextSibling.textContent.toLowerCase();
+          // Get the text content of the entire row for thorough searching
+          const rowText = row.textContent.toLowerCase();
 
-          // Get city if it exists
-          let city = '';
+          // Specific targeting of elements
+          const fullName = row.querySelector('.text-sm.font-medium.text-gray-900')?.textContent.toLowerCase().trim() || '';
+
+          // Get email - more robust way to extract it
+          let email = '';
+          const emailEl = row.querySelector('i.far.fa-envelope');
+          if (emailEl && emailEl.parentNode) {
+            email = emailEl.parentNode.textContent.toLowerCase().trim();
+          }
+
+          // Get phone - more robust way to extract it
+          let phone = '';
+          const phoneEl = row.querySelector('i.fas.fa-phone');
+          if (phoneEl && phoneEl.parentNode) {
+            phone = phoneEl.parentNode.textContent.toLowerCase().trim();
+          }
+
+          // Get city - extract just the text content
           const cityBadge = row.querySelector('.badge-city');
-          if (cityBadge) {
-            city = cityBadge.textContent.toLowerCase();
-          }
+          const city = cityBadge ? cityBadge.textContent.toLowerCase().trim() : '';
 
-          // Get gender
-          let gender = '';
+          // Get gender - extract just the text content
           const genderBadge = row.querySelector('.badge-gender');
-          if (genderBadge) {
-            gender = genderBadge.textContent.trim().toLowerCase();
-          }
+          const gender = genderBadge ? genderBadge.textContent.toLowerCase().trim() : '';
 
-          const matchesSearch = fullName.includes(searchTerm) || email.includes(searchTerm) || phone.includes(searchTerm);
+          // Check if row matches all filters
+          const matchesSearch = searchTerm === '' ||
+            fullName.includes(searchTerm) ||
+            email.includes(searchTerm) ||
+            phone.includes(searchTerm) ||
+            rowText.includes(searchTerm);
+
           const matchesCity = cityFilter === '' || city.includes(cityFilter);
-          const matchesGender = genderFilter === '' || gender === genderFilter.toLowerCase();
+          const matchesGender = genderFilter === '' || gender === genderFilter;
 
           if (matchesSearch && matchesCity && matchesGender) {
             row.style.display = '';

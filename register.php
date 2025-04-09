@@ -6,12 +6,12 @@ session_start();
 function getCities($conn)
 {
   $cities = array();
-  $sql = "SELECT id, name FROM cities ORDER BY name ASC";
+  $sql = "SELECT name FROM cities ORDER BY name ASC";
   $result = $conn->query($sql);
 
   if ($result && $result->num_rows > 0) {
     while ($row = $result->fetch_assoc()) {
-      $cities[] = $row;
+      $cities[] = $row['name'];
     }
   }
 
@@ -39,21 +39,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
 
     // Handle city - either from select or add new
-    $city_id = null;
-    if (isset($_POST['city_selection']) && $_POST['city_selection'] == 'existing' && !empty($_POST['city_id'])) {
-      $city_id = $_POST['city_id'];
+    $city = "";
+    if (isset($_POST['city_selection']) && $_POST['city_selection'] == 'existing' && !empty($_POST['city'])) {
+      $city = $_POST['city'];
     } elseif (isset($_POST['city_selection']) && $_POST['city_selection'] == 'new' && !empty($_POST['new_city'])) {
-      // Insert new city
+      // Insert new city into cities table
       $new_city = $_POST['new_city'];
+      $city = $new_city;
+
       $city_stmt = $conn->prepare("INSERT INTO cities (name) VALUES (?)");
       $city_stmt->bind_param("s", $new_city);
-      if ($city_stmt->execute()) {
-        $city_id = $conn->insert_id;
-      }
+      $city_stmt->execute();
       $city_stmt->close();
     }
 
-    $stmt = $conn->prepare("INSERT INTO users (full_name, email, phone_number, date_of_birth, profile_image, gender, address, city_id, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO users (full_name, email, phone_number, date_of_birth, profile_image, gender, address, city, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     $stmt->bind_param(
       "sssssssss",
@@ -64,7 +64,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       $profile_image,
       $_POST['gender'],
       $_POST['address'],
-      $city_id,
+      $city,
       $password
     );
 
@@ -263,7 +263,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   </select>
                 </div>
 
-                <!-- New City Selection -->
+                <!-- City Selection (Updated) -->
                 <div class="flex-1 mt-4">
                   <label class="block mb-2 text-sm text-gray-600 dark:text-gray-200">City</label>
                   <div class="mb-3">
@@ -278,10 +278,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   </div>
 
                   <div id="existing-city-field">
-                    <select name="city_id" id="city_id" class="block w-full px-5 py-3 mt-2 text-gray-700 bg-white border border-gray-200 rounded-md dark:bg-gray-900 dark:text-gray-300 dark:border-gray-600 focus:border-teal-400 focus:ring-teal-300 focus:ring-opacity-40 dark:focus:border-teal-300 focus:outline-none focus:ring">
+                    <select name="city" id="city" class="block w-full px-5 py-3 mt-2 text-gray-700 bg-white border border-gray-200 rounded-md dark:bg-gray-900 dark:text-gray-300 dark:border-gray-600 focus:border-teal-400 focus:ring-teal-300 focus:ring-opacity-40 dark:focus:border-teal-300 focus:outline-none focus:ring">
                       <option value="">Select City</option>
                       <?php foreach ($cities as $city): ?>
-                        <option value="<?php echo $city['id']; ?>"><?php echo htmlspecialchars($city['name']); ?></option>
+                        <option value="<?php echo htmlspecialchars($city); ?>"><?php echo htmlspecialchars($city); ?></option>
                       <?php endforeach; ?>
                     </select>
                   </div>
@@ -355,12 +355,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       if (selection === 'existing') {
         existingCityField.style.display = 'block';
         newCityField.style.display = 'none';
-        document.getElementById('city_id').setAttribute('required', 'required');
+        document.getElementById('city').setAttribute('required', 'required');
         document.getElementById('new_city').removeAttribute('required');
       } else {
         existingCityField.style.display = 'none';
         newCityField.style.display = 'block';
-        document.getElementById('city_id').removeAttribute('required');
+        document.getElementById('city').removeAttribute('required');
         document.getElementById('new_city').setAttribute('required', 'required');
       }
     }
