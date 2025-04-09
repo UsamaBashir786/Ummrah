@@ -34,8 +34,11 @@ if (isset($_GET['delete_id']) && !empty($_GET['delete_id'])) {
 $filter_flight_id = isset($_GET['flight_id']) ? intval($_GET['flight_id']) : 0;
 $filter_user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
 $filter_cabin_class = isset($_GET['cabin_class']) ? $_GET['cabin_class'] : '';
+$filter_status = isset($_GET['booking_status']) ? $_GET['booking_status'] : '';
+$filter_date_from = isset($_GET['date_from']) ? $_GET['date_from'] : '';
+$filter_date_to = isset($_GET['date_to']) ? $_GET['date_to'] : '';
 
-// Prepare base query
+// Prepare base query for bookings
 $query = "SELECT fb.*, f.flight_number, f.airline_name, f.departure_city, f.arrival_city, 
             f.departure_date, f.departure_time, u.full_name as user_full_name, u.email as user_email 
             FROM flight_bookings fb 
@@ -65,6 +68,24 @@ if (!empty($filter_cabin_class)) {
   $types .= "s";
 }
 
+if (!empty($filter_status)) {
+  $where_clauses[] = "fb.booking_status = ?";
+  $params[] = $filter_status;
+  $types .= "s";
+}
+
+if (!empty($filter_date_from)) {
+  $where_clauses[] = "DATE(fb.booking_date) >= ?";
+  $params[] = $filter_date_from;
+  $types .= "s";
+}
+
+if (!empty($filter_date_to)) {
+  $where_clauses[] = "DATE(fb.booking_date) <= ?";
+  $params[] = $filter_date_to;
+  $types .= "s";
+}
+
 // Combine clauses if any exist
 if (!empty($where_clauses)) {
   $query .= " WHERE " . implode(" AND ", $where_clauses);
@@ -75,6 +96,23 @@ $query .= " ORDER BY fb.booking_date DESC";
 
 // Fetch all bookings with filters
 $bookings = [];
+$total_bookings = 0;
+$total_revenue = 0;
+$total_seats = 0;
+$total_adults = 0;
+$total_children = 0;
+$class_distribution = [
+  'economy' => 0,
+  'business' => 0,
+  'first_class' => 0
+];
+$status_distribution = [
+  'pending' => 0,
+  'confirmed' => 0,
+  'cancelled' => 0,
+  'completed' => 0
+];
+
 try {
   $stmt = $conn->prepare($query);
 
@@ -89,12 +127,43 @@ try {
   if ($result->num_rows > 0) {
     while ($row = $result->fetch_assoc()) {
       $bookings[] = $row;
+
+      // Calculate totals
+      $total_bookings++;
+      $total_revenue += floatval($row['price']);
+      $total_adults += intval($row['adult_count']);
+      $total_children += intval($row['children_count']);
+      $total_seats += (intval($row['adult_count']) + intval($row['children_count']));
+
+      // Count by cabin class
+      if (isset($row['cabin_class'])) {
+        $class_distribution[$row['cabin_class']]++;
+      }
+
+      // Count by status
+      if (isset($row['booking_status'])) {
+        $status_distribution[$row['booking_status']]++;
+      }
     }
   }
 
   $stmt->close();
 } catch (Exception $e) {
   $error_message = "Database error: " . $e->getMessage();
+}
+
+// Calculate percentage distributions
+$class_percentages = [];
+$status_percentages = [];
+
+if ($total_bookings > 0) {
+  foreach ($class_distribution as $class => $count) {
+    $class_percentages[$class] = round(($count / $total_bookings) * 100);
+  }
+
+  foreach ($status_distribution as $status => $count) {
+    $status_percentages[$status] = round(($count / $total_bookings) * 100);
+  }
 }
 
 // Fetch all flights for filter dropdown
@@ -126,6 +195,37 @@ try {
 } catch (Exception $e) {
   // Just skip if there's an error
 }
+
+// Function to get formatted class name
+function formatClassName($class)
+{
+  return ucfirst(str_replace('_', ' ', $class));
+}
+
+// Function to get class color
+function getClassColor($class, $type = 'bg')
+{
+  $colors = [
+    'economy' => ['bg' => 'bg-blue-100', 'text' => 'text-blue-800'],
+    'business' => ['bg' => 'bg-green-100', 'text' => 'text-green-800'],
+    'first_class' => ['bg' => 'bg-purple-100', 'text' => 'text-purple-800']
+  ];
+
+  return isset($colors[$class][$type]) ? $colors[$class][$type] : 'bg-gray-100';
+}
+
+// Function to get status color
+function getStatusColor($status, $type = 'bg')
+{
+  $colors = [
+    'pending' => ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-800'],
+    'confirmed' => ['bg' => 'bg-green-100', 'text' => 'text-green-800'],
+    'completed' => ['bg' => 'bg-blue-100', 'text' => 'text-blue-800'],
+    'cancelled' => ['bg' => 'bg-red-100', 'text' => 'text-red-800']
+  ];
+
+  return isset($colors[$status][$type]) ? $colors[$status][$type] : 'bg-gray-100';
+}
 ?>
 
 <!DOCTYPE html>
@@ -136,6 +236,48 @@ try {
   <style>
     .booking-row:hover {
       background-color: #f0f9ff;
+    }
+
+    .filter-form {
+      background-color: #f8fafc;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .filter-form .form-group {
+      margin-bottom: 0;
+    }
+
+    .summary-card {
+      background-color: #fff;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease;
+    }
+
+    .summary-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .summary-icon {
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+
+    .progress-bar {
+      height: 8px;
+      border-radius: 4px;
+      background-color: #e5e7eb;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 4px;
     }
   </style>
 </head>
@@ -174,15 +316,166 @@ try {
           </div>
         <?php endif; ?>
 
+        <!-- Summary Cards Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+          <!-- Total Bookings Card -->
+          <div class="summary-card p-6">
+            <div class="flex items-center">
+              <div class="summary-icon bg-blue-100 text-blue-600">
+                <i class="fas fa-ticket-alt text-2xl"></i>
+              </div>
+              <div class="ml-4">
+                <h3 class="text-sm text-gray-500 uppercase">Total Bookings</h3>
+                <p class="text-2xl font-bold text-gray-800"><?php echo $total_bookings; ?></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Total Revenue Card -->
+          <div class="summary-card p-6">
+            <div class="flex items-center">
+              <div class="summary-icon bg-green-100 text-green-600">
+                <i class="fas fa-dollar-sign text-2xl"></i>
+              </div>
+              <div class="ml-4">
+                <h3 class="text-sm text-gray-500 uppercase">Total Revenue</h3>
+                <p class="text-2xl font-bold text-gray-800">$<?php echo number_format($total_revenue, 2); ?></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Total Passengers Card -->
+          <div class="summary-card p-6">
+            <div class="flex items-center">
+              <div class="summary-icon bg-purple-100 text-purple-600">
+                <i class="fas fa-users text-2xl"></i>
+              </div>
+              <div class="ml-4">
+                <h3 class="text-sm text-gray-500 uppercase">Total Passengers</h3>
+                <p class="text-2xl font-bold text-gray-800"><?php echo $total_seats; ?></p>
+                <div class="text-xs text-gray-500 mt-1">
+                  Adults: <?php echo $total_adults; ?> |
+                  Children: <?php echo $total_children; ?>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Average Booking Value Card -->
+          <div class="summary-card p-6">
+            <div class="flex items-center">
+              <div class="summary-icon bg-amber-100 text-amber-600">
+                <i class="fas fa-chart-line text-2xl"></i>
+              </div>
+              <div class="ml-4">
+                <h3 class="text-sm text-gray-500 uppercase">Average Booking Value</h3>
+                <p class="text-2xl font-bold text-gray-800">
+                  $<?php echo $total_bookings > 0 ? number_format($total_revenue / $total_bookings, 2) : '0.00'; ?>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Distribution Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <!-- Class Distribution Card -->
+          <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="p-4 bg-gray-50 border-b">
+              <h3 class="text-lg font-bold text-gray-800">Class Distribution</h3>
+            </div>
+            <div class="p-4">
+              <div class="space-y-4">
+                <!-- Economy -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm font-medium text-gray-700">
+                      Economy
+                    </span>
+                    <span class="text-sm text-gray-600">
+                      <?php echo $class_distribution['economy']; ?> bookings
+                      (<?php echo $class_percentages['economy'] ?? 0; ?>%)
+                    </span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill bg-blue-500" style="width: <?php echo $class_percentages['economy'] ?? 0; ?>%"></div>
+                  </div>
+                </div>
+
+                <!-- Business -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm font-medium text-gray-700">
+                      Business
+                    </span>
+                    <span class="text-sm text-gray-600">
+                      <?php echo $class_distribution['business']; ?> bookings
+                      (<?php echo $class_percentages['business'] ?? 0; ?>%)
+                    </span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill bg-green-500" style="width: <?php echo $class_percentages['business'] ?? 0; ?>%"></div>
+                  </div>
+                </div>
+
+                <!-- First Class -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm font-medium text-gray-700">
+                      First Class
+                    </span>
+                    <span class="text-sm text-gray-600">
+                      <?php echo $class_distribution['first_class']; ?> bookings
+                      (<?php echo $class_percentages['first_class'] ?? 0; ?>%)
+                    </span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill bg-purple-500" style="width: <?php echo $class_percentages['first_class'] ?? 0; ?>%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status Distribution Card -->
+          <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="p-4 bg-gray-50 border-b">
+              <h3 class="text-lg font-bold text-gray-800">Booking Status</h3>
+            </div>
+            <div class="p-4">
+              <div class="grid grid-cols-2 gap-4">
+                <?php foreach ($status_distribution as $status => $count): ?>
+                  <div class="bg-white border rounded-lg p-3 flex items-center">
+                    <div class="w-3 h-3 rounded-full <?php echo getStatusColor($status); ?> mr-2"></div>
+                    <div>
+                      <span class="block text-sm font-medium text-gray-700">
+                        <?php echo ucfirst($status); ?>
+                      </span>
+                      <span class="block text-xs text-gray-500">
+                        <?php echo $count; ?> bookings (<?php echo $status_percentages[$status] ?? 0; ?>%)
+                      </span>
+                    </div>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Filters -->
         <div class="bg-white rounded-lg shadow-md overflow-hidden mb-6">
-          <div class="p-4 bg-gray-50 border-b">
+          <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
             <h2 class="text-lg font-bold text-gray-800">Filter Bookings</h2>
+            <?php if (!empty($filter_flight_id) || !empty($filter_user_id) || !empty($filter_cabin_class) || !empty($filter_status) || !empty($filter_date_from) || !empty($filter_date_to)): ?>
+              <a href="booked-flight.php" class="text-blue-600 hover:text-blue-800">
+                <i class="fas fa-times-circle mr-1"></i> Clear All Filters
+              </a>
+            <?php endif; ?>
           </div>
           <div class="p-4">
-            <form method="GET" action="booked-flight.php" class="flex flex-wrap gap-4">
+            <form method="GET" action="booked-flight.php" class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <!-- Flight Filter -->
-              <div class="w-full md:w-1/4">
+              <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Flight</label>
                 <select name="flight_id" class="w-full border-gray-300 rounded-md shadow-sm focus:border-teal-500 focus:ring-teal-500">
                   <option value="">All Flights</option>
@@ -195,7 +488,7 @@ try {
               </div>
 
               <!-- User Filter -->
-              <div class="w-full md:w-1/4">
+              <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">User</label>
                 <select name="user_id" class="w-full border-gray-300 rounded-md shadow-sm focus:border-teal-500 focus:ring-teal-500">
                   <option value="">All Users</option>
@@ -208,7 +501,7 @@ try {
               </div>
 
               <!-- Cabin Class Filter -->
-              <div class="w-full md:w-1/4">
+              <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Cabin Class</label>
                 <select name="cabin_class" class="w-full border-gray-300 rounded-md shadow-sm focus:border-teal-500 focus:ring-teal-500">
                   <option value="">All Classes</option>
@@ -218,10 +511,33 @@ try {
                 </select>
               </div>
 
+              <!-- Status Filter -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Booking Status</label>
+                <select name="booking_status" class="w-full border-gray-300 rounded-md shadow-sm focus:border-teal-500 focus:ring-teal-500">
+                  <option value="">All Statuses</option>
+                  <option value="pending" <?php echo ($filter_status == 'pending') ? 'selected' : ''; ?>>Pending</option>
+                  <option value="confirmed" <?php echo ($filter_status == 'confirmed') ? 'selected' : ''; ?>>Confirmed</option>
+                  <option value="completed" <?php echo ($filter_status == 'completed') ? 'selected' : ''; ?>>Completed</option>
+                  <option value="cancelled" <?php echo ($filter_status == 'cancelled') ? 'selected' : ''; ?>>Cancelled</option>
+                </select>
+              </div>
+
+              <!-- Date Range -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                <input type="date" name="date_from" value="<?php echo $filter_date_from; ?>" class="w-full border-gray-300 rounded-md shadow-sm focus:border-teal-500 focus:ring-teal-500">
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                <input type="date" name="date_to" value="<?php echo $filter_date_to; ?>" class="w-full border-gray-300 rounded-md shadow-sm focus:border-teal-500 focus:ring-teal-500">
+              </div>
+
               <!-- Filter Buttons -->
-              <div class="w-full md:w-1/4 flex items-end">
-                <button type="submit" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 mr-2">
-                  <i class="fas fa-filter mr-2"></i> Filter
+              <div class="flex items-end space-x-2">
+                <button type="submit" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700">
+                  <i class="fas fa-filter mr-2"></i> Apply Filters
                 </button>
                 <a href="booked-flight.php" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600">
                   <i class="fas fa-times mr-2"></i> Clear
@@ -244,7 +560,7 @@ try {
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Booking Info</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flight Details</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passenger Info</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Seats</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Seats & Price</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -262,6 +578,25 @@ try {
                     // Parse JSON seats data
                     $seats_array = json_decode($booking['seats'], true);
                     $seats_display = is_array($seats_array) ? implode(', ', $seats_array) : 'No seat assigned';
+
+                    // Get booking status badge color
+                    $status_class = '';
+                    switch ($booking['booking_status']) {
+                      case 'pending':
+                        $status_class = 'bg-yellow-100 text-yellow-800';
+                        break;
+                      case 'confirmed':
+                        $status_class = 'bg-green-100 text-green-800';
+                        break;
+                      case 'completed':
+                        $status_class = 'bg-blue-100 text-blue-800';
+                        break;
+                      case 'cancelled':
+                        $status_class = 'bg-red-100 text-red-800';
+                        break;
+                      default:
+                        $status_class = 'bg-gray-100 text-gray-800';
+                    }
                     ?>
                     <tr class="booking-row hover:bg-gray-50">
                       <td class="px-6 py-4">
@@ -271,8 +606,14 @@ try {
                         <div class="text-sm text-gray-500">
                           <span class="font-medium">Date:</span> <?php echo date('M d, Y H:i', strtotime($booking['booking_date'])); ?>
                         </div>
-                        <div class="text-sm text-teal-600 font-medium">
-                          <?php echo $cabin_class_display; ?> Class
+                        <div class="flex flex-wrap gap-1 mt-1">
+                          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <?php echo getClassColor($booking['cabin_class'], 'bg'); ?> <?php echo getClassColor($booking['cabin_class'], 'text'); ?>">
+                            <?php echo $cabin_class_display; ?>
+                          </span>
+
+                          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <?php echo $status_class; ?>">
+                            <?php echo ucfirst($booking['booking_status']); ?>
+                          </span>
                         </div>
                       </td>
                       <td class="px-6 py-4">
@@ -313,12 +654,18 @@ try {
                         <div class="text-sm text-gray-600">
                           <?php echo $seats_display; ?>
                         </div>
-                        <div class="text-xs text-gray-500 mt-1">
-                          Total seats: <?php echo $booking['adult_count'] + $booking['children_count']; ?>
+                        <div class="text-sm text-gray-500 mt-1">
+                          <span class="font-medium">Total Seats:</span> <?php echo $booking['adult_count'] + $booking['children_count']; ?>
+                        </div>
+                        <div class="text-sm font-medium text-teal-600 mt-1">
+                          <span class="font-medium">Price:</span> $<?php echo number_format($booking['price'], 2); ?>
                         </div>
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <a href="view-bookings.php?delete_id=<?php echo $booking['id']; ?>" class="text-red-600 hover:text-red-900"
+                        <a href="edit-booking.php?id=<?php echo $booking['id']; ?>" class="text-blue-600 hover:text-blue-900 mr-3">
+                          <i class="fas fa-edit"></i> Edit
+                        </a>
+                        <a href="booked-flight.php?delete_id=<?php echo $booking['id']; ?>" class="text-red-600 hover:text-red-900"
                           onclick="return confirm('Are you sure you want to delete this booking? This action cannot be undone.');">
                           <i class="fas fa-trash-alt"></i> Delete
                         </a>
@@ -334,7 +681,7 @@ try {
     </div>
   </div>
 
-  <?php include '../includes/js-links.php'; ?>
+  <?php include 'includes/js-links.php'; ?>
 </body>
 
 </html>
