@@ -782,9 +782,9 @@ if (isset($_POST['update_payment'])) {
             <button onclick="printTicket()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center">
               <i class="fas fa-print mr-2"></i> Print Ticket
             </button>
-            <button onclick="sendConfirmation(<?php echo $booking_id; ?>)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
+            <!-- <button onclick="sendConfirmation(<?php echo $booking_id; ?>)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
               <i class="fas fa-envelope mr-2"></i> Send Confirmation
-            </button>
+            </button> -->
             <?php if ($status !== 'cancelled'): ?>
               <button onclick="cancelBooking(<?php echo $booking_id; ?>)" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center">
                 <i class="fas fa-times mr-2"></i> Cancel Booking
