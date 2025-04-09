@@ -226,6 +226,28 @@ function getStatusColor($status, $type = 'bg')
 
   return isset($colors[$status][$type]) ? $colors[$status][$type] : 'bg-gray-100';
 }
+
+// Function to format seats display
+function formatSeatsDisplay($seats_array)
+{
+  if (empty($seats_array)) {
+    return 'No seat assigned';
+  }
+
+  // If it's a structure from create-flight-booking.php
+  if (isset($seats_array['passengers'])) {
+    $passenger_count = isset($seats_array['count']) ? $seats_array['count'] : count($seats_array['passengers']);
+    return $passenger_count . ' passenger' . ($passenger_count > 1 ? 's' : '');
+  }
+
+  // If it's a simple array of seat IDs
+  if (isset($seats_array[0]) && !is_array($seats_array[0])) {
+    return implode(', ', $seats_array);
+  }
+
+  // For other complex structures
+  return 'Seats assigned';
+}
 ?>
 
 <!DOCTYPE html>
@@ -577,7 +599,7 @@ function getStatusColor($status, $type = 'bg')
 
                     // Parse JSON seats data
                     $seats_array = json_decode($booking['seats'], true);
-                    $seats_display = is_array($seats_array) ? implode(', ', $seats_array) : 'No seat assigned';
+                    $seats_display = formatSeatsDisplay($seats_array);
 
                     // Get booking status badge color
                     $status_class = '';
@@ -662,6 +684,9 @@ function getStatusColor($status, $type = 'bg')
                         </div>
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <a href="flight-booking-details.php?id=<?php echo $booking['id']; ?>" class="text-blue-600 hover:text-blue-900 mr-3">
+                          <i class="fas fa-eye"></i> View
+                        </a>
                         <a href="edit-booking.php?id=<?php echo $booking['id']; ?>" class="text-blue-600 hover:text-blue-900 mr-3">
                           <i class="fas fa-edit"></i> Edit
                         </a>
@@ -682,6 +707,19 @@ function getStatusColor($status, $type = 'bg')
   </div>
 
   <?php include 'includes/js-links.php'; ?>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Mobile menu toggle
+      const menuBtn = document.getElementById('menu-btn');
+      const sidebar = document.querySelector('.sidebar');
+
+      if (menuBtn && sidebar) {
+        menuBtn.addEventListener('click', function() {
+          sidebar.classList.toggle('hidden');
+        });
+      }
+    });
+  </script>
 </body>
 
 </html>
