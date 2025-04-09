@@ -683,6 +683,9 @@
   .z-50 {
     z-index: 50;
   }
+  .z-55 {
+    z-index: 55;
+  }
   .z-auto {
     z-index: auto;
   }

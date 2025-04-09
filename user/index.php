@@ -256,41 +256,41 @@ $recent_activities = $activity_stmt->get_result();
     .stat-card {
       transition: all 0.3s ease;
     }
-    
+
     .stat-card:hover {
       transform: translateY(-5px);
       box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
     }
-    
+
     .quick-action {
       transition: all 0.3s ease;
     }
-    
+
     .quick-action:hover {
       transform: scale(1.05);
     }
-    
+
     .trip-item {
       transition: all 0.2s ease;
     }
-    
+
     .trip-item:hover {
       background-color: #F9FAFB;
       transform: translateX(5px);
     }
-    
+
     .activity-item {
       transition: all 0.2s ease;
     }
-    
+
     .activity-item:hover {
       background-color: #F9FAFB;
     }
-    
+
     .countdown {
       font-variant-numeric: tabular-nums;
     }
-    
+
     /* Weather widget styling */
     .weather-widget {
       background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
@@ -299,7 +299,7 @@ $recent_activities = $activity_stmt->get_result();
       overflow: hidden;
       box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
     }
-    
+
     @media (max-width: 768px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
@@ -310,6 +310,15 @@ $recent_activities = $activity_stmt->get_result();
 
 <body class="bg-gray-100">
   <?php include 'includes/sidebar.php'; ?>
+
+  <!-- Mobile Menu Button -->
+  <div class="md:hidden fixed top-4 left-4 z-50">
+    <button id="sidebarToggle" class="bg-white p-2 rounded-full shadow-md">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
+  </div>
 
   <div class="main-content p-4 sm:p-8">
     <div class="container mx-auto">
@@ -468,7 +477,7 @@ $recent_activities = $activity_stmt->get_result();
               <p class="text-sm font-medium text-gray-700">Travel Packages</p>
             </a>
           </div>
-          
+
           <!-- Weather Widget Preview -->
           <div class="weather-widget mt-8 p-4">
             <div class="flex justify-between items-center">
@@ -509,13 +518,13 @@ $recent_activities = $activity_stmt->get_result();
         <!-- Upcoming Trips -->
         <div class="bg-white rounded-lg shadow-md p-6 lg:col-span-2">
           <h2 class="text-xl font-bold text-gray-800 mb-4">Upcoming Trips</h2>
-          
+
           <?php if ($upcoming_trips->num_rows > 0): ?>
             <div class="divide-y">
-              <?php while ($trip = $upcoming_trips->fetch_assoc()): 
+              <?php while ($trip = $upcoming_trips->fetch_assoc()):
                 $days_left = (strtotime($trip['trip_date']) - strtotime(date('Y-m-d'))) / (60 * 60 * 24);
                 $days_left = floor($days_left);
-                
+
                 // Determine label color based on trip type
                 $label_color = '';
                 switch ($trip['type']) {
@@ -565,18 +574,18 @@ $recent_activities = $activity_stmt->get_result();
                       </div>
                       <div class="mt-2 flex justify-between items-center">
                         <div class="text-sm text-gray-600">
-                          <?php 
-                            echo date('D, M j, Y', strtotime($trip['trip_date']));
-                            if (!empty($trip['trip_time'])) {
-                              echo ' at ' . date('g:i A', strtotime($trip['trip_time']));
-                            }
+                          <?php
+                          echo date('D, M j, Y', strtotime($trip['trip_date']));
+                          if (!empty($trip['trip_time'])) {
+                            echo ' at ' . date('g:i A', strtotime($trip['trip_time']));
+                          }
                           ?>
                         </div>
                         <div>
                           <?php if ($days_left <= 3): ?>
                             <div class="countdown text-sm bg-red-50 text-red-700 px-2 py-1 rounded">
-                              <span id="countdown-<?php echo $trip['booking_id']; ?>" 
-                                data-date="<?php echo $trip['trip_date']; ?>" 
+                              <span id="countdown-<?php echo $trip['booking_id']; ?>"
+                                data-date="<?php echo $trip['trip_date']; ?>"
                                 data-time="<?php echo $trip['trip_time']; ?>">
                                 --:--:--
                               </span>
@@ -614,10 +623,10 @@ $recent_activities = $activity_stmt->get_result();
         <!-- Recent Activities -->
         <div class="bg-white rounded-lg shadow-md p-6 lg:col-span-2">
           <h2 class="text-xl font-bold text-gray-800 mb-4">Recent Activities</h2>
-          
+
           <?php if ($recent_activities->num_rows > 0): ?>
             <div class="divide-y">
-              <?php while ($activity = $recent_activities->fetch_assoc()): 
+              <?php while ($activity = $recent_activities->fetch_assoc()):
                 // Determine icon based on activity type
                 $activity_icon = '';
                 switch ($activity['icon']) {
@@ -673,7 +682,7 @@ $recent_activities = $activity_stmt->get_result();
               <p class="text-sm text-gray-600"><?php echo htmlspecialchars($user['email']); ?></p>
             </div>
           </div>
-          
+
           <div class="space-y-3">
             <a href="profile.php" class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -701,7 +710,7 @@ $recent_activities = $activity_stmt->get_result();
               <span class="text-gray-700">Change Password</span>
             </a>
           </div>
-          
+
           <div class="mt-6 pt-6 border-t">
             <a href="../logout.php" class="w-full bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg transition flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -752,7 +761,7 @@ $recent_activities = $activity_stmt->get_result();
       </div>
     </div>
   </div>
-  
+
   <!-- Package Details Modal -->
   <div id="packageDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -776,34 +785,38 @@ $recent_activities = $activity_stmt->get_result();
     // Update current time
     function updateCurrentTime() {
       const now = new Date();
-      const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const timeString = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
       document.getElementById('currentTime').textContent = timeString;
     }
-    
+
     setInterval(updateCurrentTime, 1000);
     updateCurrentTime();
-    
+
     // Countdown timer for upcoming trips
     function updateCountdowns() {
       document.querySelectorAll('[id^="countdown-"]').forEach(element => {
         const targetDate = element.getAttribute('data-date');
         const targetTime = element.getAttribute('data-time') || '00:00:00';
-        
+
         const target = new Date(`${targetDate}T${targetTime}`);
         const now = new Date();
-        
+
         const diff = target - now;
-        
+
         if (diff <= 0) {
           element.innerHTML = 'Departed';
           return;
         }
-        
+
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
         const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        
+
         if (days > 0) {
           element.innerHTML = `${days}d ${hours}h ${minutes}m`;
         } else {
@@ -811,18 +824,18 @@ $recent_activities = $activity_stmt->get_result();
         }
       });
     }
-    
+
     setInterval(updateCountdowns, 1000);
     updateCountdowns();
-    
+
     // Flight details modal
     function viewFlightDetails(flightId) {
       const modal = document.getElementById('flightDetailsModal');
       const contentDiv = document.getElementById('flightDetailsContent');
-      
+
       modal.classList.remove('hidden');
       modal.classList.add('flex');
-      
+
       // Fetch flight details
       fetch(`get_flight_details.php?flight_id=${flightId}`)
         .then(response => response.text())
@@ -833,21 +846,21 @@ $recent_activities = $activity_stmt->get_result();
           contentDiv.innerHTML = `<div class="bg-red-100 p-4 rounded-lg text-red-700">Error loading flight details.</div>`;
         });
     }
-    
+
     function closeFlightModal() {
       const modal = document.getElementById('flightDetailsModal');
       modal.classList.add('hidden');
       modal.classList.remove('flex');
     }
-    
+
     // Hotel details modal
     function viewHotelDetails(bookingId) {
       const modal = document.getElementById('hotelDetailsModal');
       const contentDiv = document.getElementById('hotelDetailsContent');
-      
+
       modal.classList.remove('hidden');
       modal.classList.add('flex');
-      
+
       // Fetch hotel details
       fetch(`get_hotel_details.php?booking_id=${bookingId}`)
         .then(response => response.text())
@@ -858,21 +871,21 @@ $recent_activities = $activity_stmt->get_result();
           contentDiv.innerHTML = `<div class="bg-red-100 p-4 rounded-lg text-red-700">Error loading hotel details.</div>`;
         });
     }
-    
+
     function closeHotelModal() {
       const modal = document.getElementById('hotelDetailsModal');
       modal.classList.add('hidden');
       modal.classList.remove('flex');
     }
-    
+
     // Package details modal
     function viewPackageDetails(packageId) {
       const modal = document.getElementById('packageDetailsModal');
       const contentDiv = document.getElementById('packageDetailsContent');
-      
+
       modal.classList.remove('hidden');
       modal.classList.add('flex');
-      
+
       // Fetch package details
       fetch(`get_package_details.php?package_id=${packageId}`)
         .then(response => response.text())
@@ -883,7 +896,7 @@ $recent_activities = $activity_stmt->get_result();
           contentDiv.innerHTML = `<div class="bg-red-100 p-4 rounded-lg text-red-700">Error loading package details.</div>`;
         });
     }
-    
+
     function closePackageModal() {
       const modal = document.getElementById('packageDetailsModal');
       modal.classList.add('hidden');
