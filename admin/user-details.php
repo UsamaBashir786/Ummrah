@@ -150,6 +150,41 @@ $formatted_created_date = $created_date->format('F d, Y h:i A');
 $dob = new DateTime($user['date_of_birth']);
 $formatted_dob = $dob->format('F d, Y');
 $age = $dob->diff(new DateTime())->y;
+
+
+
+// Helper function to get available seats
+function getAvailableSeats($flightId, $conn)
+{
+  $sql = "SELECT seats FROM flights WHERE id = ?";
+  $stmt = $conn->prepare($sql);
+  $stmt->bind_param("i", $flightId);
+  $stmt->execute();
+  $result = $stmt->get_result();
+  $row = $result->fetch_assoc();
+  $stmt->close();
+
+  if ($row && $row['seats']) {
+    $seats = json_decode($row['seats'], true);
+    $total = 0;
+    $booked = 0;
+
+    // Count total and booked seats from flight_bookings
+    foreach ($seats as $class => $data) {
+      $total += $data['count'];
+      $sql = "SELECT COUNT(*) as booked FROM flight_bookings WHERE flight_id = ? AND cabin_class = ?";
+      $stmt = $conn->prepare($sql);
+      $stmt->bind_param("is", $flightId, $class);
+      $stmt->execute();
+      $result = $stmt->get_result();
+      $booked += $result->fetch_assoc()['booked'];
+      $stmt->close();
+    }
+
+    return ['available' => $total - $booked, 'total' => $total];
+  }
+  return ['available' => 0, 'total' => 0];
+}
 ?>
 
 <!DOCTYPE html>
@@ -458,21 +493,36 @@ $age = $dob->diff(new DateTime())->y;
               <?php foreach (array_slice($bookings, 0, 3) as $booking): ?>
                 <div class="booking-card bg-gray-50 rounded-xl overflow-hidden shadow-sm border border-gray-100">
                   <?php
-                  // Determine booking type and set appropriate icon and title
                   $booking_type = $booking['booking_type'] ?? 'unknown';
                   $icon_class = 'fa-calendar-alt';
                   $title = 'Booking';
+                  $price = $booking['price'] ?? 0;
+                  $subtitle = '';
 
                   switch ($booking_type) {
                     case 'package':
                       $icon_class = 'fa-box';
                       $title = $booking['package_name'] ?? 'Package Booking';
                       $subtitle = $booking['package_type'] ?? '';
+                      $price = $booking['total_price'] ?? 0;
                       break;
                     case 'flight':
                       $icon_class = 'fa-plane';
                       $title = $booking['airline_name'] ?? 'Flight Booking';
                       $subtitle = $booking['flight_number'] ?? '';
+                      // Fetch price from flights table if not set
+                      if ($price == 0 && isset($booking['flight_id'])) {
+                        $sql = "SELECT prices FROM flights WHERE id = ?";
+                        $stmt = $conn->prepare($sql);
+                        $stmt->bind_param("i", $booking['flight_id']);
+                        $stmt->execute();
+                        $result = $stmt->get_result();
+                        if ($row = $result->fetch_assoc()) {
+                          $prices = json_decode($row['prices'], true);
+                          $price = $prices[$booking['cabin_class']] ?? 0;
+                        }
+                        $stmt->close();
+                      }
                       break;
                     case 'hotel':
                       $icon_class = 'fa-hotel';
@@ -486,7 +536,6 @@ $age = $dob->diff(new DateTime())->y;
                       break;
                   }
 
-                  // Determine status and set appropriate class
                   $status = strtolower($booking['status'] ?? $booking['booking_status'] ?? 'pending');
                   $status_class = 'status-pending';
                   switch ($status) {
@@ -498,24 +547,13 @@ $age = $dob->diff(new DateTime())->y;
                     case 'canceled':
                       $status_class = 'status-cancelled';
                       break;
-                    default:
-                      $status_class = 'status-pending';
                   }
 
-                  // Get booking date
                   $date = $booking['booking_date'] ?? $booking['created_at'] ?? '';
-                  if (is_string($date)) {
-                    $booking_date = new DateTime($date);
-                    $formatted_booking_date = $booking_date->format('M d, Y');
-                  } else {
-                    $formatted_booking_date = 'N/A';
-                  }
+                  $booking_date = new DateTime($date);
+                  $formatted_booking_date = $booking_date->format('M d, Y');
 
-                  // Get booking reference
-                  $booking_ref = $booking['id'] ?? 'N/A';
-                  if (isset($booking['booking_reference'])) {
-                    $booking_ref = $booking['booking_reference'];
-                  }
+                  $booking_ref = $booking['booking_reference'] ?? $booking['id'] ?? 'N/A';
                   ?>
 
                   <div class="h-12 bg-gray-800 text-white p-3 flex justify-between items-center">
@@ -548,15 +586,24 @@ $age = $dob->diff(new DateTime())->y;
                           <?php echo ucfirst($status); ?>
                         </span>
                       </div>
-                      <?php if (isset($booking['price']) && $booking['price'] > 0): ?>
+                      <?php if ($price > 0): ?>
                         <div class="flex justify-between text-sm">
                           <span class="text-gray-500">Price:</span>
-                          <span class="text-gray-800 font-medium">
-                            $<?php echo number_format((float)$booking['price'], 2); ?>
-                          </span>
+                          <span class="text-gray-800 font-medium">$<?php echo number_format((float)$price, 2); ?></span>
                         </div>
                       <?php endif; ?>
-
+                      <?php if ($booking_type === 'flight' && isset($booking['flight_id'])):
+                        $seatInfo = getAvailableSeats($booking['flight_id'], $conn);
+                        if ($seatInfo['total'] > 0):
+                      ?>
+                          <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Seats Available:</span>
+                            <span class="text-gray-800 font-medium">
+                              <?php echo $seatInfo['available'] . '/' . $seatInfo['total']; ?>
+                            </span>
+                          </div>
+                      <?php endif;
+                      endif; ?>
                       <?php if (isset($booking['payment_status'])): ?>
                         <div class="flex justify-between text-sm">
                           <span class="text-gray-500">Payment:</span>
@@ -569,8 +616,7 @@ $age = $dob->diff(new DateTime())->y;
 
                     <div class="mt-4 pt-3 border-t border-gray-100 flex justify-end">
                       <?php
-                      // Set details link based on booking type
-                      $details_link = '#';
+                      $details_link = "#";
                       switch ($booking_type) {
                         case 'package':
                           $details_link = 'package-booking-details.php?id=' . $booking['id'];
