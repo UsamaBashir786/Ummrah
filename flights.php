@@ -271,7 +271,29 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
 
 // Validate seat availability before booking
 function checkSeatAvailability($conn, $flight_id, $cabin_class) {
-  $seat_info = getAvailableSeats($conn, $flight_id, $cabin_class);
+  // Get seat information from the flights table
+  $sql = "SELECT seats FROM flights WHERE id = ?";
+  $stmt = $conn->prepare($sql);
+  $stmt->bind_param("i", $flight_id);
+  $stmt->execute();
+  $result = $stmt->get_result();
+  
+  if ($row = $result->fetch_assoc()) {
+    $seats = json_decode($row['seats'], true);
+    $class_key = strtolower(str_replace(' ', '_', $cabin_class));
+    
+    if (isset($seats[$class_key])) {
+      $total = $seats[$class_key]['count'] ?? 0;
+      $booked = $seats[$class_key]['booked'] ?? 0;
+      return [
+        'total' => $total,
+        'booked' => $booked,
+        'available' => $total - $booked
+      ];
+    }
+  }
+  
+  return ['total' => 0, 'booked' => 0, 'available' => 0];
   return $seat_info['available'] > 0;
 }
 
