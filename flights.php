@@ -681,8 +681,22 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
                                 <span class="text-sm text-gray-600">Available Seats:</span>
                                 <span class="font-medium">
                                   <?php
+                                  // Get total seats from the seats JSON for this class
                                   $total_seats = isset($seats[$class_key]['count']) ? $seats[$class_key]['count'] : 0;
-                                  $booked_seats = isset($seats[$class_key]['booked']) ? $seats[$class_key]['booked'] : 0;
+
+                                  // Query to count how many seats have been booked for this flight and class
+                                  $booked_query = "SELECT COUNT(*) as booked_count FROM flight_bookings 
+                WHERE flight_id = {$flight['id']} 
+                AND cabin_class = '{$class}'
+                AND booking_status != 'cancelled'";
+                                  $booked_result = $conn->query($booked_query);
+                                  $booked_seats = 0;
+                                  if ($booked_result && $booked_result->num_rows > 0) {
+                                    $booked_row = $booked_result->fetch_assoc();
+                                    $booked_seats = $booked_row['booked_count'];
+                                  }
+
+                                  // Calculate remaining seats
                                   $remaining_seats = $total_seats - $booked_seats;
                                   echo $remaining_seats . ' of ' . $total_seats;
                                   ?>

@@ -479,7 +479,7 @@ $recentBookingsJSON = json_encode($recentBookings);
           <div class="flex items-center justify-between sm:justify-start w-full">
             <a href="javascript:history.back()" class="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-all duration-300 flex items-center">
               <i class="fas fa-arrow-left mr-1"></i>
-              <span class="hidden sm:inline">Back</span>
+              <!-- <span class="hidden sm:inline">Back</span> -->
             </a>
 
             <!-- Mobile Menu Button - Only visible on small screens -->
@@ -497,9 +497,8 @@ $recentBookingsJSON = json_encode($recentBookings);
           <p class="text-blue-100 text-sm sm:text-base">Advanced Real-Time Insights</p>
         </div>
 
-        <!-- Right Section with Date and Buttons - Hidden on mobile -->
         <div class="hidden sm:flex items-center space-x-3 md:space-x-4">
-          <div class="bg-white/20 rounded-lg px-3 py-2">
+          <!-- <div class="bg-white/20 rounded-lg px-3 py-2">
             <span class="text-xs md:text-sm">Last Updated: <?php echo date('F d, Y H:i'); ?></span>
           </div>
           <div class="relative">
@@ -511,7 +510,11 @@ $recentBookingsJSON = json_encode($recentBookings);
           <button id="export-pdf" class="bg-white text-indigo-700 rounded-lg px-3 py-2 text-sm font-medium hover:bg-blue-50 transition">
             <i class="fas fa-file-export mr-1"></i>
             <span class="hidden md:inline">Export</span>
-          </button>
+          </button> -->
+          <a href="javascript:history.back()" class="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-all duration-300 flex items-center">
+            <i class="fas fa-arrow-left mr-1"></i>
+            <span class="hidden sm:inline">Back</span>
+          </a>
         </div>
       </div>
     </div>

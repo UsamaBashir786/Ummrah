@@ -9,6 +9,32 @@ if (!isset($_SESSION['admin_email'])) {
   exit();
 }
 
+// Process status update if submitted
+if (isset($_POST['update_status']) && isset($_POST['booking_id']) && isset($_POST['new_status'])) {
+  $booking_id = intval($_POST['booking_id']);
+  $new_status = $_POST['new_status'];
+
+  // Validate status value
+  $valid_statuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+  if (in_array($new_status, $valid_statuses)) {
+    try {
+      $update_sql = "UPDATE flight_bookings SET booking_status = ? WHERE id = ?";
+      $update_stmt = $conn->prepare($update_sql);
+      $update_stmt->bind_param("si", $new_status, $booking_id);
+
+      if ($update_stmt->execute()) {
+        $success_message = "Booking #$booking_id status updated to " . ucfirst($new_status);
+      } else {
+        $error_message = "Error updating booking status.";
+      }
+
+      $update_stmt->close();
+    } catch (Exception $e) {
+      $error_message = "Database error: " . $e->getMessage();
+    }
+  }
+}
+
 // Delete booking if requested
 if (isset($_GET['delete_id']) && !empty($_GET['delete_id'])) {
   $delete_id = intval($_GET['delete_id']);
@@ -101,7 +127,13 @@ $total_revenue = 0;
 $total_seats = 0;
 $total_adults = 0;
 $total_children = 0;
+$completed_revenue = 0;
 $class_distribution = [
+  'economy' => 0,
+  'business' => 0,
+  'first_class' => 0
+];
+$class_revenue = [
   'economy' => 0,
   'business' => 0,
   'first_class' => 0
@@ -135,14 +167,19 @@ try {
       $total_children += intval($row['children_count']);
       $total_seats += (intval($row['adult_count']) + intval($row['children_count']));
 
-      // Count by cabin class
+      // Count by cabin class and track revenue
       if (isset($row['cabin_class'])) {
         $class_distribution[$row['cabin_class']]++;
+        $class_revenue[$row['cabin_class']] += floatval($row['price']);
       }
 
-      // Count by status
+      // Count by status and track completed revenue
       if (isset($row['booking_status'])) {
         $status_distribution[$row['booking_status']]++;
+
+        if ($row['booking_status'] == 'completed') {
+          $completed_revenue += floatval($row['price']);
+        }
       }
     }
   }
@@ -301,6 +338,12 @@ function formatSeatsDisplay($seats_array)
       height: 100%;
       border-radius: 4px;
     }
+
+    .status-select {
+      padding: 2px 4px;
+      font-size: 0.75rem;
+      border-radius: 0.25rem;
+    }
   </style>
 </head>
 
@@ -319,10 +362,36 @@ function formatSeatsDisplay($seats_array)
         <h1 class="text-xl font-semibold">
           <i class="text-teal-600 fas fa-ticket-alt mx-2"></i> Flight Bookings
         </h1>
-        <a href="view-flight.php" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700">
-          <i class="fas fa-plane-departure mr-2"></i> View Flights
-        </a>
+        <div class="flex items-center gap-3">
+          <button id="refresh-btn" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
+            <i class="fas fa-sync-alt mr-2"></i> Refresh
+          </button>
+          <a href="view-flight.php" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700">
+            <i class="fas fa-plane-departure mr-2"></i> View Flights
+          </a>
+        </div>
       </div>
+
+      <script>
+        // Immediately attach the event handler to the refresh button
+        document.addEventListener('DOMContentLoaded', function() {
+          const refreshBtn = document.getElementById('refresh-btn');
+          if (refreshBtn) {
+            refreshBtn.addEventListener('click', function() {
+              // Add spinning animation to the refresh icon
+              const refreshIcon = this.querySelector('.fa-sync-alt');
+              if (refreshIcon) {
+                refreshIcon.classList.add('fa-spin');
+              }
+
+              // Refresh the page after a small delay
+              setTimeout(() => {
+                window.location.reload(true); // true forces reload from server, not cache
+              }, 300);
+            });
+          }
+        });
+      </script>
 
       <!-- Content Container -->
       <div class="overflow-auto flex-1 container mx-auto px-4 py-8">
@@ -339,7 +408,7 @@ function formatSeatsDisplay($seats_array)
         <?php endif; ?>
 
         <!-- Summary Cards Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <!-- Total Bookings Card -->
           <div class="summary-card p-6">
             <div class="flex items-center">
@@ -362,6 +431,22 @@ function formatSeatsDisplay($seats_array)
               <div class="ml-4">
                 <h3 class="text-sm text-gray-500 uppercase">Total Revenue</h3>
                 <p class="text-2xl font-bold text-gray-800">$<?php echo number_format($total_revenue, 2); ?></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Completed Revenue Card -->
+          <div class="summary-card p-6">
+            <div class="flex items-center">
+              <div class="summary-icon bg-indigo-100 text-indigo-600">
+                <i class="fas fa-check-circle text-2xl"></i>
+              </div>
+              <div class="ml-4">
+                <h3 class="text-sm text-gray-500 uppercase">Completed Revenue</h3>
+                <p class="text-2xl font-bold text-gray-800">$<?php echo number_format($completed_revenue, 2); ?></p>
+                <div class="text-xs text-gray-500 mt-1">
+                  <?php echo $status_distribution['completed'] ?? 0; ?> bookings
+                </div>
               </div>
             </div>
           </div>
@@ -459,27 +544,85 @@ function formatSeatsDisplay($seats_array)
             </div>
           </div>
 
-          <!-- Status Distribution Card -->
+          <!-- Revenue by Cabin Class Card -->
           <div class="bg-white rounded-lg shadow-md overflow-hidden">
             <div class="p-4 bg-gray-50 border-b">
-              <h3 class="text-lg font-bold text-gray-800">Booking Status</h3>
+              <h3 class="text-lg font-bold text-gray-800">Revenue by Class</h3>
             </div>
             <div class="p-4">
-              <div class="grid grid-cols-2 gap-4">
-                <?php foreach ($status_distribution as $status => $count): ?>
-                  <div class="bg-white border rounded-lg p-3 flex items-center">
-                    <div class="w-3 h-3 rounded-full <?php echo getStatusColor($status); ?> mr-2"></div>
-                    <div>
-                      <span class="block text-sm font-medium text-gray-700">
-                        <?php echo ucfirst($status); ?>
-                      </span>
-                      <span class="block text-xs text-gray-500">
-                        <?php echo $count; ?> bookings (<?php echo $status_percentages[$status] ?? 0; ?>%)
-                      </span>
-                    </div>
+              <div class="space-y-4">
+                <!-- Economy -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm font-medium text-gray-700">
+                      Economy
+                    </span>
+                    <span class="text-sm text-gray-600">
+                      $<?php echo number_format($class_revenue['economy'], 2); ?>
+                      (<?php echo $total_revenue > 0 ? round(($class_revenue['economy'] / $total_revenue) * 100) : 0; ?>%)
+                    </span>
                   </div>
-                <?php endforeach; ?>
+                  <div class="progress-bar">
+                    <div class="progress-fill bg-blue-500" style="width: <?php echo $total_revenue > 0 ? round(($class_revenue['economy'] / $total_revenue) * 100) : 0; ?>%"></div>
+                  </div>
+                </div>
+
+                <!-- Business -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm font-medium text-gray-700">
+                      Business
+                    </span>
+                    <span class="text-sm text-gray-600">
+                      $<?php echo number_format($class_revenue['business'], 2); ?>
+                      (<?php echo $total_revenue > 0 ? round(($class_revenue['business'] / $total_revenue) * 100) : 0; ?>%)
+                    </span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill bg-green-500" style="width: <?php echo $total_revenue > 0 ? round(($class_revenue['business'] / $total_revenue) * 100) : 0; ?>%"></div>
+                  </div>
+                </div>
+
+                <!-- First Class -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm font-medium text-gray-700">
+                      First Class
+                    </span>
+                    <span class="text-sm text-gray-600">
+                      $<?php echo number_format($class_revenue['first_class'], 2); ?>
+                      (<?php echo $total_revenue > 0 ? round(($class_revenue['first_class'] / $total_revenue) * 100) : 0; ?>%)
+                    </span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill bg-purple-500" style="width: <?php echo $total_revenue > 0 ? round(($class_revenue['first_class'] / $total_revenue) * 100) : 0; ?>%"></div>
+                  </div>
+                </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status Distribution Card -->
+        <div class="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+          <div class="p-4 bg-gray-50 border-b">
+            <h3 class="text-lg font-bold text-gray-800">Booking Status</h3>
+          </div>
+          <div class="p-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <?php foreach ($status_distribution as $status => $count): ?>
+                <div class="bg-white border rounded-lg p-3 flex items-center">
+                  <div class="w-3 h-3 rounded-full <?php echo getStatusColor($status); ?> mr-2"></div>
+                  <div>
+                    <span class="block text-sm font-medium text-gray-700">
+                      <?php echo ucfirst($status); ?>
+                    </span>
+                    <span class="block text-xs text-gray-500">
+                      <?php echo $count; ?> bookings (<?php echo $status_percentages[$status] ?? 0; ?>%)
+                    </span>
+                  </div>
+                </div>
+              <?php endforeach; ?>
             </div>
           </div>
         </div>
@@ -601,24 +744,25 @@ function formatSeatsDisplay($seats_array)
                     $seats_array = json_decode($booking['seats'], true);
                     $seats_display = formatSeatsDisplay($seats_array);
 
-                    // Get booking status badge color
-                    $status_class = '';
+                    // Get status color classes for the select
+                    $status_bg_class = '';
                     switch ($booking['booking_status']) {
                       case 'pending':
-                        $status_class = 'bg-yellow-100 text-yellow-800';
+                        $status_bg_class = 'bg-yellow-100';
                         break;
                       case 'confirmed':
-                        $status_class = 'bg-green-100 text-green-800';
+                        $status_bg_class = 'bg-green-100';
                         break;
                       case 'completed':
-                        $status_class = 'bg-blue-100 text-blue-800';
+                        $status_bg_class = 'bg-blue-100';
                         break;
                       case 'cancelled':
-                        $status_class = 'bg-red-100 text-red-800';
+                        $status_bg_class = 'bg-red-100';
                         break;
-                      default:
-                        $status_class = 'bg-gray-100 text-gray-800';
                     }
+
+                    // Get booking status badge color
+                    $status_class = getStatusColor($booking['booking_status'], 'bg') . ' ' . getStatusColor($booking['booking_status'], 'text');
                     ?>
                     <tr class="booking-row hover:bg-gray-50">
                       <td class="px-6 py-4">
@@ -633,9 +777,19 @@ function formatSeatsDisplay($seats_array)
                             <?php echo $cabin_class_display; ?>
                           </span>
 
-                          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <?php echo $status_class; ?>">
-                            <?php echo ucfirst($booking['booking_status']); ?>
-                          </span>
+                          <form method="POST" class="status-update-form inline-block ml-1" data-booking-id="<?php echo $booking['id']; ?>">
+                            <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                            <input type="hidden" name="update_status" value="1">
+                            <div class="flex items-center">
+                              <select name="new_status" class="status-select text-xs rounded border border-gray-300 py-1 px-2 focus:border-teal-500 focus:ring-teal-500 <?php echo $status_bg_class; ?>">
+                                <option value="pending" <?php echo ($booking['booking_status'] == 'pending') ? 'selected' : ''; ?>>Pending</option>
+                                <option value="confirmed" <?php echo ($booking['booking_status'] == 'confirmed') ? 'selected' : ''; ?>>Confirmed</option>
+                                <option value="completed" <?php echo ($booking['booking_status'] == 'completed') ? 'selected' : ''; ?>>Completed</option>
+                                <option value="cancelled" <?php echo ($booking['booking_status'] == 'cancelled') ? 'selected' : ''; ?>>Cancelled</option>
+                              </select>
+                              <span class="status-indicator ml-1"></span>
+                            </div>
+                          </form>
                         </div>
                       </td>
                       <td class="px-6 py-4">
@@ -718,6 +872,40 @@ function formatSeatsDisplay($seats_array)
           sidebar.classList.toggle('hidden');
         });
       }
+
+      // Status update handling
+      const statusForms = document.querySelectorAll('.status-update-form');
+      statusForms.forEach(form => {
+        const select = form.querySelector('.status-select');
+        const indicator = form.querySelector('.status-indicator');
+
+        select.addEventListener('change', function() {
+          // Show loading spinner
+          indicator.innerHTML = '<i class="fas fa-spinner fa-spin text-gray-500"></i>';
+
+          // Change select background based on selected status
+          const selectedStatus = this.value;
+          select.className = select.className.replace(/bg-\w+-100/g, '');
+
+          switch (selectedStatus) {
+            case 'pending':
+              select.classList.add('bg-yellow-100');
+              break;
+            case 'confirmed':
+              select.classList.add('bg-green-100');
+              break;
+            case 'completed':
+              select.classList.add('bg-blue-100');
+              break;
+            case 'cancelled':
+              select.classList.add('bg-red-100');
+              break;
+          }
+
+          // Submit the form
+          setTimeout(() => form.submit(), 300);
+        });
+      });
     });
   </script>
 </body>

@@ -161,10 +161,9 @@
       </div>
     </div>
 
-    <!-- Logout -->
     <a href="table-view.php"
       class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors group mt-4">
-      <i class="fas fa-sign-out-alt text-gray-400 group-hover:text-red-400"></i>
+      <i class="fas fa-chart-line text-gray-400 group-hover:text-red-400"></i>
       <span class="group-hover:text-yellow-400">Advance Analysis</span>
     </a>
 

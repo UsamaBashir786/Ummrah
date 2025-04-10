@@ -358,7 +358,7 @@ if ($flight_details) {
     <?php if ($already_booked): ?>
       <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-lg mb-6">
         <p class="text-sm text-yellow-700"><?php echo htmlspecialchars($info_message); ?></p>
-        <a href="my_bookings.php" class="text-sm text-yellow-700 underline hover:text-yellow-800 mt-2 inline-block">
+        <a href="user/bookings-flights.php?user_id=<?php echo $_SESSION['user_id']; ?>" class="text-sm text-yellow-700 underline hover:text-yellow-800 mt-2 inline-block">
           View your bookings
         </a>
       </div>
