@@ -684,11 +684,14 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
                                   // Get total seats from the seats JSON for this class
                                   $total_seats = isset($seats[$class_key]['count']) ? $seats[$class_key]['count'] : 0;
 
+                                  // Normalize the class name to match the database (lowercase, no spaces)
+                                  $normalized_class = strtolower(str_replace(' ', '_', $class));
+
                                   // Query to count how many seats have been booked for this flight and class
                                   $booked_query = "SELECT COUNT(*) as booked_count FROM flight_bookings 
-                WHERE flight_id = {$flight['id']} 
-                AND cabin_class = '{$class}'
-                AND booking_status != 'cancelled'";
+            WHERE flight_id = {$flight['id']} 
+            AND cabin_class = '{$normalized_class}'
+            AND booking_status != 'cancelled'";
                                   $booked_result = $conn->query($booked_query);
                                   $booked_seats = 0;
                                   if ($booked_result && $booked_result->num_rows > 0) {
