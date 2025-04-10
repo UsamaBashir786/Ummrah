@@ -54,34 +54,34 @@
         </div>
       </div>
 
-      <div class="border-t border-gray-700 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center">
+      <!-- <div class="border-t border-gray-700 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center">
         <p class="text-gray-400 mb-4 md:mb-0">© 2023 UmrahFlights. All rights reserved.</p>
         <div class="flex space-x-4">
-          <!-- Visa SVG -->
+          Visa SVG
           <svg class="h-8" viewBox="0 0 100 32" xmlns="http://www.w3.org/2000/svg">
             <text x="0" y="24" font-size="24" font-weight="bold" fill="#1A1F71">VISA</text>
           </svg>
 
-          <!-- MasterCard SVG -->
+          MasterCard SVG
           <svg class="h-8" viewBox="0 0 100 32" xmlns="http://www.w3.org/2000/svg">
             <circle cx="35" cy="16" r="14" fill="#EA001B" />
             <circle cx="50" cy="16" r="14" fill="#FFA200" />
             <text x="60" y="22" font-size="14" font-weight="bold" fill="black">MasterCard</text>
           </svg>
 
-          <!-- American Express SVG -->
+          American Express SVG
           <svg class="h-8" viewBox="0 0 100 32" xmlns="http://www.w3.org/2000/svg">
             <rect x="0" y="0" width="100" height="32" fill="#002663" />
             <text x="10" y="22" font-size="14" font-weight="bold" fill="white">AMEX</text>
           </svg>
 
-          <!-- PayPal SVG -->
+          PayPal SVG
           <svg class="h-8" viewBox="0 0 100 32" xmlns="http://www.w3.org/2000/svg">
             <text x="0" y="24" font-size="20" font-weight="bold" fill="#003087">Pay</text>
             <text x="40" y="24" font-size="20" font-weight="bold" fill="#009CDE">Pal</text>
           </svg>
         </div>
-      </div>
+      </div> -->
 
     </div>
   </footer>
