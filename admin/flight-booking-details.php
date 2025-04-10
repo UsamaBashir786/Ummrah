@@ -47,7 +47,6 @@ function getAvailableSeats($flightId, $conn)
     $total = 0;
     $booked = 0;
 
-    // Count total and booked seats from flight_bookings
     foreach ($seats as $class => $data) {
       $total += $data['count'];
       $sql = "SELECT COUNT(*) as booked FROM flight_bookings WHERE flight_id = ? AND cabin_class = ?";
@@ -64,49 +63,46 @@ function getAvailableSeats($flightId, $conn)
   return ['available' => 0, 'total' => 0];
 }
 
-// Format dates
+// Format dates and times
 $booking_date = new DateTime($booking['booking_date']);
 $formatted_booking_date = $booking_date->format('F d, Y h:i A');
 
-// Format departure date
-$departure_date = null;
-$formatted_departure_date = 'N/A';
-if (isset($booking['departure_date']) && !empty($booking['departure_date'])) {
-  $departure_date = new DateTime($booking['departure_date']);
-  $formatted_departure_date = $departure_date->format('F d, Y h:i A');
+$departure_datetime = DateTime::createFromFormat(
+  'Y-m-d H:i:s',
+  $booking['departure_date'] . ' ' . $booking['departure_time']
+);
+$formatted_departure = $departure_datetime ? $departure_datetime->format('F d, Y h:i A') : 'N/A';
+
+$arrival_datetime = null;
+$formatted_arrival = 'N/A';
+if ($departure_datetime && !empty($booking['flight_duration'])) {
+  $arrival_datetime = clone $departure_datetime;
+  $arrival_datetime->modify("+{$booking['flight_duration']} hours");
+  $formatted_arrival = $arrival_datetime->format('F d, Y h:i A');
 }
 
-// Format arrival date
-$arrival_date = null;
-$formatted_arrival_date = 'N/A';
-if (isset($booking['arrival_date']) && !empty($booking['arrival_date'])) {
-  $arrival_date = new DateTime($booking['arrival_date']);
-  $formatted_arrival_date = $arrival_date->format('F d, Y h:i A');
-}
-
-// Get flight duration
-$duration = 'N/A';
-if ($departure_date instanceof DateTime && $arrival_date instanceof DateTime) {
-  $interval = $departure_date->diff($arrival_date);
-  $duration = '';
-
-  if ($interval->days > 0) {
-    $duration .= $interval->days . 'd ';
-  }
-  $duration .= $interval->h . 'h ' . $interval->i . 'm';
-}
+// Format duration
+$duration = !empty($booking['flight_duration']) ?
+  sprintf('%dh %dm', floor($booking['flight_duration']), ($booking['flight_duration'] * 60) % 60) :
+  'N/A';
 
 // Get seat information
 $seatInfo = getAvailableSeats($booking['flight_id'], $conn);
 
-// Get price from the prices JSON field
-$prices = json_decode($booking['prices'], true);
-$price = $prices[$booking['cabin_class']] ?? $booking['ticket_price'] ?? 0;
+// Get price information - fixed version
+$flight_prices = json_decode($booking['prices'], true) ?? [];
+$base_price = 0;
+if (!empty($flight_prices)) {
+  // Normalize cabin class to match JSON keys
+  $cabin_class = strtolower(str_replace(' ', '_', $booking['cabin_class']));
+  $base_price = $flight_prices[$cabin_class] ?? 0;
+}
+// Fallback to ticket_price if available in flight_bookings table
+$total_price = $booking['total_price'] ?? $base_price;
 
-// Define status class for styling
+// Define status classes
 $status = strtolower($booking['booking_status'] ?? 'pending');
 $status_class = 'status-pending';
-
 switch ($status) {
   case 'confirmed':
   case 'completed':
@@ -118,10 +114,8 @@ switch ($status) {
     break;
 }
 
-// Define payment status class
 $payment_status = strtolower($booking['payment_status'] ?? 'unpaid');
 $payment_class = 'status-pending';
-
 switch ($payment_status) {
   case 'paid':
   case 'completed':
@@ -133,76 +127,42 @@ switch ($payment_status) {
 }
 
 // Get passenger details
-$passenger_info = [];
-if (isset($booking['passenger_details']) && !empty($booking['passenger_details'])) {
-  $passenger_info = json_decode($booking['passenger_details'], true);
-}
+$passenger_info = json_decode($booking['passenger_details'] ?? '[]', true);
 
 // Update booking status
 if (isset($_POST['update_status'])) {
   $new_status = $_POST['status'];
-
   $update_sql = "UPDATE flight_bookings SET booking_status = ? WHERE id = ?";
-  $update_stmt = $conn->prepare($update_sql);
-  $update_stmt->bind_param("si", $new_status, $booking_id);
+  $stmt = $conn->prepare($update_sql);
+  $stmt->bind_param("si", $new_status, $booking_id);
 
-  if ($update_stmt->execute()) {
+  if ($stmt->execute()) {
     $booking['booking_status'] = $new_status;
     $status = strtolower($new_status);
-
-    // Update status class
-    switch ($status) {
-      case 'confirmed':
-      case 'completed':
-        $status_class = 'status-confirmed';
-        break;
-      case 'cancelled':
-      case 'canceled':
-        $status_class = 'status-cancelled';
-        break;
-      default:
-        $status_class = 'status-pending';
-    }
-
+    $status_class = $status === 'confirmed' || $status === 'completed' ? 'status-confirmed' : ($status === 'cancelled' ? 'status-cancelled' : 'status-pending');
     $success_message = "Booking status updated successfully.";
   } else {
     $error_message = "Failed to update booking status.";
   }
-
-  $update_stmt->close();
+  $stmt->close();
 }
 
 // Update payment status
 if (isset($_POST['update_payment'])) {
   $new_payment_status = $_POST['payment_status'];
-
   $update_sql = "UPDATE flight_bookings SET payment_status = ? WHERE id = ?";
-  $update_stmt = $conn->prepare($update_sql);
-  $update_stmt->bind_param("si", $new_payment_status, $booking_id);
+  $stmt = $conn->prepare($update_sql);
+  $stmt->bind_param("si", $new_payment_status, $booking_id);
 
-  if ($update_stmt->execute()) {
+  if ($stmt->execute()) {
     $booking['payment_status'] = $new_payment_status;
     $payment_status = strtolower($new_payment_status);
-
-    // Update payment status class
-    switch ($payment_status) {
-      case 'paid':
-      case 'completed':
-        $payment_class = 'status-confirmed';
-        break;
-      case 'refunded':
-        $payment_class = 'status-cancelled';
-        break;
-      default:
-        $payment_class = 'status-pending';
-    }
-
+    $payment_class = $payment_status === 'paid' || $payment_status === 'completed' ? 'status-confirmed' : ($payment_status === 'refunded' ? 'status-cancelled' : 'status-pending');
     $payment_success_message = "Payment status updated successfully.";
   } else {
     $payment_error_message = "Failed to update payment status.";
   }
-
-  $update_stmt->close();
+  $stmt->close();
 }
 ?>
 
@@ -307,12 +267,8 @@ if (isset($_POST['update_payment'])) {
 
 <body class="bg-gray-100">
   <div class="flex h-screen">
-    <!-- Sidebar -->
     <?php include 'includes/sidebar.php'; ?>
-
-    <!-- Main Content -->
     <div class="main flex-1 flex flex-col overflow-hidden">
-      <!-- Navbar -->
       <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center no-print">
         <div class="flex items-center">
           <button class="md:hidden text-gray-800 mr-4" id="menu-btn">
@@ -338,26 +294,22 @@ if (isset($_POST['update_payment'])) {
             <p><i class="fas fa-check-circle mr-2"></i> <?php echo $success_message; ?></p>
           </div>
         <?php endif; ?>
-
         <?php if (isset($error_message)): ?>
           <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded">
             <p><i class="fas fa-exclamation-circle mr-2"></i> <?php echo $error_message; ?></p>
           </div>
         <?php endif; ?>
-
         <?php if (isset($payment_success_message)): ?>
           <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded">
             <p><i class="fas fa-check-circle mr-2"></i> <?php echo $payment_success_message; ?></p>
           </div>
         <?php endif; ?>
-
         <?php if (isset($payment_error_message)): ?>
           <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded">
             <p><i class="fas fa-exclamation-circle mr-2"></i> <?php echo $payment_error_message; ?></p>
           </div>
         <?php endif; ?>
 
-        <!-- Booking Header -->
         <div class="profile-header bg-gradient-to-r from-cyan-600 to-teal-700 rounded-xl shadow-lg p-6 mb-6 text-white">
           <div class="flex flex-col md:flex-row items-center md:items-start justify-between">
             <div>
@@ -392,9 +344,7 @@ if (isset($_POST['update_payment'])) {
           </div>
         </div>
 
-        <!-- Flight Information -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <!-- Flight Details -->
           <div class="lg:col-span-2">
             <div class="bg-white rounded-xl shadow-md overflow-hidden">
               <div class="bg-gray-800 text-white p-4 flex justify-between items-center">
@@ -405,29 +355,25 @@ if (isset($_POST['update_payment'])) {
                   <?php echo htmlspecialchars($booking['cabin_class']); ?> Class
                 </span>
               </div>
-
               <div class="p-5">
-                <!-- Flight Path Visualization -->
                 <div class="flight-path mb-6">
                   <div class="grid grid-cols-2">
                     <div class="ticket-segment text-center">
-                      <div class="text-2xl font-bold text-gray-800"><?php echo htmlspecialchars($booking['departure_city'] ?? 'N/A'); ?></div>
-                      <div class="text-sm text-gray-500"><?php echo isset($booking['departure_airport']) ? htmlspecialchars($booking['departure_airport']) : 'N/A'; ?></div>
+                      <div class="text-2xl font-bold text-gray-800"><?php echo htmlspecialchars($booking['departure_city']); ?></div>
                       <div class="text-base font-medium text-teal-600 mt-1">
-                        <?php echo ($departure_date instanceof DateTime) ? $departure_date->format('h:i A') : 'N/A'; ?>
+                        <?php echo $departure_datetime ? $departure_datetime->format('h:i A') : 'N/A'; ?>
                       </div>
                       <div class="text-xs text-gray-500">
-                        <?php echo ($departure_date instanceof DateTime) ? $departure_date->format('d M Y') : 'N/A'; ?>
+                        <?php echo $departure_datetime ? $departure_datetime->format('d M Y') : 'N/A'; ?>
                       </div>
                     </div>
                     <div class="ticket-segment text-center">
-                      <div class="text-2xl font-bold text-gray-800"><?php echo htmlspecialchars($booking['arrival_city'] ?? 'N/A'); ?></div>
-                      <div class="text-sm text-gray-500"><?php echo isset($booking['arrival_airport']) ? htmlspecialchars($booking['arrival_airport']) : 'N/A'; ?></div>
+                      <div class="text-2xl font-bold text-gray-800"><?php echo htmlspecialchars($booking['arrival_city']); ?></div>
                       <div class="text-base font-medium text-teal-600 mt-1">
-                        <?php echo ($arrival_date instanceof DateTime) ? $arrival_date->format('h:i A') : 'N/A'; ?>
+                        <?php echo $arrival_datetime ? $arrival_datetime->format('h:i A') : 'N/A'; ?>
                       </div>
                       <div class="text-xs text-gray-500">
-                        <?php echo ($arrival_date instanceof DateTime) ? $arrival_date->format('d M Y') : 'N/A'; ?>
+                        <?php echo $arrival_datetime ? $arrival_datetime->format('d M Y') : 'N/A'; ?>
                       </div>
                     </div>
                   </div>
@@ -442,9 +388,9 @@ if (isset($_POST['update_payment'])) {
                       </p>
                     </div>
                     <div class="bg-gray-50 p-3 rounded-lg">
-                      <p class="text-sm text-gray-500">Aircraft</p>
+                      <p class="text-sm text-gray-500">Distance</p>
                       <p class="text-base font-medium text-gray-800">
-                        <i class="fas fa-plane-departure text-teal-600 mr-1"></i> <?php echo htmlspecialchars($booking['aircraft_type'] ?? 'N/A'); ?>
+                        <i class="fas fa-ruler text-teal-600 mr-1"></i> <?php echo htmlspecialchars($booking['distance'] ?? 'N/A'); ?> km
                       </p>
                     </div>
                     <div class="bg-gray-50 p-3 rounded-lg">
@@ -468,16 +414,8 @@ if (isset($_POST['update_payment'])) {
                       <p class="text-base font-medium text-gray-800"><?php echo htmlspecialchars($booking['flight_number']); ?></p>
                     </div>
                     <div>
-                      <p class="text-sm text-gray-500">Departure Terminal</p>
-                      <p class="text-base font-medium text-gray-800"><?php echo htmlspecialchars($booking['departure_terminal'] ?? 'N/A'); ?></p>
-                    </div>
-                    <div>
-                      <p class="text-sm text-gray-500">Arrival Terminal</p>
-                      <p class="text-base font-medium text-gray-800"><?php echo htmlspecialchars($booking['arrival_terminal'] ?? 'N/A'); ?></p>
-                    </div>
-                    <div>
-                      <p class="text-sm text-gray-500">Flight Policy</p>
-                      <p class="text-base font-medium text-gray-800"><?php echo !empty($booking['flight_policy']) ? htmlspecialchars($booking['flight_policy']) : 'Standard Policy'; ?></p>
+                      <p class="text-sm text-gray-500">Flight Notes</p>
+                      <p class="text-base font-medium text-gray-800"><?php echo htmlspecialchars($booking['flight_notes'] ?? 'N/A'); ?></p>
                     </div>
                     <div>
                       <p class="text-sm text-gray-500">Booking Reference</p>
@@ -489,7 +427,6 @@ if (isset($_POST['update_payment'])) {
             </div>
           </div>
 
-          <!-- Booking Summary -->
           <div class="lg:col-span-1">
             <div class="bg-white rounded-xl shadow-md overflow-hidden">
               <div class="bg-gray-800 text-white p-4">
@@ -497,14 +434,13 @@ if (isset($_POST['update_payment'])) {
                   <i class="fas fa-receipt mr-2"></i> Booking Summary
                 </h2>
               </div>
-
               <div class="p-5">
                 <div class="mb-4 pb-4 border-b border-gray-100">
                   <h3 class="text-lg font-semibold text-gray-800 mb-3">Pricing Details</h3>
                   <div class="space-y-2">
                     <div class="flex justify-between">
                       <span class="text-gray-600">Base Fare</span>
-                      <span class="font-medium text-gray-800">$<?php echo number_format((float)$price, 2); ?></span>
+                      <span class="font-medium text-gray-800">$<?php echo number_format((float)$base_price, 2); ?></span>
                     </div>
                     <?php if (isset($booking['taxes']) && $booking['taxes'] > 0): ?>
                       <div class="flex justify-between">
@@ -512,15 +448,9 @@ if (isset($_POST['update_payment'])) {
                         <span class="font-medium text-gray-800">$<?php echo number_format((float)$booking['taxes'], 2); ?></span>
                       </div>
                     <?php endif; ?>
-                    <?php if (isset($booking['additional_services']) && $booking['additional_services'] > 0): ?>
-                      <div class="flex justify-between">
-                        <span class="text-gray-600">Additional Services</span>
-                        <span class="font-medium text-gray-800">$<?php echo number_format((float)$booking['additional_services'], 2); ?></span>
-                      </div>
-                    <?php endif; ?>
                     <div class="flex justify-between pt-2 border-t border-gray-100">
                       <span class="text-gray-800 font-semibold">Total Price</span>
-                      <span class="font-bold text-teal-600">$<?php echo number_format((float)($booking['total_price'] ?? $price), 2); ?></span>
+                      <span class="font-bold text-teal-600">$<?php echo number_format((float)$total_price, 2); ?></span>
                     </div>
                   </div>
                 </div>
@@ -568,7 +498,6 @@ if (isset($_POST['update_payment'])) {
                     </div>
                   </div>
 
-                  <!-- Status Update Form -->
                   <div class="mt-4 no-print">
                     <form method="POST" class="mb-3">
                       <div class="flex gap-2">
@@ -583,7 +512,6 @@ if (isset($_POST['update_payment'])) {
                         </button>
                       </div>
                     </form>
-
                     <form method="POST">
                       <div class="flex gap-2">
                         <select name="payment_status" class="flex-1 rounded-lg border-gray-300">
@@ -603,15 +531,13 @@ if (isset($_POST['update_payment'])) {
           </div>
         </div>
 
-        <!-- Additional Passengers (if available) -->
-        <?php if (!empty($passenger_info) && count($passenger_info) > 0): ?>
+        <?php if (!empty($passenger_info)): ?>
           <div class="bg-white rounded-xl shadow-md overflow-hidden mb-6">
             <div class="bg-gray-800 text-white p-4">
               <h2 class="text-xl font-semibold flex items-center">
                 <i class="fas fa-users mr-2"></i> Additional Passengers
               </h2>
             </div>
-
             <div class="p-5">
               <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -631,16 +557,16 @@ if (isset($_POST['update_payment'])) {
                           <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($passenger['name'] ?? 'N/A'); ?></div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                          <div class="text-sm text-gray-500"><?php echo isset($passenger['age']) ? htmlspecialchars($passenger['age']) : 'N/A'; ?></div>
+                          <div class="text-sm text-gray-500"><?php echo htmlspecialchars($passenger['age'] ?? 'N/A'); ?></div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                          <div class="text-sm text-gray-500"><?php echo isset($passenger['gender']) ? htmlspecialchars($passenger['gender']) : 'N/A'; ?></div>
+                          <div class="text-sm text-gray-500"><?php echo htmlspecialchars($passenger['gender'] ?? 'N/A'); ?></div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                          <div class="text-sm text-gray-500"><?php echo isset($passenger['document_id']) ? htmlspecialchars($passenger['document_id']) : 'N/A'; ?></div>
+                          <div class="text-sm text-gray-500"><?php echo htmlspecialchars($passenger['document_id'] ?? 'N/A'); ?></div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                          <div class="text-sm text-gray-500"><?php echo isset($passenger['special_requirements']) ? htmlspecialchars($passenger['special_requirements']) : 'None'; ?></div>
+                          <div class="text-sm text-gray-500"><?php echo htmlspecialchars($passenger['special_requirements'] ?? 'None'); ?></div>
                         </td>
                       </tr>
                     <?php endforeach; ?>
@@ -651,140 +577,88 @@ if (isset($_POST['update_payment'])) {
           </div>
         <?php endif; ?>
 
-        <!-- Flight Services and Amenities -->
         <div class="bg-white rounded-xl shadow-md overflow-hidden mb-6">
           <div class="bg-gray-800 text-white p-4">
             <h2 class="text-xl font-semibold flex items-center">
               <i class="fas fa-concierge-bell mr-2"></i> Flight Services & Amenities
             </h2>
           </div>
-
           <div class="p-5">
             <?php
-            // Check if amenities information exists
-            $has_amenities = false;
             $amenities = [];
-
-            if (isset($booking['amenities']) && !empty($booking['amenities'])) {
-              $amenities = json_decode($booking['amenities'], true);
-              $has_amenities = true;
-            }
-
-            // Use basic amenities for the class if none specified
-            if (!$has_amenities) {
-              switch (strtolower($booking['cabin_class'])) {
-                case 'first class':
-                  $amenities = [
-                    'baggage' => '2 checked bags (32kg each), 2 cabin bags',
-                    'meal' => 'Premium dining experience with gourmet meals',
-                    'entertainment' => 'Premium entertainment, noise-canceling headphones',
-                    'wifi' => 'Complimentary high-speed Wi-Fi',
-                    'seat' => 'Fully-reclining seats with extended legroom',
-                    'additional' => 'Priority boarding, VIP lounge access, Dedicated check-in'
-                  ];
-                  break;
-                case 'business':
-                  $amenities = [
-                    'baggage' => '2 checked bags (23kg each), 2 cabin bags',
-                    'meal' => 'Premium meal service with multiple options',
-                    'entertainment' => 'Advanced entertainment system',
-                    'wifi' => 'Complimentary Wi-Fi',
-                    'seat' => 'Reclining seats with extra legroom',
-                    'additional' => 'Priority boarding, Lounge access'
-                  ];
-                  break;
-                case 'premium economy':
-                  $amenities = [
-                    'baggage' => '1 checked bag (23kg), 1 cabin bag',
-                    'meal' => 'Enhanced meal service',
-                    'entertainment' => 'Standard entertainment system',
-                    'wifi' => 'Wi-Fi available for purchase',
-                    'seat' => 'Extra legroom seats',
-                    'additional' => 'Priority boarding'
-                  ];
-                  break;
-                default: // Economy
-                  $amenities = [
-                    'baggage' => '1 checked bag (20kg), 1 cabin bag',
-                    'meal' => 'Standard meal service',
-                    'entertainment' => 'Basic entertainment system',
-                    'wifi' => 'Wi-Fi available for purchase',
-                    'seat' => 'Standard seats',
-                    'additional' => 'Standard boarding'
-                  ];
-              }
-              $has_amenities = true;
+            switch (strtolower($booking['cabin_class'])) {
+              case 'first class':
+                $amenities = [
+                  'baggage' => '2 checked bags (32kg each), 2 cabin bags',
+                  'meal' => 'Premium dining experience with gourmet meals',
+                  'entertainment' => 'Premium entertainment, noise-canceling headphones',
+                  'wifi' => 'Complimentary high-speed Wi-Fi',
+                  'seat' => 'Fully-reclining seats with extended legroom',
+                  'additional' => 'Priority boarding, VIP lounge access'
+                ];
+                break;
+              case 'business':
+                $amenities = [
+                  'baggage' => '2 checked bags (23kg each), 2 cabin bags',
+                  'meal' => 'Premium meal service with multiple options',
+                  'entertainment' => 'Advanced entertainment system',
+                  'wifi' => 'Complimentary Wi-Fi',
+                  'seat' => 'Reclining seats with extra legroom',
+                  'additional' => 'Priority boarding, Lounge access'
+                ];
+                break;
+              default: // Economy
+                $amenities = [
+                  'baggage' => '1 checked bag (20kg), 1 cabin bag',
+                  'meal' => 'Standard meal service',
+                  'entertainment' => 'Basic entertainment system',
+                  'wifi' => 'Wi-Fi available for purchase',
+                  'seat' => 'Standard seats',
+                  'additional' => 'Standard boarding'
+                ];
             }
             ?>
-
-            <?php if ($has_amenities): ?>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-gray-50 p-4 rounded-lg">
-                  <div class="text-teal-600 mb-2">
-                    <i class="fas fa-suitcase text-xl"></i>
-                  </div>
-                  <h3 class="font-semibold text-gray-800 mb-1">Baggage Allowance</h3>
-                  <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['baggage'] ?? 'Standard baggage policy'); ?></p>
-                </div>
-
-                <div class="bg-gray-50 p-4 rounded-lg">
-                  <div class="text-teal-600 mb-2">
-                    <i class="fas fa-utensils text-xl"></i>
-                  </div>
-                  <h3 class="font-semibold text-gray-800 mb-1">Meal Service</h3>
-                  <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['meal'] ?? 'Standard meal service'); ?></p>
-                </div>
-
-                <div class="bg-gray-50 p-4 rounded-lg">
-                  <div class="text-teal-600 mb-2">
-                    <i class="fas fa-film text-xl"></i>
-                  </div>
-                  <h3 class="font-semibold text-gray-800 mb-1">Entertainment</h3>
-                  <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['entertainment'] ?? 'Basic entertainment system'); ?></p>
-                </div>
-
-                <div class="bg-gray-50 p-4 rounded-lg">
-                  <div class="text-teal-600 mb-2">
-                    <i class="fas fa-wifi text-xl"></i>
-                  </div>
-                  <h3 class="font-semibold text-gray-800 mb-1">Wi-Fi</h3>
-                  <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['wifi'] ?? 'Wi-Fi available for purchase'); ?></p>
-                </div>
-
-                <div class="bg-gray-50 p-4 rounded-lg">
-                  <div class="text-teal-600 mb-2">
-                    <i class="fas fa-chair text-xl"></i>
-                  </div>
-                  <h3 class="font-semibold text-gray-800 mb-1">Seat Features</h3>
-                  <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['seat'] ?? 'Standard seating'); ?></p>
-                </div>
-
-                <div class="bg-gray-50 p-4 rounded-lg">
-                  <div class="text-teal-600 mb-2">
-                    <i class="fas fa-plus-circle text-xl"></i>
-                  </div>
-                  <h3 class="font-semibold text-gray-800 mb-1">Additional Services</h3>
-                  <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['additional'] ?? 'Standard boarding and services'); ?></p>
-                </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-teal-600 mb-2"><i class="fas fa-suitcase text-xl"></i></div>
+                <h3 class="font-semibold text-gray-800 mb-1">Baggage Allowance</h3>
+                <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['baggage']); ?></p>
               </div>
-            <?php else: ?>
-              <div class="bg-gray-50 p-6 rounded-lg text-center">
-                <p class="text-gray-600">No specific amenities information available for this flight.</p>
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-teal-600 mb-2"><i class="fas fa-utensils text-xl"></i></div>
+                <h3 class="font-semibold text-gray-800 mb-1">Meal Service</h3>
+                <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['meal']); ?></p>
               </div>
-            <?php endif; ?>
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-teal-600 mb-2"><i class="fas fa-film text-xl"></i></div>
+                <h3 class="font-semibold text-gray-800 mb-1">Entertainment</h3>
+                <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['entertainment']); ?></p>
+              </div>
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-teal-600 mb-2"><i class="fas fa-wifi text-xl"></i></div>
+                <h3 class="font-semibold text-gray-800 mb-1">Wi-Fi</h3>
+                <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['wifi']); ?></p>
+              </div>
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-teal-600 mb-2"><i class="fas fa-chair text-xl"></i></div>
+                <h3 class="font-semibold text-gray-800 mb-1">Seat Features</h3>
+                <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['seat']); ?></p>
+              </div>
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-teal-600 mb-2"><i class="fas fa-plus-circle text-xl"></i></div>
+                <h3 class="font-semibold text-gray-800 mb-1">Additional Services</h3>
+                <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['additional']); ?></p>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Actions -->
         <div class="mt-6 bg-white rounded-xl shadow-md p-5 no-print">
           <h2 class="text-xl font-semibold text-gray-800 mb-4">Actions</h2>
           <div class="flex flex-wrap gap-3">
             <button onclick="printTicket()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center">
               <i class="fas fa-print mr-2"></i> Print Ticket
             </button>
-            <!-- <button onclick="sendConfirmation(<?php echo $booking_id; ?>)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
-              <i class="fas fa-envelope mr-2"></i> Send Confirmation
-            </button> -->
             <?php if ($status !== 'cancelled'): ?>
               <button onclick="cancelBooking(<?php echo $booking_id; ?>)" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center">
                 <i class="fas fa-times mr-2"></i> Cancel Booking
@@ -805,10 +679,8 @@ if (isset($_POST['update_payment'])) {
   <?php include 'includes/js-links.php'; ?>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Mobile menu toggle
       const menuBtn = document.getElementById('menu-btn');
       const sidebar = document.querySelector('.sidebar');
-
       if (menuBtn && sidebar) {
         menuBtn.addEventListener('click', function() {
           sidebar.classList.toggle('hidden');
@@ -820,74 +692,6 @@ if (isset($_POST['update_payment'])) {
       window.print();
     }
 
-    function sendConfirmation(bookingId) {
-      if (bookingId <= 0) {
-        Swal.fire({
-          title: 'Error',
-          text: 'Invalid booking ID',
-          icon: 'error'
-        });
-        return;
-      }
-
-      Swal.fire({
-        title: 'Send Confirmation Email',
-        text: "Send a booking confirmation email to the passenger?",
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Yes, send it!'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          // Show loading state
-          Swal.fire({
-            title: 'Sending...',
-            text: 'Sending confirmation email to passenger',
-            allowOutsideClick: false,
-            didOpen: () => {
-              Swal.showLoading();
-            }
-          });
-
-          // Send the request to the backend
-          fetch(`send-flight-confirmation.php?id=${bookingId}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              }
-            })
-            .then(response => {
-              if (!response.ok) {
-                throw new Error('Network response was not ok');
-              }
-              return response.json();
-            })
-            .then(data => {
-              if (data.success) {
-                Swal.fire({
-                  title: 'Success!',
-                  text: 'Confirmation email has been sent to the passenger.',
-                  icon: 'success',
-                  confirmButtonColor: '#3085d6'
-                });
-              } else {
-                throw new Error(data.message || 'Failed to send email');
-              }
-            })
-            .catch(error => {
-              console.error('Error:', error);
-              Swal.fire({
-                title: 'Error!',
-                text: error.message || 'An error occurred while sending the confirmation email',
-                icon: 'error',
-                confirmButtonColor: '#3085d6'
-              });
-            });
-        }
-      });
-    }
-
     function cancelBooking(bookingId) {
       if (bookingId <= 0) {
         Swal.fire({
@@ -897,7 +701,6 @@ if (isset($_POST['update_payment'])) {
         });
         return;
       }
-
       Swal.fire({
         title: 'Cancel Booking',
         text: "Are you sure you want to cancel this booking? This action cannot be undone.",
@@ -908,7 +711,6 @@ if (isset($_POST['update_payment'])) {
         confirmButtonText: 'Yes, cancel it!'
       }).then((result) => {
         if (result.isConfirmed) {
-          // Update booking status
           fetch(`update-flight-status.php?id=${bookingId}`, {
               method: 'POST',
               headers: {
@@ -918,24 +720,16 @@ if (isset($_POST['update_payment'])) {
                 status: 'cancelled'
               })
             })
-            .then(response => {
-              if (!response.ok) {
-                throw new Error('Network response was not ok');
-              }
-              return response.json();
-            })
+            .then(response => response.ok ? response.json() : Promise.reject('Network error'))
             .then(data => {
               if (data.success) {
                 Swal.fire({
-                  title: 'Cancelled!',
-                  text: 'The booking has been cancelled.',
-                  icon: 'success',
-                  showConfirmButton: false,
-                  timer: 1500
-                }).then(() => {
-                  // Reload the page to reflect changes
-                  window.location.reload();
-                });
+                    title: 'Cancelled!',
+                    text: 'The booking has been cancelled.',
+                    icon: 'success',
+                    timer: 1500
+                  })
+                  .then(() => window.location.reload());
               } else {
                 throw new Error(data.message || 'Failed to cancel booking');
               }
@@ -944,9 +738,8 @@ if (isset($_POST['update_payment'])) {
               console.error('Error:', error);
               Swal.fire({
                 title: 'Error!',
-                text: error.message || 'An error occurred while cancelling the booking',
-                icon: 'error',
-                confirmButtonColor: '#3085d6'
+                text: error.message,
+                icon: 'error'
               });
             });
         }
