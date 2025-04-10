@@ -419,9 +419,9 @@ if (!empty($flight['seats'])) {
         Request Cancellation
       </button>
     <?php endif; ?>
-    <button class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-700 transition" onclick="printFlightDetails()">
+    <!-- <button class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-700 transition" onclick="printFlightDetails()">
       Print Details
-    </button>
+    </button> -->
   </div>
 </div>
 

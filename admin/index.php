@@ -363,6 +363,7 @@ if (empty($topRoutes)) {
 </head>
 
 <body class="bg-gray-50 font-sans text-gray-800">
+  <?php include 'notifications.php'; ?>
   <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
     <?php include 'includes/sidebar.php'; ?>
@@ -382,12 +383,26 @@ if (empty($topRoutes)) {
             </div>
           </div>
           <div class="flex items-center gap-3">
+            <!-- Notification Bell -->
             <div class="relative">
-              <button class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-all">
-                <i class="fas fa-bell"></i>
-                <span class="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500"></span>
+              <button id="notif-bell" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-all relative">
+                <i class="fas fa-bell text-lg"></i>
+                <span id="notif-count" class="absolute top-0 right-0 h-4 w-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center hidden">0</span>
               </button>
+              <!-- Notification Dropdown -->
+              <div id="notif-dropdown" class="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto z-40">
+                <div class="p-4 border-b border-gray-200">
+                  <h3 class="text-sm font-semibold text-gray-700">Notifications</h3>
+                </div>
+                <div id="notif-list" class="divide-y divide-gray-200">
+                  <!-- Notifications will be appended here -->
+                </div>
+                <div class="p-2 text-center">
+                  <a href="notifications_page.php" class="text-sm text-emerald-600 hover:underline">View All Notifications</a>
+                </div>
+              </div>
             </div>
+            <!-- Admin Profile -->
             <div class="relative">
               <button class="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-lg transition-all">
                 <img src="assets/images/admin-avatar.jpg" alt="Admin" class="w-8 h-8 rounded-full object-cover border-2 border-emerald-500">
@@ -398,6 +413,77 @@ if (empty($topRoutes)) {
           </div>
         </div>
       </header>
+
+      <!-- Include Font Awesome for icons (if not already included) -->
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+      <!-- JavaScript for Notification Bell -->
+      <script>
+        const bell = document.getElementById('notif-bell');
+        const dropdown = document.getElementById('notif-dropdown');
+        const notifList = document.getElementById('notif-list');
+        const notifCount = document.getElementById('notif-count');
+
+        // Toggle dropdown visibility
+        bell.addEventListener('click', () => {
+          dropdown.classList.toggle('hidden');
+          if (!dropdown.classList.contains('hidden')) {
+            fetchNotifications(); // Fetch notifications when opening
+          }
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+          if (!bell.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.add('hidden');
+          }
+        });
+
+        function fetchNotifications() {
+          fetch('notifications.php', {
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            })
+            .then(response => response.json())
+            .then(data => {
+              notifList.innerHTML = ''; // Clear existing notifications
+              const unreadCount = Array.isArray(data) ? data.length : (data.id ? 1 : 0);
+
+              // Update notification count
+              if (unreadCount > 0) {
+                notifCount.textContent = unreadCount;
+                notifCount.classList.remove('hidden');
+              } else {
+                notifCount.classList.add('hidden');
+              }
+
+              // Handle single notification (from notifications.php) or array
+              const notifications = Array.isArray(data) ? data : (data.id ? [data] : []);
+              if (notifications.length === 0) {
+                notifList.innerHTML = '<p class="p-4 text-sm text-gray-500">No new notifications</p>';
+                return;
+              }
+
+              notifications.forEach(notif => {
+                const div = document.createElement('div');
+                div.className = 'p-4 hover:bg-gray-50 transition-colors';
+                div.innerHTML = `
+          <p class="text-sm text-gray-700">${notif.message}</p>
+          <p class="text-xs text-gray-500">${new Date(notif.created_at).toLocaleString()}</p>
+        `;
+                notifList.appendChild(div);
+              });
+            })
+            .catch(error => console.error('Error fetching notifications:', error));
+        }
+
+        // Poll for new notifications every 5 seconds
+        setInterval(fetchNotifications, 5000);
+
+        // Initial fetch on page load
+        fetchNotifications();
+      </script>
 
       <!-- Content Area -->
       <main class="flex-1 overflow-y-auto p-6">
@@ -755,14 +841,14 @@ if (empty($topRoutes)) {
 
   </script>
   <!-- In your HTML before the closing </body> tag -->
-<script>
-  // Pass PHP data to JavaScript variables
-  const bookingDataFromPHP = <?php echo json_encode($bookingData); ?>;
-  const revenueDataFromPHP = <?php echo json_encode($monthlyRevenue); ?>;
-  const transportDataFromPHP = <?php echo json_encode($transportTypes); ?>;
-  const hotelLocationDataFromPHP = <?php echo json_encode($hotelLocations); ?>;
-</script>
-<script src="assets/js/dashboard-charts.js"></script>
+  <script>
+    // Pass PHP data to JavaScript variables
+    const bookingDataFromPHP = <?php echo json_encode($bookingData); ?>;
+    const revenueDataFromPHP = <?php echo json_encode($monthlyRevenue); ?>;
+    const transportDataFromPHP = <?php echo json_encode($transportTypes); ?>;
+    const hotelLocationDataFromPHP = <?php echo json_encode($hotelLocations); ?>;
+  </script>
+  <script src="assets/js/dashboard-charts.js"></script>
 </body>
 
 </html>

@@ -1,228 +1,113 @@
-<script>
-  /**
-   * Admin Dashboard Preloader
-   * Simple and reliable preloader that completely removes itself after loading
-   */
+<?php
 
-  // Create a self-executing function to isolate all preloader code
-  (function() {
-    // Create preloader div
-    const preloader = document.createElement('div');
-    preloader.id = 'admin-dashboard-preloader';
+/**
+ * Admin Preloader Component
+ * 
+ * A one-time preloader for admin panel that shows only once per session
+ * using HTML, CSS, JavaScript, PHP, and Tailwind CSS
+ */
 
-    // Set styles
-    preloader.style.position = 'fixed';
-    preloader.style.top = '0';
-    preloader.style.left = '0';
-    preloader.style.width = '100%';
-    preloader.style.height = '100%';
-    preloader.style.backgroundColor = '#6366f1';
-    preloader.style.background = 'linear-gradient(-45deg, #3b82f6, #6366f1)';
-    preloader.style.zIndex = '999999';
-    preloader.style.display = 'flex';
-    preloader.style.flexDirection = 'column';
-    preloader.style.alignItems = 'center';
-    preloader.style.justifyContent = 'center';
-    preloader.style.transition = 'opacity 0.5s ease';
+// Start the session if not already started
+if (session_status() === PHP_SESSION_NONE) {
+  session_start();
+}
 
-    // Create logo SVG
-    const logo = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    logo.setAttribute('width', '120');
-    logo.setAttribute('height', '120');
-    logo.setAttribute('viewBox', '0 0 120 120');
-    logo.setAttribute('fill', 'none');
-    logo.style.marginBottom = '2rem';
+// Check if the preloader has been shown before in this session
+$showPreloader = true;
+if (isset($_SESSION['preloader_shown']) && $_SESSION['preloader_shown'] === true) {
+  $showPreloader = false;
+} else {
+  // Mark the preloader as shown for this session
+  $_SESSION['preloader_shown'] = true;
+}
+?>
 
-    // Add paths
-    const outerHex = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    outerHex.setAttribute('d', 'M60 10L110 40V80L60 110L10 80V40L60 10Z');
-    outerHex.setAttribute('stroke', 'white');
-    outerHex.setAttribute('stroke-width', '4');
-    outerHex.setAttribute('fill', 'none');
+<!-- Preloader Component - Include this file in your admin panel pages -->
+<?php if ($showPreloader): ?>
+  <div id="admin-preloader" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-90">
+    <div class="text-center">
+      <!-- Logo/Brand -->
+      <div class="mb-6">
+        <svg class="w-16 h-16 mx-auto text-blue-500 animate-pulse" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+        </svg>
+      </div>
 
-    const innerHex = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    innerHex.setAttribute('d', 'M60 30L90 45V75L60 90L30 75V45L60 30Z');
-    innerHex.setAttribute('stroke', 'white');
-    innerHex.setAttribute('stroke-width', '3');
-    innerHex.setAttribute('fill', 'none');
+      <!-- Loading Text -->
+      <h2 class="text-xl font-semibold text-white mb-3">Loading Admin Panel</h2>
 
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', '60');
-    circle.setAttribute('cy', '60');
-    circle.setAttribute('r', '15');
-    circle.setAttribute('stroke', 'white');
-    circle.setAttribute('stroke-width', '3');
-    circle.setAttribute('fill', 'none');
+      <!-- Loading Bar -->
+      <div class="w-64 h-2 mx-auto bg-gray-700 rounded-full overflow-hidden">
+        <div id="progress-bar" class="h-full bg-blue-500 rounded-full w-0 transition-all duration-300"></div>
+      </div>
 
-    logo.appendChild(outerHex);
-    logo.appendChild(innerHex);
-    logo.appendChild(circle);
+      <!-- Loading Percentage -->
+      <div class="mt-3 text-blue-400 text-sm font-mono">
+        <span id="progress-percentage">0%</span> Complete
+      </div>
+    </div>
+  </div>
 
-    // Create dots container
-    const dotsContainer = document.createElement('div');
-    dotsContainer.style.width = '80px';
-    dotsContainer.style.height = '80px';
-    dotsContainer.style.position = 'relative';
-    dotsContainer.style.marginBottom = '2rem';
-
-    // Add dots
-    const positions = [{
-        top: '0px',
-        left: '0px'
-      },
-      {
-        top: '0px',
-        right: '0px'
-      },
-      {
-        bottom: '0px',
-        left: '0px'
-      },
-      {
-        bottom: '0px',
-        right: '0px'
+  <style>
+    /* Additional styles if needed beyond Tailwind */
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
       }
-    ];
 
-    positions.forEach(pos => {
-      const dot = document.createElement('div');
-      dot.className = 'preloader-dot';
-      dot.style.position = 'absolute';
-      dot.style.width = '20px';
-      dot.style.height = '20px';
-      dot.style.backgroundColor = 'white';
-      dot.style.borderRadius = '50%';
+      to {
+        opacity: 0;
+        visibility: hidden;
+      }
+    }
 
-      // Set position
-      Object.keys(pos).forEach(key => {
-        dot.style[key] = pos[key];
-      });
+    .preloader-fade-out {
+      animation: fadeOut 0.5s ease-in-out forwards;
+    }
+  </style>
 
-      dotsContainer.appendChild(dot);
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Elements
+      const preloader = document.getElementById('admin-preloader');
+      const progressBar = document.getElementById('progress-bar');
+      const progressPercentage = document.getElementById('progress-percentage');
+
+      // Progress simulation
+      let progress = 0;
+      const interval = setInterval(function() {
+        progress += Math.floor(Math.random() * 10) + 1;
+
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(interval);
+
+          // Add a small delay before hiding the preloader
+          setTimeout(function() {
+            preloader.classList.add('preloader-fade-out');
+
+            // Remove preloader from DOM after animation completes
+            setTimeout(function() {
+              preloader.remove();
+            }, 500);
+          }, 300);
+        }
+
+        // Update visuals
+        progressBar.style.width = progress + '%';
+        progressPercentage.textContent = progress + '%';
+      }, 150);
+
+      // Store in localStorage to prevent showing on page refresh
+      localStorage.setItem('admin_preloader_shown', 'true');
     });
 
-    // Create loading text
-    const loadingText = document.createElement('div');
-    loadingText.textContent = 'Loading Dashboard';
-    loadingText.style.color = 'white';
-    loadingText.style.fontSize = '24px';
-    loadingText.style.fontWeight = 'bold';
-    loadingText.style.marginBottom = '1.5rem';
-    loadingText.style.fontFamily = 'Arial, sans-serif';
-
-    // Create progress bar container
-    const progressContainer = document.createElement('div');
-    progressContainer.style.width = '250px';
-    progressContainer.style.height = '10px';
-    progressContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-    progressContainer.style.borderRadius = '10px';
-    progressContainer.style.overflow = 'hidden';
-
-    // Create progress bar
-    const progressBar = document.createElement('div');
-    progressBar.style.width = '0%';
-    progressBar.style.height = '100%';
-    progressBar.style.backgroundColor = 'white';
-    progressBar.style.borderRadius = '10px';
-    progressBar.style.transition = 'width 0.1s linear';
-
-    progressContainer.appendChild(progressBar);
-
-    // Create status text
-    const statusText = document.createElement('div');
-    statusText.textContent = 'Initializing...';
-    statusText.style.color = 'rgba(255, 255, 255, 0.8)';
-    statusText.style.fontSize = '14px';
-    statusText.style.marginTop = '15px';
-    statusText.style.fontFamily = 'Arial, sans-serif';
-
-    // Add all elements to preloader
-    preloader.appendChild(logo);
-    preloader.appendChild(dotsContainer);
-    preloader.appendChild(loadingText);
-    preloader.appendChild(progressContainer);
-    preloader.appendChild(statusText);
-
-    // Add preloader to body
-    document.body.appendChild(preloader);
-
-    // Set up dot animation
-    const dots = document.querySelectorAll('.preloader-dot');
-    let growing = true;
-
-    const animateDots = () => {
-      dots.forEach((dot, index) => {
-        setTimeout(() => {
-          if (growing) {
-            dot.style.transform = 'scale(0.7)';
-            dot.style.opacity = '0.7';
-          } else {
-            dot.style.transform = 'scale(1)';
-            dot.style.opacity = '1';
-          }
-        }, index * 150);
-      });
-      growing = !growing;
-    };
-
-    // Initial dot animation
-    animateDots();
-    const dotInterval = setInterval(animateDots, 1000);
-
-    // Progress bar animation
-    const statusMessages = [
-      "Initializing...",
-      "Loading resources...",
-      "Preparing dashboard...",
-      "Almost there...",
-      "Finishing up...",
-      "Ready!"
-    ];
-
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-      progress += 1;
-      progressBar.style.width = `${progress}%`;
-
-      // Update status messages
-      if (progress === 20) {
-        statusText.textContent = statusMessages[1];
-      } else if (progress === 40) {
-        statusText.textContent = statusMessages[2];
-      } else if (progress === 60) {
-        statusText.textContent = statusMessages[3];
-      } else if (progress === 80) {
-        statusText.textContent = statusMessages[4];
-      } else if (progress === 100) {
-        statusText.textContent = statusMessages[5];
-
-        // Complete loading
-        clearInterval(progressInterval);
-        clearInterval(dotInterval);
-
-        // Fade out and remove after reaching 100%
-        setTimeout(() => {
-          preloader.style.opacity = '0';
-
-          // Remove from DOM after fade out
-          setTimeout(() => {
-            if (preloader.parentNode) {
-              preloader.parentNode.removeChild(preloader);
-              console.log("Preloader completely removed");
-            }
-          }, 500);
-        }, 800);
+    // Handle page refresh - check localStorage in addition to PHP session
+    if (localStorage.getItem('admin_preloader_shown') === 'true') {
+      const preloader = document.getElementById('admin-preloader');
+      if (preloader) {
+        preloader.remove();
       }
-    }, 30);
-
-    // Failsafe: Force remove preloader after 10 seconds if something goes wrong
-    setTimeout(() => {
-      if (preloader.parentNode) {
-        clearInterval(progressInterval);
-        clearInterval(dotInterval);
-        preloader.parentNode.removeChild(preloader);
-        console.log("Preloader force removed by failsafe");
-      }
-    }, 10000);
-  })();
-</script>
+    }
+  </script>
+<?php endif; ?>
