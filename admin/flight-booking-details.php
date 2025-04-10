@@ -89,16 +89,20 @@ $duration = !empty($booking['flight_duration']) ?
 // Get seat information
 $seatInfo = getAvailableSeats($booking['flight_id'], $conn);
 
-// Get price information - fixed version
+// Get price information - Fixed version
 $flight_prices = json_decode($booking['prices'], true) ?? [];
 $base_price = 0;
 if (!empty($flight_prices)) {
-  // Normalize cabin class to match JSON keys
-  $cabin_class = strtolower(str_replace(' ', '_', $booking['cabin_class']));
-  $base_price = $flight_prices[$cabin_class] ?? 0;
+  // Normalize cabin class to match JSON keys (e.g., "Economy" to "economy")
+  $cabin_class = strtolower($booking['cabin_class']);
+  $base_price = isset($flight_prices[$cabin_class]) ? (float)$flight_prices[$cabin_class] : 0;
 }
-// Fallback to ticket_price if available in flight_bookings table
-$total_price = $booking['total_price'] ?? $base_price;
+
+// Use the price from flight_bookings as the total price
+$total_price = isset($booking['price']) ? (float)$booking['price'] : $base_price;
+
+// Calculate passenger count (adult_count + children_count)
+$passenger_count = ($booking['adult_count'] ?? 1) + ($booking['children_count'] ?? 0);
 
 // Define status classes
 $status = strtolower($booking['booking_status'] ?? 'pending');
@@ -126,7 +130,7 @@ switch ($payment_status) {
     break;
 }
 
-// Get passenger details
+// Get passenger details (if any additional passengers are stored in JSON)
 $passenger_info = json_decode($booking['passenger_details'] ?? '[]', true);
 
 // Update booking status
@@ -271,6 +275,8 @@ if (isset($_POST['update_payment'])) {
     <div class="main flex-1 flex flex-col overflow-hidden">
       <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center no-print">
         <div class="flex items-center">
+
+
           <button class="md:hidden text-gray-800 mr-4" id="menu-btn">
             <i class="fas fa-bars"></i>
           </button>
@@ -332,7 +338,7 @@ if (isset($_POST['update_payment'])) {
                   <i class="fas fa-credit-card mr-1"></i> <?php echo ucfirst($booking['payment_status'] ?? 'Unpaid'); ?>
                 </span>
                 <span class="booking-status bg-white/20">
-                  <i class="fas fa-users mr-1"></i> <?php echo isset($booking['passenger_count']) ? $booking['passenger_count'] : '1'; ?> Passenger(s)
+                  <i class="fas fa-users mr-1"></i> <?php echo $passenger_count; ?> Passenger(s)
                 </span>
               </div>
             </div>
@@ -419,7 +425,7 @@ if (isset($_POST['update_payment'])) {
                     </div>
                     <div>
                       <p class="text-sm text-gray-500">Booking Reference</p>
-                      <p class="text-base font-medium text-gray-800"><?php echo htmlspecialchars($booking['booking_reference'] ?? $booking['id']); ?></p>
+                      <p class="text-base font-medium text-gray-800"><?php echo htmlspecialchars($booking['id']); ?></p>
                     </div>
                   </div>
                 </div>
@@ -440,17 +446,12 @@ if (isset($_POST['update_payment'])) {
                   <div class="space-y-2">
                     <div class="flex justify-between">
                       <span class="text-gray-600">Base Fare</span>
-                      <span class="font-medium text-gray-800">$<?php echo number_format((float)$base_price, 2); ?></span>
+                      <span class="font-medium text-gray-800">$<?php echo number_format($base_price, 2); ?></span>
                     </div>
-                    <?php if (isset($booking['taxes']) && $booking['taxes'] > 0): ?>
-                      <div class="flex justify-between">
-                        <span class="text-gray-600">Taxes & Fees</span>
-                        <span class="font-medium text-gray-800">$<?php echo number_format((float)$booking['taxes'], 2); ?></span>
-                      </div>
-                    <?php endif; ?>
+                    <!-- Add taxes if applicable -->
                     <div class="flex justify-between pt-2 border-t border-gray-100">
                       <span class="text-gray-800 font-semibold">Total Price</span>
-                      <span class="font-bold text-teal-600">$<?php echo number_format((float)$total_price, 2); ?></span>
+                      <span class="font-bold text-teal-600">$<?php echo number_format($total_price, 2); ?></span>
                     </div>
                   </div>
                 </div>
@@ -472,7 +473,7 @@ if (isset($_POST['update_payment'])) {
                     </div>
                     <div>
                       <p class="text-sm text-gray-500">Passenger Count</p>
-                      <p class="text-base font-medium text-gray-800"><?php echo isset($booking['passenger_count']) ? $booking['passenger_count'] : '1'; ?> Person(s)</p>
+                      <p class="text-base font-medium text-gray-800"><?php echo $passenger_count; ?> Person(s)</p>
                     </div>
                   </div>
                 </div>
@@ -639,20 +640,14 @@ if (isset($_POST['update_payment'])) {
                 <h3 class="font-semibold text-gray-800 mb-1">Wi-Fi</h3>
                 <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['wifi']); ?></p>
               </div>
-              <div class="bg-gray-50 p-4 rounded-lg">
-                <div class="text-teal-600 mb-2"><i class="fas fa-chair text-xl"></i></div>
-                <h3 class="font-semibold text-gray-800 mb-1">Seat Features</h3>
-                <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['seat']); ?></p>
-              </div>
-              <div class="bg-gray-50 p-4 rounded-lg">
-                <div class="text-teal-600 mb-2"><i class="fas fa-plus-circle text-xl"></i></div>
-                <h3 class="font-semibold text-gray-800 mb-1">Additional Services</h3>
-                <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['additional']); ?></p>
-              </div>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg">
+              <div class="text-teal-600 mb-2"><i class="fas fa-plus-circle text-xl"></i></div>
+              <h3 class="font-semibold text-gray-800 mb-1">Additional Services</h3>
+              <p class="text-sm text-gray-600"><?php echo htmlspecialchars($amenities['additional']); ?></p>
             </div>
           </div>
         </div>
-
         <div class="mt-6 bg-white rounded-xl shadow-md p-5 no-print">
           <h2 class="text-xl font-semibold text-gray-800 mb-4">Actions</h2>
           <div class="flex flex-wrap gap-3">
@@ -673,7 +668,12 @@ if (isset($_POST['update_payment'])) {
           </div>
         </div>
       </div>
+
+
+
+
     </div>
+  </div>
   </div>
 
   <?php include 'includes/js-links.php'; ?>
