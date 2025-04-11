@@ -36,6 +36,153 @@ if ($booking_result->num_rows === 0) {
 }
 
 $booking = $booking_result->fetch_assoc();
+// Handle PDF generation
+if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
+  require_once 'vendor/tecnickcom/tcpdf/tcpdf.php';
+
+  // Create new PDF document
+  $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
+
+  // Set document information
+  $pdf->SetCreator(PDF_CREATOR);
+  $pdf->SetAuthor('Ummrah Transportation');
+  $pdf->SetTitle('Transportation Booking Voucher');
+  $pdf->SetSubject('Booking Confirmation Voucher');
+  $pdf->SetKeywords('Booking, Voucher, Transportation, Ummrah');
+
+  // Set default header data
+  $pdf->SetHeaderData('', 0, 'Ummrah Transportation', 'Booking Voucher - Ref: ' . $booking['booking_reference']);
+
+  // Set header and footer fonts
+  $pdf->setHeaderFont([PDF_FONT_NAME_MAIN, '', PDF_FONT_SIZE_MAIN]);
+  $pdf->setFooterFont([PDF_FONT_NAME_DATA, '', PDF_FONT_SIZE_DATA]);
+
+  // Set default monospaced font
+  $pdf->SetDefaultMonospacedFont(PDF_FONT_MONOSPACED);
+
+  // Set margins
+  $pdf->SetMargins(15, 20, 15);
+  $pdf->SetHeaderMargin(10);
+  $pdf->SetFooterMargin(10);
+
+  // Set auto page breaks
+  $pdf->SetAutoPageBreak(TRUE, PDF_MARGIN_BOTTOM);
+
+  // Set image scale factor
+  $pdf->setImageScale(PDF_IMAGE_SCALE_RATIO);
+
+  // Add a page
+  $pdf->AddPage();
+
+  // Set font
+  $pdf->SetFont('helvetica', '', 12);
+
+  // Voucher content
+  $html = '
+  <h1 style="text-align: center; color: #0d9488;">Transportation Booking Voucher</h1>
+  <p style="text-align: center; font-size: 14px;">Thank you for choosing Ummrah Transportation!</p>
+  
+  <h2 style="background-color: #f0fdfa; padding: 10px; color: #0d9488;">Booking Details</h2>
+  <table border="0" cellpadding="5">
+    <tr>
+      <td width="30%"><strong>Reference:</strong></td>
+      <td width="70%">' . htmlspecialchars($booking['booking_reference']) . '</td>
+    </tr>
+    <tr>
+      <td><strong>Service Type:</strong></td>
+      <td>' . ucfirst($booking['service_type']) . ' Service</td>
+    </tr>
+    <tr>
+      <td><strong>Route:</strong></td>
+      <td>' . htmlspecialchars($booking['route_name'] ?? 'N/A') . '</td>
+    </tr>
+    <tr>
+      <td><strong>Vehicle:</strong></td>
+      <td>' . htmlspecialchars($booking['vehicle_name'] ?? 'N/A') . '</td>
+    </tr>
+    <tr>
+      <td><strong>Price:</strong></td>
+      <td>' . number_format($booking['price'], 2) . ' SR</td>
+    </tr>
+    <tr>
+      <td><strong>Date & Time:</strong></td>
+      <td>' . (new DateTime($booking['booking_date']))->format('F j, Y') . ' at ' . date('h:i A', strtotime($booking['booking_time'])) . '</td>
+    </tr>
+    <tr>
+      <td><strong>Passengers:</strong></td>
+      <td>' . $booking['passengers'] . ' person(s)</td>
+    </tr>
+    <tr>
+      <td><strong>Pickup Location:</strong></td>
+      <td>' . htmlspecialchars($booking['pickup_location']) . '</td>
+    </tr>
+    <tr>
+      <td><strong>Drop-off Location:</strong></td>
+      <td>' . htmlspecialchars($booking['dropoff_location']) . '</td>
+    </tr>';
+
+  if (!empty($booking['special_requests'])) {
+    $html .= '
+    <tr>
+      <td><strong>Special Requests:</strong></td>
+      <td>' . htmlspecialchars($booking['special_requests']) . '</td>
+    </tr>';
+  }
+
+  $html .= '
+    <tr>
+      <td><strong>Status:</strong></td>
+      <td>' . ucfirst($booking['booking_status']) . '</td>
+    </tr>
+    <tr>
+      <td><strong>Payment Status:</strong></td>
+      <td>' . ucfirst($booking['payment_status']) . '</td>
+    </tr>
+  </table>
+  
+  <h2 style="background-color: #f0fdfa; padding: 10px; color: #0d9488;">Customer Information</h2>
+  <table border="0" cellpadding="5">
+    <tr>
+      <td width="30%"><strong>Name:</strong></td>
+      <td width="70%">' . htmlspecialchars($booking['full_name']) . '</td>
+    </tr>
+    <tr>
+      <td><strong>Email:</strong></td>
+      <td>' . htmlspecialchars($booking['email']) . '</td>
+    </tr>';
+
+  if (!empty($booking['phone_number'])) {
+    $html .= '
+    <tr>
+      <td><strong>Phone:</strong></td>
+      <td>' . htmlspecialchars($booking['phone_number']) . '</td>
+    </tr>';
+  }
+
+  $html .= '
+  </table>
+  
+  <h2 style="background-color: #f0fdfa; padding: 10px; color: #0d9488;">Important Information</h2>
+  <ul style="font-size: 10px;">
+    <li>Please be ready at the pickup location at least 15 minutes before the scheduled time.</li>
+    <li>The driver will contact you approximately 30 minutes before pickup.</li>
+    <li>Luggage allowance depends on the vehicle type and number of passengers.</li>
+    <li>For any changes to your booking, please contact us at least 24 hours in advance.</li>
+    <li>Payment is required to fully confirm your booking.</li>
+  </ul>
+  
+  <p style="text-align: center; font-size: 10px; margin-top: 20px;">
+    Ummrah Transportation - Your Trusted Travel Partner<br>
+    Contact: support@ummrah.com | Phone: +123-456-7890
+  </p>';
+
+  // Write HTML content
+  $pdf->writeHTML($html, true, false, true, false, '');
+
+  // Close and output PDF
+  $pdf->Output('voucher_' . $booking['booking_reference'] . '.pdf', 'D');
+  exit();
+}
 ?>
 
 <!DOCTYPE html>
@@ -113,7 +260,7 @@ $booking = $booking_result->fetch_assoc();
 
                   <div>
                     <p class="text-sm text-gray-500">Price</p>
-                    <p class="font-medium text-teal-600"><?php echo $booking['price']; ?> SR</p>
+                    <p class="font-medium text-teal-600"><?php echo number_format($booking['price'], 2); ?> SR</p>
                   </div>
 
                   <div>
@@ -212,12 +359,12 @@ $booking = $booking_result->fetch_assoc();
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <p class="text-sm text-gray-500">Name</p>
-                    <p class="font-medium"><?php echo htmlspecialchars($booking['full_name']); ?></p>
+                    <p class="font-medium"><?php echo htmlspecialchars($booking['full_name'] ?? 'N/A'); ?></p>
                   </div>
 
                   <div>
                     <p class="text-sm text-gray-500">Email</p>
-                    <p class="font-medium"><?php echo htmlspecialchars($booking['email']); ?></p>
+                    <p class="font-medium"><?php echo htmlspecialchars($booking['email'] ?? 'N/A'); ?></p>
                   </div>
 
                   <?php if (!empty($booking['phone_number'])): ?>
@@ -233,10 +380,14 @@ $booking = $booking_result->fetch_assoc();
             <!-- Action Buttons -->
             <div class="flex flex-wrap justify-between gap-4 no-print">
               <div>
-                <button onclick="window.print()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition">
+                <!-- <button onclick="window.print()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition">
                   <i class="bx bx-printer mr-2"></i> Print Confirmation
-                </button>
-                <a href="my-bookings.php" class="inline-block px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition ml-2">
+                </button> -->
+                <a href="?booking_id=<?php echo $booking_id; ?>&reference=<?php echo $booking_reference; ?>&generate_pdf=1"
+                  class="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition ml-2">
+                  <i class="bx bx-download mr-2"></i> Download PDF Voucher
+                </a>
+                <a href="user/bookings-transport.php?user_id=<?php echo htmlspecialchars($_SESSION['user_id']); ?>" class="inline-block px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition ml-2">
                   <i class="bx bx-list-ul mr-2"></i> My Bookings
                 </a>
               </div>
