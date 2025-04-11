@@ -25,13 +25,8 @@ if (!empty($profile_image) && file_exists("../" . $profile_image)) {
 // Fetch user's transportation bookings
 $transport_bookings_sql = "
     SELECT 
-        tb.*,
-        ta.driver_name,
-        ta.driver_contact,
-        ta.status as assign_status,
-        ta.vehicle_id
+        tb.*
     FROM transportation_bookings tb
-    LEFT JOIN transportation_assign ta ON tb.id = ta.booking_id AND tb.booking_reference = ta.booking_reference
     WHERE tb.user_id = ?
     ORDER BY tb.booking_date, tb.booking_time
 ";
@@ -278,6 +273,31 @@ $transport_bookings = $transport_stmt->get_result();
     <div class="container mx-auto px-4 py-8">
       <h1 class="text-3xl font-bold mb-6">My Transportation Bookings</h1>
 
+      <!-- Display success/error messages -->
+      <?php if (isset($_GET['success']) && $_GET['success'] === 'booking_cancelled') { ?>
+        <div class="bg-green-100 text-green-700 p-4 rounded-lg mb-6">
+          Booking successfully cancelled.
+        </div>
+      <?php } elseif (isset($_GET['error'])) { ?>
+        <div class="bg-red-100 text-red-700 p-4 rounded-lg mb-6">
+          <?php
+          switch ($_GET['error']) {
+            case 'booking_not_found':
+              echo 'Booking not found.';
+              break;
+            case 'booking_not_cancellable':
+              echo 'This booking cannot be cancelled.';
+              break;
+            case 'cancellation_failed':
+              echo 'Failed to cancel the booking. Please try again.';
+              break;
+            default:
+              echo 'An error occurred.';
+          }
+          ?>
+        </div>
+      <?php } ?>
+
       <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
         <h2 class="text-2xl font-bold mb-4">Your Transportation Bookings</h2>
 
@@ -336,12 +356,16 @@ $transport_bookings = $transport_stmt->get_result();
                   <th scope="col" class="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Date & Time</th>
                   <th scope="col" class="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Price</th>
                   <th scope="col" class="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Status</th>
-                  <th scope="col" class="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Driver</th>
                   <th scope="col" class="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                <?php while ($transport = $transport_bookings->fetch_assoc()) { ?>
+                <?php while ($transport = $transport_bookings->fetch_assoc()) {
+                  // Skip if the booking ID is invalid
+                  if (empty($transport['id']) || !is_numeric($transport['id'])) {
+                    continue;
+                  }
+                ?>
                   <tr class="hover:bg-gray-50 transition-colors duration-200">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="font-medium text-gray-900"><?php echo htmlspecialchars($transport['booking_reference']); ?></div>
@@ -390,20 +414,6 @@ $transport_bookings = $transport_stmt->get_result();
                         <?php echo ucfirst($transport['booking_status']); ?>
                       </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="text-sm text-gray-900">
-                        <?php
-                        if (!empty($transport['driver_name'])) {
-                          echo htmlspecialchars($transport['driver_name']);
-                          if (!empty($transport['driver_contact'])) {
-                            echo '<br><span class="text-xs text-gray-500">' . htmlspecialchars($transport['driver_contact']) . '</span>';
-                          }
-                        } else {
-                          echo '<span class="text-gray-400">Not assigned yet</span>';
-                        }
-                        ?>
-                      </div>
-                    </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button onclick="viewTransportDetails(<?php echo $transport['id']; ?>)"
                         class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded-lg transition duration-200 shadow-sm">
@@ -421,6 +431,10 @@ $transport_bookings = $transport_stmt->get_result();
             <?php
             $transport_bookings->data_seek(0);
             while ($transport = $transport_bookings->fetch_assoc()) {
+              // Skip if the booking ID is invalid
+              if (empty($transport['id']) || !is_numeric($transport['id'])) {
+                continue;
+              }
             ?>
               <div class="bg-white rounded-lg shadow mb-4 overflow-hidden">
                 <div class="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 flex justify-between items-center">
@@ -475,21 +489,6 @@ $transport_bookings = $transport_stmt->get_result();
                       <div class="text-xs text-gray-500">Price</div>
                       <div class="font-medium text-green-600">$<?php echo htmlspecialchars($transport['price']); ?></div>
                     </div>
-                    <div>
-                      <div class="text-xs text-gray-500">Driver</div>
-                      <div class="font-medium">
-                        <?php
-                        if (!empty($transport['driver_name'])) {
-                          echo htmlspecialchars($transport['driver_name']);
-                          if (!empty($transport['driver_contact'])) {
-                            echo '<br><span class="text-xs text-gray-500">' . htmlspecialchars($transport['driver_contact']) . '</span>';
-                          }
-                        } else {
-                          echo '<span class="text-gray-400">Not assigned yet</span>';
-                        }
-                        ?>
-                      </div>
-                    </div>
                   </div>
                   <div class="mt-4 flex justify-center">
                     <button onclick="viewTransportDetails(<?php echo $transport['id']; ?>)"
@@ -523,6 +522,17 @@ $transport_bookings = $transport_stmt->get_result();
       const modal = document.getElementById('transportDetailsModal');
       const contentDiv = document.getElementById('transportDetailsContent');
 
+      // Validate bookingId
+      if (!bookingId || isNaN(bookingId)) {
+        contentDiv.innerHTML = `
+          <div class="bg-red-100 p-4 rounded-lg text-red-700">
+            <p>Invalid booking ID. Please try again.</p>
+          </div>
+        `;
+        modal.style.display = 'flex';
+        return;
+      }
+
       modal.style.display = 'flex';
 
       // Fetch transportation details via AJAX
@@ -539,6 +549,13 @@ $transport_bookings = $transport_stmt->get_result();
           `;
           console.error('Error fetching transportation details:', error);
         });
+    }
+
+    // Cancel Booking
+    function cancelBooking(bookingId, bookingReference) {
+      if (confirm('Are you sure you want to cancel this booking? This action cannot be undone.')) {
+        window.location.href = '../cancel-booking.php?booking_id=' + bookingId + '&reference=' + bookingReference;
+      }
     }
 
     // Close modal
