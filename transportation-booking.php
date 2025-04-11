@@ -158,7 +158,7 @@ function generateBookingReference()
 
 <body class="bg-gray-50">
   <?php include 'includes/navbar.php'; ?>
-<div class="mt-15"></div>
+  <div class="mt-15"></div>
   <section class="py-10 bg-gray-50">
     <div class="container mx-auto px-4">
       <div class="max-w-4xl mx-auto">
@@ -330,7 +330,7 @@ function generateBookingReference()
 
               <!-- Submit Button -->
               <div class="flex justify-between">
-                <a href="transportation-price-lists.php" class="px-6 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition">
+                <a href="transportation.php" class="px-6 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition">
                   <i class="bx bx-arrow-back mr-2"></i> Back to Prices
                 </a>
                 <button type="submit" name="submit_booking" class="px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition">
