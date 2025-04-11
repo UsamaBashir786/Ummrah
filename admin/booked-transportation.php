@@ -19,7 +19,7 @@ $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
 $items_per_page = 10;
 $offset = ($page - 1) * $items_per_page;
 
-// Base SQL query
+// Base SQL query for the main table
 $sql = "SELECT tb.*, u.full_name, u.email, u.phone_number 
         FROM transportation_bookings tb
         LEFT JOIN users u ON tb.user_id = u.id
@@ -51,14 +51,49 @@ if (!empty($filter_search)) {
            OR u.phone_number LIKE '%$search_term%')";
 }
 
-// Count total results for pagination
-$count_sql = str_replace("tb.*, u.full_name, u.email, u.phone_number", "COUNT(*) as total", $sql);
+// Combine queries for total items, total revenue, and completed bookings
+$count_sql = "SELECT 
+                COUNT(*) as total, 
+                SUM(CASE WHEN tb.booking_status != 'cancelled' THEN tb.price ELSE 0 END) as total_revenue, 
+                SUM(CASE WHEN tb.booking_status = 'completed' THEN 1 ELSE 0 END) as completed 
+              FROM transportation_bookings tb
+              LEFT JOIN users u ON tb.user_id = u.id
+              WHERE 1=1";
+
+// Apply the same filters as the main query
+if (!empty($filter_status)) {
+  $count_sql .= " AND tb.booking_status = '" . mysqli_real_escape_string($conn, $filter_status) . "'";
+}
+
+if (!empty($filter_service)) {
+  $count_sql .= " AND tb.service_type = '" . mysqli_real_escape_string($conn, $filter_service) . "'";
+}
+
+if (!empty($filter_date_from)) {
+  $count_sql .= " AND tb.booking_date >= '" . mysqli_real_escape_string($conn, $filter_date_from) . "'";
+}
+
+if (!empty($filter_date_to)) {
+  $count_sql .= " AND tb.booking_date <= '" . mysqli_real_escape_string($conn, $filter_date_to) . "'";
+}
+
+if (!empty($filter_search)) {
+  $search_term = mysqli_real_escape_string($conn, $filter_search);
+  $count_sql .= " AND (tb.booking_reference LIKE '%$search_term%'
+                   OR tb.route_name LIKE '%$search_term%'
+                   OR u.full_name LIKE '%$search_term%'
+                   OR u.email LIKE '%$search_term%'
+                   OR u.phone_number LIKE '%$search_term%')";
+}
+
 $count_result = $conn->query($count_sql);
 $count_row = $count_result->fetch_assoc();
 $total_items = $count_row['total'];
+$total_revenue = $count_row['total_revenue'] ?? 0; // Default to 0 if no bookings
+$completed_bookings = $count_row['completed'] ?? 0; // Default to 0 if no completed bookings
 $total_pages = ceil($total_items / $items_per_page);
 
-// Finalize query with pagination and ordering
+// Finalize the main query with pagination and ordering
 $sql .= " ORDER BY tb.booking_date DESC, tb.booking_time DESC LIMIT $offset, $items_per_page";
 $result = $conn->query($sql);
 
@@ -252,6 +287,27 @@ if (isset($_GET['success'])) {
               </p>
             </div>
 
+            <!-- Stats Section -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <!-- Total Bookings -->
+              <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-4 text-white">
+                <div class="text-lg opacity-80 mb-1">Total Bookings</div>
+                <div class="text-3xl font-bold"><?php echo $total_items; ?></div>
+              </div>
+
+              <!-- Total Revenue (Lump Sum, excluding cancelled bookings) -->
+              <div class="bg-gradient-to-r from-green-400 to-green-500 rounded-lg p-4 text-white">
+                <div class="text-lg opacity-80 mb-1">Total Revenue</div>
+                <div class="text-3xl font-bold">$<?php echo number_format($total_revenue, 2); ?></div>
+              </div>
+
+              <!-- Completed Bookings -->
+              <div class="bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-lg p-4 text-white">
+                <div class="text-lg opacity-80 mb-1">Completed Bookings</div>
+                <div class="text-3xl font-bold"><?php echo $completed_bookings; ?></div>
+              </div>
+            </div>
+
             <!-- Bookings Table -->
             <div class="overflow-x-auto">
               <table class="min-w-full bg-white border border-gray-200">
@@ -329,10 +385,13 @@ if (isset($_GET['success'])) {
                             ?>">
                             <?php echo ucfirst($booking['booking_status']); ?>
                           </span>
-                          <div class="text-xs text-gray-500 mt-1">
-                            Payment: <span class="<?php echo ($booking['payment_status'] == 'paid') ? 'text-green-600' : 'text-orange-600'; ?>">
-                              <?php echo ucfirst($booking['payment_status']); ?>
-                            </span>
+                          <div class="text-xs mt-1">
+                            Payment:
+                            <select class="payment-status-select border-gray-300 rounded-md text-xs focus:ring-teal-500 focus:border-teal-500"
+                              data-booking-id="<?php echo $booking['id']; ?>">
+                              <option value="paid" <?php echo ($booking['payment_status'] == 'paid') ? 'selected' : ''; ?> class="text-green-600">Paid</option>
+                              <option value="unpaid" <?php echo ($booking['payment_status'] == 'unpaid') ? 'selected' : ''; ?> class="text-orange-600">Unpaid</option>
+                            </select>
                           </div>
                           <div class="text-xs text-gray-500 mt-1">
                             Price: $<?php echo number_format($booking['price'], 2); ?>
@@ -355,11 +414,11 @@ if (isset($_GET['success'])) {
                             </button>
 
                             <!-- Assign Button - for pending or confirmed bookings -->
-                            <?php if ($booking['booking_status'] == 'pending' || $booking['booking_status'] == 'confirmed'): ?>
+                            <!-- <?php if ($booking['booking_status'] == 'pending' || $booking['booking_status'] == 'confirmed'): ?>
                               <a href="assign-transportation.php?booking_id=<?php echo $booking['id']; ?>" class="text-purple-600 hover:text-purple-900">
                                 <i class="fas fa-user-check"></i>
                               </a>
-                            <?php endif; ?>
+                            <?php endif; ?> -->
 
                             <!-- Delete Button -->
                             <button type="button" class="text-red-600 hover:text-red-900 delete-booking"
@@ -751,6 +810,79 @@ if (isset($_GET['success'])) {
             if (result.isConfirmed) {
               document.getElementById('delete-booking-id').value = bookingId;
               document.getElementById('deleteBookingForm').submit();
+            }
+          });
+        });
+      });
+
+      // Update Payment Status functionality
+      const paymentStatusSelects = document.querySelectorAll('.payment-status-select');
+      paymentStatusSelects.forEach(select => {
+        select.addEventListener('change', function() {
+          const bookingId = this.getAttribute('data-booking-id');
+          const newPaymentStatus = this.value;
+
+          // Confirm the change
+          Swal.fire({
+            title: 'Update Payment Status?',
+            text: `Are you sure you want to change the payment status to "${newPaymentStatus}" for this booking?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#10B981',
+            cancelButtonColor: '#6B7280',
+            confirmButtonText: 'Yes, update it!'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              // Send AJAX request to update payment status
+              fetch('update-payment-status.php', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                  },
+                  body: `booking_id=${bookingId}&payment_status=${newPaymentStatus}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                  if (data.success) {
+                    Swal.fire({
+                      title: 'Success!',
+                      text: data.message,
+                      icon: 'success',
+                      confirmButtonColor: '#10B981'
+                    });
+
+                    // Update the UI (e.g., color of the dropdown)
+                    if (newPaymentStatus === 'paid') {
+                      this.classList.remove('text-orange-600');
+                      this.classList.add('text-green-600');
+                    } else {
+                      this.classList.remove('text-green-600');
+                      this.classList.add('text-orange-600');
+                    }
+                  } else {
+                    Swal.fire({
+                      title: 'Error!',
+                      text: data.message,
+                      icon: 'error',
+                      confirmButtonColor: '#EF4444'
+                    });
+                    // Revert the dropdown to its previous value
+                    this.value = newPaymentStatus === 'paid' ? 'unpaid' : 'paid';
+                  }
+                })
+                .catch(error => {
+                  Swal.fire({
+                    title: 'Error!',
+                    text: 'An error occurred while updating the payment status.',
+                    icon: 'error',
+                    confirmButtonColor: '#EF4444'
+                  });
+                  // Revert the dropdown to its previous value
+                  this.value = newPaymentStatus === 'paid' ? 'unpaid' : 'paid';
+                });
+            } else {
+              // Revert the dropdown to its previous value if the user cancels
+              this.value = newPaymentStatus === 'paid' ? 'unpaid' : 'paid';
             }
           });
         });
