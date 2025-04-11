@@ -49,6 +49,7 @@ if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'
 
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="UTF-8">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -58,6 +59,7 @@ if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'
     z-index: 9999;
   }
 </style>
+
 <body>
   <!-- Notification Popup -->
   <div id="live-notif" class="fixed bottom-4 right-4 hidden bg-green-500 text-white p-4 rounded-lg shadow-lg transition-all duration-300">
@@ -79,17 +81,19 @@ if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'
 
     function checkForNewNotifications() {
       fetch('<?php echo basename(__FILE__); ?>?filter=latest_unread', {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log('Popup notification data:', data);
-        if (data && data.id && data.id > lastNotifId) {
-          lastNotifId = data.id;
-          showNotification(data.message, data.created_at);
-        }
-      })
-      .catch(error => console.error('Error fetching notifications:', error));
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Popup notification data:', data);
+          if (data && data.id && data.id > lastNotifId) {
+            lastNotifId = data.id;
+            showNotification(data.message, data.created_at);
+          }
+        })
+        .catch(error => console.error('Error fetching notifications:', error));
     }
 
     document.getElementById('close-notif').addEventListener('click', () => {
@@ -100,4 +104,5 @@ if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'
     checkForNewNotifications();
   </script>
 </body>
+
 </html>
