@@ -508,7 +508,9 @@ if (empty($topRoutes)) {
                 <div class="flex items-end gap-2">
                   <p class="text-3xl font-bold text-gray-800"><?php echo number_format($totalUsers); ?></p>
                   <p class="text-xs text-green-600 font-medium mb-1 flex items-center">
-                    <i class="fas fa-arrow-up mr-1"></i>12%
+                    <!-- <i class="fas fa-arrow-up mr-Total Revenue
+Total Revenue
+1"></i>12% -->
                   </p>
                 </div>
                 <p class="text-xs text-gray-500 mt-1">Total registered users</p>
@@ -528,7 +530,7 @@ if (empty($topRoutes)) {
                 <div class="flex items-end gap-2">
                   <p class="text-3xl font-bold text-gray-800"><?php echo number_format($totalBookings); ?></p>
                   <p class="text-xs text-green-600 font-medium mb-1 flex items-center">
-                    <i class="fas fa-arrow-up mr-1"></i>18%
+                    <!-- <i class="fas fa-arrow-up mr-1"></i>18% -->
                   </p>
                 </div>
                 <p class="text-xs text-gray-500 mt-1">Across all services</p>
@@ -548,10 +550,10 @@ if (empty($topRoutes)) {
                 <div class="flex items-end gap-2">
                   <p class="text-3xl font-bold text-gray-800">$<?php echo number_format($totalRevenue); ?></p>
                   <p class="text-xs text-green-600 font-medium mb-1 flex items-center">
-                    <i class="fas fa-arrow-up mr-1"></i>15%
+                    <!-- <i class="fas fa-arrow-up mr-1"></i>15% -->
                   </p>
                 </div>
-                <p class="text-xs text-gray-500 mt-1">Total earnings to date</p>
+                <p class="text-xs text-white mt-1">Total earnings to date</p>
               </div>
               <div class="h-1 w-full bg-purple-500"></div>
             </div>
@@ -578,7 +580,7 @@ if (empty($topRoutes)) {
                                                               echo number_format($upcoming);
                                                               ?></p>
                 </div>
-                <p class="text-xs text-gray-500 mt-1">Scheduled in the next 30 days</p>
+                <p class="text-xs text-hwhies-500 mt-1 text-white">Scheduled in the next 30 days</p>
               </div>
               <div class="h-1 w-full bg-amber-500"></div>
             </div>
@@ -653,186 +655,6 @@ if (empty($topRoutes)) {
             </div>
           </div>
 
-          <!-- Charts & Analytics Row -->
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <!-- Booking Trends Chart -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
-              <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-gray-800">Booking Trends</h2>
-                <div class="flex items-center space-x-2">
-                  <select class="text-sm border border-gray-200 rounded px-2 py-1 bg-gray-50">
-                    <option>Last 6 months</option>
-                    <option>Last 12 months</option>
-                    <option>This year</option>
-                  </select>
-                </div>
-              </div>
-              <div class="h-64">
-                <canvas id="bookingsChart"></canvas>
-              </div>
-            </div>
-
-            <!-- Recent Activities -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-gray-800">Recent Activities</h2>
-                <button class="text-emerald-600 hover:text-emerald-700 text-sm font-medium">View All</button>
-              </div>
-              <div class="space-y-5">
-                <?php foreach ($recentActivities as $activity): ?>
-                  <div class="flex items-start gap-3">
-                    <div class="p-2 rounded-full bg-<?php
-                                                    switch ($activity['type']) {
-                                                      case 'flight':
-                                                        echo 'blue';
-                                                        break;
-                                                      case 'hotel':
-                                                        echo 'teal';
-                                                        break;
-                                                      case 'package':
-                                                        echo 'purple';
-                                                        break;
-                                                      case 'transport':
-                                                        echo 'amber';
-                                                        break;
-                                                      default:
-                                                        echo 'gray';
-                                                    }
-                                                    ?>-50 text-<?php
-                                                                switch ($activity['type']) {
-                                                                  case 'flight':
-                                                                    echo 'blue';
-                                                                    break;
-                                                                  case 'hotel':
-                                                                    echo 'teal';
-                                                                    break;
-                                                                  case 'package':
-                                                                    echo 'purple';
-                                                                    break;
-                                                                  case 'transport':
-                                                                    echo 'amber';
-                                                                    break;
-                                                                  default:
-                                                                    echo 'gray';
-                                                                }
-                                                                ?>-600 mt-1">
-                      <i class="fas fa-<?php echo $activity['icon']; ?> text-sm"></i>
-                    </div>
-                    <div>
-                      <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($activity['item_name']); ?></p>
-                      <p class="text-gray-600 text-sm">Booked by <?php echo htmlspecialchars($activity['user_name']); ?></p>
-                      <p class="text-gray-500 text-xs"><?php echo htmlspecialchars($activity['details']); ?></p>
-                      <p class="text-gray-400 text-xs mt-1"><?php
-                                                            $date = new DateTime($activity['booking_date']);
-                                                            echo $date->format('M d, Y');
-                                                            ?></p>
-                    </div>
-                  </div>
-                <?php endforeach; ?>
-              </div>
-            </div>
-          </div>
-
-          <!-- Revenue & Services Row -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <!-- Revenue Chart -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-gray-800">Revenue Overview</h2>
-                <div class="flex items-center space-x-2">
-                  <button class="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700 font-medium">Monthly</button>
-                  <button class="text-xs px-2 py-1 rounded text-gray-500 hover:bg-gray-100">Quarterly</button>
-                </div>
-              </div>
-              <div class="h-64">
-                <canvas id="revenueChart"></canvas>
-              </div>
-            </div>
-
-            <!-- Transportation Split -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-gray-800">Transportation Services</h2>
-                <div class="flex items-center space-x-1">
-                  <span class="inline-block w-3 h-3 rounded-full bg-amber-500"></span>
-                  <span class="text-xs text-gray-500 mr-2">Taxi</span>
-                  <span class="inline-block w-3 h-3 rounded-full bg-emerald-500"></span>
-                  <span class="text-xs text-gray-500">Rent A Car</span>
-                </div>
-              </div>
-              <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-gray-50 rounded-lg p-4 text-center">
-                  <p class="text-gray-500 text-sm">Bookings</p>
-                  <p class="text-2xl font-bold text-gray-800"><?php echo number_format($transportBookings); ?></p>
-                </div>
-                <div class="bg-gray-50 rounded-lg p-4 text-center">
-                  <p class="text-gray-500 text-sm">Revenue</p>
-                  <p class="text-2xl font-bold text-gray-800">$<?php
-                                                                $transportRevenueQuery = "SELECT SUM(price) as revenue FROM transportation_bookings";
-                                                                $transportRevenue = $conn->query($transportRevenueQuery)->fetch_assoc()['revenue'] ?? 34500;
-                                                                echo number_format($transportRevenue);
-                                                                ?></p>
-                </div>
-              </div>
-              <div class="h-48">
-                <canvas id="transportChart"></canvas>
-              </div>
-            </div>
-          </div>
-
-          <!-- Popular Routes & Hotel Location Row -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Top Routes -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-gray-800">Top Flight Routes</h2>
-                <button class="text-emerald-600 hover:text-emerald-700 text-sm font-medium">View Details</button>
-              </div>
-              <div class="space-y-4">
-                <?php foreach ($topRoutes as $index => $route): ?>
-                  <div class="flex items-center">
-                    <div class="w-8 text-center text-gray-500 font-medium"><?php echo $index + 1; ?></div>
-                    <div class="flex-1 px-4">
-                      <p class="font-medium text-gray-800"><?php echo htmlspecialchars($route['route']); ?></p>
-                    </div>
-                    <div class="w-24">
-                      <div class="h-2 bg-gray-100 rounded-full">
-                        <?php $percentage = min(100, ($route['count'] / $topRoutes[0]['count']) * 100); ?>
-                        <div class="h-2 bg-emerald-500 rounded-full" style="width: <?php echo $percentage; ?>%"></div>
-                      </div>
-                    </div>
-                    <div class="w-16 text-right text-gray-700 font-medium"><?php echo $route['count']; ?></div>
-                  </div>
-                <?php endforeach; ?>
-              </div>
-            </div>
-
-            <!-- Hotel Distribution -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-gray-800">Hotel Distribution</h2>
-                <button class="text-emerald-600 hover:text-emerald-700 text-sm font-medium">View All Hotels</button>
-              </div>
-              <div class="h-64">
-                <canvas id="hotelLocationChart"></canvas>
-              </div>
-              <div class="grid grid-cols-2 gap-4 mt-4">
-                <?php foreach ($hotelLocations as $location): ?>
-                  <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="flex items-center justify-between">
-                      <div>
-                        <p class="text-gray-500 text-sm"><?php echo ucfirst(htmlspecialchars($location['location'])); ?></p>
-                        <p class="text-lg font-bold text-gray-800"><?php echo $location['hotel_count']; ?> hotels</p>
-                      </div>
-                      <div class="text-<?php echo $location['location'] == 'makkah' ? 'emerald' : 'blue'; ?>-500">
-                        <i class="fas fa-hotel text-2xl"></i>
-                      </div>
-                    </div>
-                  </div>
-                <?php endforeach; ?>
-              </div>
-            </div>
-          </div>
         </div>
       </main>
     </div>

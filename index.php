@@ -24,8 +24,8 @@ if (isset($_SESSION['user_id'])) {
 
   <?php include 'includes/navbar.php' ?>
   <?php include 'includes/bttom-to-top.php' ?>
-  <?php include 'includes/pre-loader.php' ?>
-  <?php include 'includes/chatbot.php' ?>
+  <!-- <?php include 'includes/pre-loader.php' ?> -->
+  <!-- <?php include 'includes/chatbot.php' ?> -->
   <!----
   --------------- >HERO Section
   --->
