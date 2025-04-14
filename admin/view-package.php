@@ -1,42 +1,12 @@
 <?php
 include 'includes/db-config.php';
 
-// Initialize filters
-$packageTypeFilter = $_GET['package_type'] ?? '';
-$minPriceFilter = $_GET['min_price'] ?? '';
-$maxPriceFilter = $_GET['max_price'] ?? '';
-
-// Build the query dynamically based on filters
-$sql = "SELECT id, title, description, package_type, departure_city, departure_date, departure_time, arrival_city, return_date, return_time, price, package_image FROM packages WHERE 1=1";
-
-if ($packageTypeFilter) {
-  $sql .= " AND package_type = :package_type";
-}
-if ($minPriceFilter !== '') {
-  $sql .= " AND price >= :min_price";
-}
-if ($maxPriceFilter !== '') {
-  $sql .= " AND price <= :max_price";
-}
-
-$stmt = $pdo->prepare($sql);
-
-// Bind parameters
-if ($packageTypeFilter) {
-  $stmt->bindValue(':package_type', $packageTypeFilter);
-}
-if ($minPriceFilter !== '') {
-  $stmt->bindValue(':min_price', $minPriceFilter, PDO::PARAM_INT);
-}
-if ($maxPriceFilter !== '') {
-  $stmt->bindValue(':max_price', $maxPriceFilter, PDO::PARAM_INT);
-}
-
-// Execute the query and fetch results
-$stmt->execute();
+// Fetch all packages from the database
+$sql = "SELECT id, title, description, package_type, departure_city, departure_date, departure_time, arrival_city, return_date, return_time, price, package_image FROM packages";
+$stmt = $pdo->query($sql);
 $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Calculate the total price without discounts
+// Calculate total price
 $totalPrice = 0;
 foreach ($packages as $package) {
   $totalPrice += $package['price'];
@@ -52,6 +22,7 @@ foreach ($packages as $package) {
   <title>Umrah Packages - Detailed View</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
 <body class="bg-gray-100">
@@ -65,30 +36,23 @@ foreach ($packages as $package) {
           <i class="text-teal-600 fas fa-box mx-2"></i> Umrah Packages
         </h1>
 
-        <!-- Add Package Button -->
+        <!-- Back Button -->
         <a href="add-packages.php" class="flex items-center text-gray-700 hover:text-gray-900">
-          <i class="fas fa-plus mr-2"></i> Add Package
+          <i class="fas fa-arrow-left mr-2"></i> Back
         </a>
       </div>
 
       <div class="overflow-auto container mx-auto px-2 sm:px-4 py-4 sm:py-8">
         <div class="mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-lg">
-          <!-- Filter Form -->
-          <form method="GET" class="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b space-y-4 sm:space-y-0">
-            <div class="flex flex-wrap gap-2">
-              <select name="package_type" class="border rounded-md px-3 py-2" onchange="this.form.submit()">
-                <option value="">All Package Types</option>
-                <option value="Economy" <?= $packageTypeFilter === 'Economy' ? 'selected' : '' ?>>Economy</option>
-                <option value="Standard" <?= $packageTypeFilter === 'Standard' ? 'selected' : '' ?>>Standard</option>
-                <option value="Premium" <?= $packageTypeFilter === 'Premium' ? 'selected' : '' ?>>Premium</option>
-              </select>
-              <input type="number" name="min_price" placeholder="Min Price" value="<?= htmlspecialchars($minPriceFilter) ?>" class="border rounded-md px-3 py-2" onchange="this.form.submit()">
-              <input type="number" name="max_price" placeholder="Max Price" value="<?= htmlspecialchars($maxPriceFilter) ?>" class="border rounded-md px-3 py-2" onchange="this.form.submit()">
+          <!-- Total Price Section -->
+          <div class="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b space-y-4 sm:space-y-0">
+            <div class="text-lg font-medium text-gray-800">
+              <i class="fas fa-calculator text-teal-600 mr-2"></i>Total Price
             </div>
             <div class="text-right">
-              <p class="text-lg font-semibold text-gray-900">Total Price: <span class="text-teal-600">$<?= number_format($totalPrice, 2) ?></span></p>
+              <p class="text-lg font-semibold text-gray-900">Total: <span class="text-teal-600">$<?= number_format($totalPrice, 2) ?></span></p>
             </div>
-          </form>
+          </div>
 
           <!-- Table Content -->
           <div class="overflow-x-auto" id="packageTableContainer">
@@ -97,7 +61,7 @@ foreach ($packages as $package) {
                 <tr>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Package Info</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Package Type</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Departure & Arrival City</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
                 </tr>
