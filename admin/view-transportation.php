@@ -382,6 +382,7 @@ $rentacar_routes = getRentacarRoutes();
     <!-- Main Content -->
     <div class="overflow-y-auto flex-1 flex flex-col">
       <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center">
+
         <h1 class="text-xl font-semibold">
           <i class="text-teal-600 fas fa-car mx-2"></i> Transportation Management
         </h1>
@@ -391,7 +392,9 @@ $rentacar_routes = getRentacarRoutes();
           </button>
         </div>
       </div>
-
+      <div class="contianer w-full p-5">
+        <?php include 'includes/transport-stats.php'; ?>
+      </div>
       <div class="container mx-auto px-4 py-8">
         <?php if ($success_message): ?>
           <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" id="success-alert">
