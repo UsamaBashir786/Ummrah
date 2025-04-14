@@ -1,10 +1,46 @@
 <?php
 include 'includes/db-config.php';
 
-// Fetch all packages from the database
-$sql = "SELECT id, title, description, package_type, departure_city, departure_date, departure_time, arrival_city, return_date, return_time, price, package_image FROM packages";
-$stmt = $pdo->query($sql);
+// Initialize filters
+$packageTypeFilter = $_GET['package_type'] ?? '';
+$minPriceFilter = $_GET['min_price'] ?? '';
+$maxPriceFilter = $_GET['max_price'] ?? '';
+
+// Build the query dynamically based on filters
+$sql = "SELECT id, title, description, package_type, departure_city, departure_date, departure_time, arrival_city, return_date, return_time, price, package_image FROM packages WHERE 1=1";
+
+if ($packageTypeFilter) {
+  $sql .= " AND package_type = :package_type";
+}
+if ($minPriceFilter !== '') {
+  $sql .= " AND price >= :min_price";
+}
+if ($maxPriceFilter !== '') {
+  $sql .= " AND price <= :max_price";
+}
+
+$stmt = $pdo->prepare($sql);
+
+// Bind parameters
+if ($packageTypeFilter) {
+  $stmt->bindValue(':package_type', $packageTypeFilter);
+}
+if ($minPriceFilter !== '') {
+  $stmt->bindValue(':min_price', $minPriceFilter, PDO::PARAM_INT);
+}
+if ($maxPriceFilter !== '') {
+  $stmt->bindValue(':max_price', $maxPriceFilter, PDO::PARAM_INT);
+}
+
+// Execute the query and fetch results
+$stmt->execute();
 $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Calculate the total price without discounts
+$totalPrice = 0;
+foreach ($packages as $package) {
+  $totalPrice += $package['price'];
+}
 ?>
 
 <!DOCTYPE html>
@@ -16,77 +52,43 @@ $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <title>Umrah Packages - Detailed View</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
 <body class="bg-gray-100">
-  <!-- Filter Modal -->
-  <div id="filterModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-      <div class="mt-3">
-        <h3 class="text-lg font-medium text-gray-900">Filter Packages</h3>
-        <form id="filterForm" class="mt-4">
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700">Package Type</label>
-            <select name="package_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-              <option value="">All Types</option>
-              <option value="Economy">Economy</option>
-              <option value="Standard">Standard</option>
-              <option value="Premium">Premium</option>
-            </select>
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700">Price Range</label>
-            <div class="flex gap-2">
-              <input type="number" name="min_price" placeholder="Min" class="mt-1 block w-full rounded-md border-gray-300">
-              <input type="number" name="max_price" placeholder="Max" class="mt-1 block w-full rounded-md border-gray-300">
-            </div>
-          </div>
-          <div class="flex justify-end gap-2 mt-4">
-            <button type="button" onclick="closeFilterModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md">Cancel</button>
-            <button type="submit" class="px-4 py-2 bg-teal-600 text-white rounded-md">Apply Filter</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
   <div class="flex h-screen">
     <?php include 'includes/sidebar.php'; ?>
 
     <div class="main flex-1 flex flex-col">
       <div class="bg-white shadow-md py-4 px-4 sm:px-6 flex justify-between items-center">
-        <!-- Menu Button (Left) -->
-        <button class="md:hidden text-gray-800" id="menu-btn">
-          <i class="fas fa-bars"></i>
-        </button>
-
         <!-- Title -->
         <h1 class="text-lg sm:text-xl font-semibold">
           <i class="text-teal-600 fas fa-box mx-2"></i> Umrah Packages
         </h1>
 
-        <!-- Back Button (Right) -->
+        <!-- Add Package Button -->
         <a href="add-packages.php" class="flex items-center text-gray-700 hover:text-gray-900">
-          <i class="fas fa-arrow-left mr-2"></i> Back
+          <i class="fas fa-plus mr-2"></i> Add Package
         </a>
       </div>
 
-
       <div class="overflow-auto container mx-auto px-2 sm:px-4 py-4 sm:py-8">
         <div class="mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-lg">
-          <div class="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b space-y-4 sm:space-y-0">
+          <!-- Filter Form -->
+          <form method="GET" class="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b space-y-4 sm:space-y-0">
             <div class="flex flex-wrap gap-2">
-              <button class="bg-teal-600 text-white px-3 sm:px-4 py-2 rounded hover:bg-teal-500 text-sm sm:text-base" onclick="window.location.href='add-packages.php'">
-                <i class="fas fa-plus mr-2"></i>Add Package
-              </button>
+              <select name="package_type" class="border rounded-md px-3 py-2" onchange="this.form.submit()">
+                <option value="">All Package Types</option>
+                <option value="Economy" <?= $packageTypeFilter === 'Economy' ? 'selected' : '' ?>>Economy</option>
+                <option value="Standard" <?= $packageTypeFilter === 'Standard' ? 'selected' : '' ?>>Standard</option>
+                <option value="Premium" <?= $packageTypeFilter === 'Premium' ? 'selected' : '' ?>>Premium</option>
+              </select>
+              <input type="number" name="min_price" placeholder="Min Price" value="<?= htmlspecialchars($minPriceFilter) ?>" class="border rounded-md px-3 py-2" onchange="this.form.submit()">
+              <input type="number" name="max_price" placeholder="Max Price" value="<?= htmlspecialchars($maxPriceFilter) ?>" class="border rounded-md px-3 py-2" onchange="this.form.submit()">
             </div>
-            <div class="relative w-full sm:w-auto">
-              <input type="search" id="searchInput" placeholder="Search packages..."
-                class="w-full sm:w-auto pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:border-teal-500">
-              <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+            <div class="text-right">
+              <p class="text-lg font-semibold text-gray-900">Total Price: <span class="text-teal-600">$<?= number_format($totalPrice, 2) ?></span></p>
             </div>
-          </div>
+          </form>
 
           <!-- Table Content -->
           <div class="overflow-x-auto" id="packageTableContainer">
@@ -95,10 +97,9 @@ $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <tr>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Package Info</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Package Type</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Departure & Arrival City</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -133,7 +134,7 @@ $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
                           <i class="fas fa-plane-departure text-gray-400 mr-1"></i>
                           <?= htmlspecialchars($package['departure_city']) ?>
                           <span class="text-gray-500 text-xs ml-1">
-                            (<?= date('M d, Y', strtotime($package['departure_date'])) ?> 
+                            (<?= date('M d, Y', strtotime($package['departure_date'])) ?>
                             <?= date('h:i A', strtotime($package['departure_time'])) ?>)
                           </span>
                         </div>
@@ -141,7 +142,7 @@ $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
                           <i class="fas fa-plane-arrival text-gray-400 mr-1"></i>
                           <?= htmlspecialchars($package['arrival_city']) ?>
                           <span class="text-gray-500 text-xs ml-1">
-                            (<?= date('M d, Y', strtotime($package['return_date'])) ?> 
+                            (<?= date('M d, Y', strtotime($package['return_date'])) ?>
                             <?= date('h:i A', strtotime($package['return_time'])) ?>)
                           </span>
                         </div>
@@ -152,116 +153,15 @@ $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         $<?= number_format($package['price'], 2) ?>
                       </div>
                     </td>
-                    <td class="px-4 py-4 text-sm font-medium">
-                      <button onclick="window.location.href='view-package-details.php?id=<?= $package['id'] ?>'" class="text-teal-600 hover:text-teal-900 mr-2">
-                        <i class="fas fa-eye"></i>
-                      </button>
-
-                      <button onclick="editPackage(<?= $package['id'] ?>)"
-                        class="text-blue-600 hover:text-blue-900 mr-2">
-                        <i class="fas fa-edit"></i>
-                      </button>
-                      <button onclick="deletePackage(<?= $package['id'] ?>)"
-                        class="text-red-600 hover:text-red-900">
-                        <i class="fas fa-trash"></i>
-                      </button>
-                    </td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>
             </table>
           </div>
-
-
-          <!-- Pagination -->
-          <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div class="text-sm text-gray-700 w-full sm:w-auto text-center sm:text-left">
-                Showing <span class="font-medium">1</span> to
-                <span class="font-medium"><?= count($packages) ?></span> of
-                <span class="font-medium"><?= count($packages) ?></span> results
-              </div>
-              <div class="flex justify-center w-full sm:w-auto">
-                <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                  <button class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                    <i class="fas fa-chevron-left"></i>
-                  </button>
-                  <button class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">1</button>
-                  <button class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">2</button>
-                  <button class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                    <i class="fas fa-chevron-right"></i>
-                  </button>
-                </nav>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
   </div>
-
-  <script>
-    function editPackage(id) {
-      window.location.href = `edit-package.php?id=${id}`;
-    }
-
-    function deletePackage(id) {
-      Swal.fire({
-        title: 'Are you sure?',
-        text: "You won't be able to revert this!",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Yes, delete it!'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          fetch(`delete-package.php?id=${id}`, {
-              method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-              if (data.success) {
-                Swal.fire({
-                  title: 'Deleted!',
-                  text: 'Package has been deleted.',
-                  icon: 'success'
-                }).then(() => {
-                  window.location.reload(); // This will refresh the page
-                });
-              }
-            });
-        }
-      });
-    }
-
-    // Modal functions
-    function openFilterModal() {
-      document.getElementById('filterModal').classList.remove('hidden');
-    }
-
-    function closeFilterModal() {
-      document.getElementById('filterModal').classList.add('hidden');
-    }
-
-    // Search functionality
-    document.getElementById('searchInput').addEventListener('keyup', function(e) {
-      const searchValue = e.target.value.toLowerCase();
-      const tableRows = document.querySelectorAll('tbody tr');
-
-      tableRows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(searchValue) ? '' : 'none';
-      });
-    });
-
-    // Filter form submission
-    document.getElementById('filterForm').addEventListener('submit', function(e) {
-      e.preventDefault();
-      // Add your filter logic here
-      closeFilterModal();
-    });
-  </script>
 </body>
 
 </html>

@@ -139,10 +139,12 @@ $hotels = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <i class="text-teal-600 fas fa-hotel mx-2"></i> View Hotels
         </h1>
       </div>
-
+      
       <!-- Content Container -->
       <div class="overflow-auto container mx-auto px-2 sm:px-4 py-4 sm:py-8">
         <div class="mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-lg">
+        <?php include 'includes/hotel-statistics.php'; ?>
+
           <!-- Search and Filter Section -->
           <div class="mb-4 sm:mb-6">
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

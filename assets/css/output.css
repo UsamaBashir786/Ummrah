@@ -2164,6 +2164,9 @@
     --tw-border-style: solid;
     border-style: solid;
   }
+  .border-blue-100 {
+    border-color: var(--color-blue-100);
+  }
   .border-blue-200 {
     border-color: var(--color-blue-200);
   }
@@ -2203,8 +2206,14 @@
   .border-gray-900 {
     border-color: var(--color-gray-900);
   }
+  .border-green-100 {
+    border-color: var(--color-green-100);
+  }
   .border-green-500 {
     border-color: var(--color-green-500);
+  }
+  .border-purple-100 {
+    border-color: var(--color-purple-100);
   }
   .border-purple-200 {
     border-color: var(--color-purple-200);
@@ -3166,6 +3175,9 @@
   .text-green-100 {
     color: var(--color-green-100);
   }
+  .text-green-400 {
+    color: var(--color-green-400);
+  }
   .text-green-500 {
     color: var(--color-green-500);
   }
@@ -3195,6 +3207,9 @@
   }
   .text-purple-100 {
     color: var(--color-purple-100);
+  }
+  .text-purple-400 {
+    color: var(--color-purple-400);
   }
   .text-purple-500 {
     color: var(--color-purple-500);
