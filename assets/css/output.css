@@ -620,9 +620,6 @@
   .top-8 {
     top: calc(var(--spacing) * 8);
   }
-  .top-20 {
-    top: calc(var(--spacing) * 20);
-  }
   .top-24 {
     top: calc(var(--spacing) * 24);
   }
@@ -833,9 +830,6 @@
   .m-2 {
     margin: calc(var(--spacing) * 2);
   }
-  .-mx-1 {
-    margin-inline: calc(var(--spacing) * -1);
-  }
   .-mx-1\.5 {
     margin-inline: calc(var(--spacing) * -1.5);
   }
@@ -883,9 +877,6 @@
   }
   .-mt-16 {
     margin-top: calc(var(--spacing) * -16);
-  }
-  .mt-0 {
-    margin-top: calc(var(--spacing) * 0);
   }
   .mt-0\.5 {
     margin-top: calc(var(--spacing) * 0.5);
@@ -1088,9 +1079,6 @@
   .aspect-square {
     aspect-ratio: 1 / 1;
   }
-  .h-0 {
-    height: calc(var(--spacing) * 0);
-  }
   .h-0\.5 {
     height: calc(var(--spacing) * 0.5);
   }
@@ -1232,9 +1220,6 @@
   .w-20 {
     width: calc(var(--spacing) * 20);
   }
-  .w-24 {
-    width: calc(var(--spacing) * 24);
-  }
   .w-32 {
     width: calc(var(--spacing) * 32);
   }
@@ -1250,12 +1235,6 @@
   .w-80 {
     width: calc(var(--spacing) * 80);
   }
-  .w-96 {
-    width: calc(var(--spacing) * 96);
-  }
-  .w-100 {
-    width: calc(var(--spacing) * 100);
-  }
   .w-full {
     width: 100%;
   }
@@ -1264,9 +1243,6 @@
   }
   .w-screen {
     width: 100vw;
-  }
-  .w-xl {
-    width: var(--container-xl);
   }
   .max-w-2xl {
     max-width: var(--container-2xl);
@@ -1797,13 +1773,6 @@
       margin-block-end: calc(calc(var(--spacing) * 4) * calc(1 - var(--tw-space-y-reverse)));
     }
   }
-  .space-y-5 {
-    :where(& > :not(:last-child)) {
-      --tw-space-y-reverse: 0;
-      margin-block-start: calc(calc(var(--spacing) * 5) * var(--tw-space-y-reverse));
-      margin-block-end: calc(calc(var(--spacing) * 5) * calc(1 - var(--tw-space-y-reverse)));
-    }
-  }
   .space-y-6 {
     :where(& > :not(:last-child)) {
       --tw-space-y-reverse: 0;
@@ -1821,13 +1790,6 @@
   .space-y-reverse {
     :where(& > :not(:last-child)) {
       --tw-space-y-reverse: 1;
-    }
-  }
-  .-space-x-px {
-    :where(& > :not(:last-child)) {
-      --tw-space-x-reverse: 0;
-      margin-inline-start: calc(-1px * var(--tw-space-x-reverse));
-      margin-inline-end: calc(-1px * calc(1 - var(--tw-space-x-reverse)));
     }
   }
   .space-x-1 {
@@ -2036,10 +1998,6 @@
     border-top-left-radius: var(--radius-lg);
     border-bottom-left-radius: var(--radius-lg);
   }
-  .rounded-l-md {
-    border-top-left-radius: var(--radius-md);
-    border-bottom-left-radius: var(--radius-md);
-  }
   .rounded-t {
     border-top-left-radius: 0.25rem;
     border-top-right-radius: 0.25rem;
@@ -2058,10 +2016,6 @@
   .rounded-r-lg {
     border-top-right-radius: var(--radius-lg);
     border-bottom-right-radius: var(--radius-lg);
-  }
-  .rounded-r-md {
-    border-top-right-radius: var(--radius-md);
-    border-bottom-right-radius: var(--radius-md);
   }
   .rounded-tr {
     border-top-right-radius: 0.25rem;
@@ -2310,9 +2264,6 @@
   }
   .bg-emerald-50 {
     background-color: var(--color-emerald-50);
-  }
-  .bg-emerald-100 {
-    background-color: var(--color-emerald-100);
   }
   .bg-emerald-500 {
     background-color: var(--color-emerald-500);
@@ -2796,9 +2747,6 @@
   }
   .px-8 {
     padding-inline: calc(var(--spacing) * 8);
-  }
-  .py-0 {
-    padding-block: calc(var(--spacing) * 0);
   }
   .py-0\.5 {
     padding-block: calc(var(--spacing) * 0.5);
@@ -4303,13 +4251,6 @@
       }
     }
   }
-  .hover\:text-emerald-700 {
-    &:hover {
-      @media (hover: hover) {
-        color: var(--color-emerald-700);
-      }
-    }
-  }
   .hover\:text-emerald-800 {
     &:hover {
       @media (hover: hover) {
@@ -4763,11 +4704,6 @@
       padding-block: calc(var(--spacing) * 8);
     }
   }
-  .sm\:text-left {
-    @media (width >= 40rem) {
-      text-align: left;
-    }
-  }
   .sm\:text-2xl {
     @media (width >= 40rem) {
       font-size: var(--text-2xl);
@@ -4897,11 +4833,6 @@
   .md\:w-2\/3 {
     @media (width >= 48rem) {
       width: calc(2/3 * 100%);
-    }
-  }
-  .md\:w-64 {
-    @media (width >= 48rem) {
-      width: calc(var(--spacing) * 64);
     }
   }
   .md\:w-auto {
