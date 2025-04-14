@@ -4593,6 +4593,11 @@
       --tw-ring-color: var(--color-gray-300);
     }
   }
+  .focus\:ring-gray-500 {
+    &:focus {
+      --tw-ring-color: var(--color-gray-500);
+    }
+  }
   .focus\:ring-teal-200 {
     &:focus {
       --tw-ring-color: var(--color-teal-200);
