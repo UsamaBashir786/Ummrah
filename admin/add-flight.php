@@ -286,13 +286,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <div class="main flex-1 flex flex-col">
       <!-- Navbar -->
       <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center">
-        <button class="md:hidden text-gray-800" id="menu-btn">
-          <i class="fas fa-bars"></i>
-        </button>
-        <h1 class="text-xl font-semibold ">
+        <h1 class="text-xl font-semibold flex items-center">
           <i class="text-teal-600 fas fa-plane mx-2"></i> Add New Flight
         </h1>
+
+        <div class="flex items-center gap-4">
+          <button onclick="history.back()" class="text-gray-800 hover:text-teal-600">
+            <i class="fas fa-arrow-left mr-1"></i> Back
+          </button>
+          <button class="md:hidden text-gray-800" id="menu-btn">
+            <i class="fas fa-bars"></i>
+          </button>
+        </div>
       </div>
+
 
       <!-- Form Container -->
       <div class="overflow-auto container mx-auto px-4 py-8">
@@ -568,7 +575,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <i class="fas fa-save mr-2"></i> Save Flight
               </button>
               <button type="reset" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">
-                <i class="fas fa-times mr-2"></i> Cancel
+                <i class="fas fa-times mr-2"></i>Reset
               </button>
             </div>
           </form>

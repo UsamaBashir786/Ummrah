@@ -2,7 +2,7 @@
 session_name("admin_session");
 session_start();
 if (!isset($_SESSION['admin_email'])) {
-  header("Location: admin/login.php");
+  header("Location: login.php");
   exit();
 }
 
@@ -402,14 +402,6 @@ if (empty($topRoutes)) {
                   <a href="notifications_page.php" class="text-sm text-emerald-600 hover:underline">View All Notifications</a>
                 </div>
               </div>
-            </div>
-            <!-- Admin Profile -->
-            <div class="relative">
-              <button class="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-lg transition-all">
-                <img src="assets/images/admin-avatar.jpg" alt="Admin" class="w-8 h-8 rounded-full object-cover border-2 border-emerald-500">
-                <span class="hidden md:inline-block font-medium text-gray-700">Admin</span>
-                <i class="fas fa-chevron-down text-xs text-gray-500"></i>
-              </button>
             </div>
           </div>
         </div>
