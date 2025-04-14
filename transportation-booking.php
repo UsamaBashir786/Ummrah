@@ -27,13 +27,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_booking'])) {
   $route_name = $_POST['route_name'];
   $vehicle_type = $_POST['vehicle_type'];
   $vehicle_name = $_POST['vehicle_name'];
-  $price = $_POST['price'];
+  $base_price = $_POST['base_price'];
   $booking_date = $_POST['booking_date'];
   $booking_time = $_POST['booking_time'];
   $pickup_location = $_POST['pickup_location'];
-  $dropoff_location = $_POST['dropoff_location'];
   $passengers = $_POST['passengers'];
   $special_requests = $_POST['special_requests'];
+  $duration = isset($_POST['duration']) ? $_POST['duration'] : null;
+
+  // Calculate final price based on passengers
+  $price = $base_price;
+  if ($passengers > 1) {
+    $price = $base_price * $passengers;
+  }
 
   // Validate inputs
   $errors = [];
@@ -50,10 +56,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_booking'])) {
     $errors[] = "Pickup location is required";
   }
 
-  if (empty($dropoff_location)) {
-    $errors[] = "Drop-off location is required";
-  }
-
   if (empty($passengers) || !is_numeric($passengers) || $passengers < 1) {
     $errors[] = "Number of passengers must be at least 1";
   }
@@ -64,17 +66,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_booking'])) {
     $booking_status = "pending";
     $booking_timestamp = date("Y-m-d H:i:s");
 
+    // First verify your table structure with:
+    // SHOW COLUMNS FROM transportation_bookings;
+
+    // Then adjust this query to match exactly
     $insert_query = "INSERT INTO transportation_bookings 
                      (user_id, booking_reference, service_type, route_id, route_name, 
                       vehicle_type, vehicle_name, price, booking_date, booking_time, 
-                      pickup_location, dropoff_location, passengers, special_requests, 
+                      pickup_location, passengers, special_requests, duration,
                       booking_status, created_at) 
                      VALUES 
                      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     $stmt = $conn->prepare($insert_query);
+    if (!$stmt) {
+      die("Prepare failed: " . $conn->error);
+    }
+
     $stmt->bind_param(
-      "issiisssssssisss",
+      "issiisssssisssss",
       $user_id,
       $booking_reference,
       $service_type,
@@ -86,9 +96,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_booking'])) {
       $booking_date,
       $booking_time,
       $pickup_location,
-      $dropoff_location,
       $passengers,
       $special_requests,
+      $duration,
       $booking_status,
       $booking_timestamp
     );
@@ -100,7 +110,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_booking'])) {
       header("Location: booking-confirmation.php?booking_id=$booking_id&reference=$booking_reference");
       exit();
     } else {
-      $errors[] = "Database error: " . $conn->error;
+      $errors[] = "Database error: " . $stmt->error;
     }
   }
 } else if (isset($_GET['service_type']) && isset($_GET['route_id']) && isset($_GET['vehicle_type'])) {
@@ -110,10 +120,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_booking'])) {
   $route_name = $_GET['route_name'] ?? '';
   $vehicle_type = $_GET['vehicle_type'];
   $vehicle_name = $_GET['vehicle_name'] ?? '';
-  $price = $_GET['price'] ?? 0;
+  $base_price = $_GET['price'] ?? 0;
 
   // If any parameter is missing, redirect back to price list
-  if (empty($service_type) || empty($route_id) || empty($vehicle_type) || empty($price)) {
+  if (empty($service_type) || empty($route_id) || empty($vehicle_type) || empty($base_price)) {
     header("Location: transportation-price-lists.php");
     exit();
   }
@@ -124,10 +134,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_booking'])) {
   $route_name = $_POST['route_name'] ?? '';
   $vehicle_type = $_POST['vehicle_type'];
   $vehicle_name = $_POST['vehicle_name'] ?? '';
-  $price = $_POST['price'] ?? 0;
+  $base_price = $_POST['price'] ?? 0;
 
   // If any parameter is missing, redirect back to price list
-  if (empty($service_type) || empty($route_id) || empty($vehicle_type) || empty($price)) {
+  if (empty($service_type) || empty($route_id) || empty($vehicle_type) || empty($base_price)) {
     header("Location: transportation-price-lists.php");
     exit();
   }
@@ -187,8 +197,8 @@ function generateBookingReference()
                 </div>
 
                 <div>
-                  <p class="text-sm text-gray-600">Price:</p>
-                  <p class="font-medium text-teal-600"><?php echo $price; ?> SR</p>
+                  <p class="text-sm text-gray-600">Base Price:</p>
+                  <p class="font-medium text-teal-600"><?php echo $base_price; ?> SR</p>
                 </div>
 
                 <div>
@@ -216,7 +226,7 @@ function generateBookingReference()
               <input type="hidden" name="route_name" value="<?php echo htmlspecialchars($route_name); ?>">
               <input type="hidden" name="vehicle_type" value="<?php echo $vehicle_type; ?>">
               <input type="hidden" name="vehicle_name" value="<?php echo htmlspecialchars($vehicle_name); ?>">
-              <input type="hidden" name="price" value="<?php echo $price; ?>">
+              <input type="hidden" name="base_price" value="<?php echo $base_price; ?>">
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <!-- User Information (pre-filled, read-only) -->
@@ -250,7 +260,7 @@ function generateBookingReference()
 
                 <div>
                   <label class="block text-gray-700 text-sm font-bold mb-2" for="booking_time">
-                    Pickup Time *
+                    Pickup Time (24-hour format) *
                   </label>
                   <input type="time" id="booking_time" name="booking_time"
                     value="<?php echo isset($_POST['booking_time']) ? $_POST['booking_time'] : ''; ?>"
@@ -259,24 +269,14 @@ function generateBookingReference()
               </div>
 
               <div class="mb-6">
-                <!-- Pickup and Dropoff Locations -->
-                <div class="mb-4">
+                <!-- Pickup Location -->
+                <div>
                   <label class="block text-gray-700 text-sm font-bold mb-2" for="pickup_location">
                     Pickup Location *
                   </label>
                   <input type="text" id="pickup_location" name="pickup_location"
                     placeholder="Enter full pickup address"
                     value="<?php echo isset($_POST['pickup_location']) ? htmlspecialchars($_POST['pickup_location']) : ''; ?>"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
-                </div>
-
-                <div>
-                  <label class="block text-gray-700 text-sm font-bold mb-2" for="dropoff_location">
-                    Drop-off Location *
-                  </label>
-                  <input type="text" id="dropoff_location" name="dropoff_location"
-                    placeholder="Enter full destination address"
-                    value="<?php echo isset($_POST['dropoff_location']) ? htmlspecialchars($_POST['dropoff_location']) : ''; ?>"
                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
                 </div>
               </div>
@@ -292,21 +292,31 @@ function generateBookingReference()
                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
                 </div>
 
-                <?php if ($service_type === 'rentacar'): ?>
-                  <!-- Additional options for rentacar -->
-                  <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">
-                      Duration
-                    </label>
-                    <select name="duration"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500">
-                      <option value="one_way">One Way</option>
-                      <option value="round_trip">Round Trip</option>
-                      <option value="full_day">Full Day</option>
-                    </select>
+                <!-- Price Calculation Display -->
+                <div>
+                  <label class="block text-gray-700 text-sm font-bold mb-2">
+                    Total Price
+                  </label>
+                  <div class="px-3 py-2 border border-gray-300 rounded-md bg-gray-50">
+                    <span id="priceDisplay"><?php echo $base_price; ?></span> SR
                   </div>
-                <?php endif; ?>
+                </div>
               </div>
+
+              <?php if ($service_type === 'rentacar'): ?>
+                <!-- Additional options for rentacar -->
+                <div class="mb-6">
+                  <label class="block text-gray-700 text-sm font-bold mb-2">
+                    Duration
+                  </label>
+                  <select name="duration"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    <option value="one_way">One Way</option>
+                    <option value="round_trip">Round Trip</option>
+                    <option value="full_day">Full Day</option>
+                  </select>
+                </div>
+              <?php endif; ?>
 
               <!-- Special Requests -->
               <div class="mb-6">
@@ -351,7 +361,7 @@ function generateBookingReference()
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('booking_date').min = today;
 
-    // Prefill default time if empty
+    // Prefill default time if empty (24-hour format)
     if (!document.getElementById('booking_time').value) {
       const now = new Date();
       now.setHours(now.getHours() + 2); // Default to 2 hours from now
@@ -359,6 +369,17 @@ function generateBookingReference()
       const minutes = String(now.getMinutes()).padStart(2, '0');
       document.getElementById('booking_time').value = `${hours}:${minutes}`;
     }
+
+    // Price calculation based on passengers
+    const basePrice = <?php echo $base_price; ?>;
+    const passengersInput = document.getElementById('passengers');
+    const priceDisplay = document.getElementById('priceDisplay');
+
+    passengersInput.addEventListener('input', function() {
+      const passengers = parseInt(this.value) || 1;
+      const totalPrice = basePrice * passengers;
+      priceDisplay.textContent = totalPrice;
+    });
   </script>
 </body>
 

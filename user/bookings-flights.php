@@ -7,6 +7,53 @@ if (!isset($_SESSION['user_id'])) {
 
 require_once '../connection/connection.php';
 
+// Handle delete booking request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_booking'])) {
+  $booking_id = $_POST['booking_id'];
+  $booking_type = $_POST['booking_type'];
+  $user_id = $_SESSION['user_id'];
+
+  try {
+    $conn->begin_transaction();
+
+    switch ($booking_type) {
+      case 'direct':
+        $stmt = $conn->prepare("DELETE FROM flight_book WHERE flight_id = ? AND user_id = ?");
+        $stmt->bind_param("ii", $booking_id, $user_id);
+        break;
+
+      case 'package':
+        $stmt = $conn->prepare("DELETE FROM flight_assign WHERE flight_id = ? AND user_id = ?");
+        $stmt->bind_param("ii", $booking_id, $user_id);
+        break;
+
+      case 'standalone':
+        $stmt = $conn->prepare("DELETE FROM flight_bookings WHERE flight_id = ? AND user_id = ?");
+        $stmt->bind_param("ii", $booking_id, $user_id);
+        break;
+
+      default:
+        throw new Exception("Invalid booking type");
+    }
+
+    $stmt->execute();
+
+    if ($stmt->affected_rows === 0) {
+      throw new Exception("No booking found or you don't have permission to delete it");
+    }
+
+    $conn->commit();
+    $_SESSION['success_message'] = "Booking deleted successfully!";
+    header("Location: bookings-flights.php");
+    exit();
+  } catch (Exception $e) {
+    $conn->rollback();
+    $_SESSION['error_message'] = "Error deleting booking: " . $e->getMessage();
+    header("Location: bookings-flights.php");
+    exit();
+  }
+}
+
 $user_id = $_SESSION['user_id'];
 $sql = "SELECT * FROM users WHERE id = ?";
 $stmt = $conn->prepare($sql);
@@ -178,31 +225,9 @@ $completed_flights = count(array_filter($all_flights, fn($f) => $f['flight_statu
       background: rgba(0, 0, 0, 0.5);
       justify-content: center;
       align-items: center;
-    }
-
-    .modal-content {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      width: 90%;
-      max-width: 500px;
-    }
-
-    .flight-details-modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      justify-content: center;
-      align-items: center;
       z-index: 1000;
       overflow-y: auto;
-      /* Allow scrolling if content overflows */
       padding: 20px;
-      /* Add padding to prevent content from touching edges */
     }
 
     .modal-content {
@@ -212,13 +237,10 @@ $completed_flights = count(array_filter($all_flights, fn($f) => $f['flight_statu
       width: 90%;
       max-width: 500px;
       max-height: 80vh;
-      /* Limit height to 80% of viewport height */
       overflow-y: auto;
-      /* Enable scrolling within the modal if content overflows */
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
 
-    /* Ensure modal content sections are properly spaced */
     .modal-content h3 {
       color: #1e40af;
       font-size: 1.25rem;
@@ -254,17 +276,59 @@ $completed_flights = count(array_filter($all_flights, fn($f) => $f['flight_statu
       color: #6b7280;
     }
 
-    .modal-content .status-badge {
-      padding: 4px 8px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 500;
-      text-transform: capitalize;
+    .delete-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
     }
 
-    .modal-content .status-badge.upcoming {
-      background-color: #fef3c7;
-      color: #d97706;
+    .delete-modal-content {
+      background: white;
+      padding: 25px;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    .delete-modal-actions {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .delete-btn {
+      background-color: #dc2626;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: none;
+    }
+
+    .delete-btn:hover {
+      background-color: #b91c1c;
+    }
+
+    .cancel-btn {
+      background-color: #e5e7eb;
+      color: #4b5563;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: none;
+    }
+
+    .cancel-btn:hover {
+      background-color: #d1d5db;
     }
   </style>
 </head>
@@ -272,6 +336,7 @@ $completed_flights = count(array_filter($all_flights, fn($f) => $f['flight_statu
 <body class="bg-gray-100">
   <?php include 'includes/sidebar.php'; ?>
 
+  <!-- Flight Details Modal -->
   <div id="flightDetailsModal" class="flight-details-modal">
     <div class="modal-content">
       <div class="flex justify-between items-center mb-4">
@@ -290,8 +355,52 @@ $completed_flights = count(array_filter($all_flights, fn($f) => $f['flight_statu
     </div>
   </div>
 
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="delete-modal">
+    <div class="delete-modal-content">
+      <h2 class="text-xl font-bold mb-4">Confirm Deletion</h2>
+      <p>Are you sure you want to delete this booking? This action cannot be undone.</p>
+      <form id="deleteForm" method="POST" action="">
+        <input type="hidden" name="delete_booking" value="1">
+        <input type="hidden" id="deleteBookingId" name="booking_id" value="">
+        <input type="hidden" id="deleteBookingType" name="booking_type" value="">
+        <div class="delete-modal-actions">
+          <button type="button" onclick="closeDeleteModal()" class="cancel-btn">Cancel</button>
+          <button type="submit" class="delete-btn">Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="main-content p-8">
     <div class="container mx-auto px-4 py-8">
+      <!-- Display success/error messages -->
+      <?php if (isset($_SESSION['success_message'])): ?>
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
+          <span class="block sm:inline"><?php echo $_SESSION['success_message']; ?></span>
+          <span class="absolute top-0 bottom-0 right-0 px-4 py-3" onclick="this.parentElement.style.display='none'">
+            <svg class="fill-current h-6 w-6 text-green-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+              <title>Close</title>
+              <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z" />
+            </svg>
+          </span>
+        </div>
+        <?php unset($_SESSION['success_message']); ?>
+      <?php endif; ?>
+
+      <?php if (isset($_SESSION['error_message'])): ?>
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+          <span class="block sm:inline"><?php echo $_SESSION['error_message']; ?></span>
+          <span class="absolute top-0 bottom-0 right-0 px-4 py-3" onclick="this.parentElement.style.display='none'">
+            <svg class="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+              <title>Close</title>
+              <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z" />
+            </svg>
+          </span>
+        </div>
+        <?php unset($_SESSION['error_message']); ?>
+      <?php endif; ?>
+
       <h1 class="text-3xl font-bold mb-6">My Flight Bookings</h1>
       <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
         <?php
@@ -326,6 +435,7 @@ $completed_flights = count(array_filter($all_flights, fn($f) => $f['flight_statu
                   <th>Date</th>
                   <th>Status</th>
                   <th>Details</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -339,6 +449,14 @@ $completed_flights = count(array_filter($all_flights, fn($f) => $f['flight_statu
                     <td><span class="status-badge <?php echo $flight['flight_status']; ?>"><?php echo $flight['flight_status']; ?></span></td>
                     <td>
                       <button onclick="viewFlightDetails(<?php echo $flight['id']; ?>)" class="text-blue-600 hover:underline">View</button>
+                    </td>
+                    <td>
+                      <button onclick="showDeleteModal(<?php echo $flight['id']; ?>, '<?php echo $flight['booking_type']; ?>')"
+                        class="text-red-600 hover:text-red-800">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </td>
                   </tr>
                 <?php } ?>
@@ -358,7 +476,16 @@ $completed_flights = count(array_filter($all_flights, fn($f) => $f['flight_statu
                 <p class="text-sm mt-2"><strong>From:</strong> <?php echo htmlspecialchars($flight['departure_city']); ?></p>
                 <p class="text-sm"><strong>To:</strong> <?php echo htmlspecialchars($flight['arrival_city']); ?></p>
                 <p class="text-sm"><strong>Date:</strong> <?php echo htmlspecialchars($flight['departure_date'] . ' ' . $flight['departure_time']); ?></p>
-                <button onclick="viewFlightDetails(<?php echo $flight['id']; ?>)" class="mt-2 text-blue-600 hover:underline">View Details</button>
+                <div class="flex justify-between mt-3">
+                  <button onclick="viewFlightDetails(<?php echo $flight['id']; ?>)" class="text-blue-600 hover:underline">View Details</button>
+                  <button onclick="showDeleteModal(<?php echo $flight['id']; ?>, '<?php echo $flight['booking_type']; ?>')"
+                    class="text-red-600 hover:text-red-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete
+                  </button>
+                </div>
               </div>
             <?php } ?>
           </div>
@@ -406,9 +533,22 @@ $completed_flights = count(array_filter($all_flights, fn($f) => $f['flight_statu
       document.getElementById('flightDetailsModal').style.display = 'none';
     }
 
+    function showDeleteModal(bookingId, bookingType) {
+      document.getElementById('deleteBookingId').value = bookingId;
+      document.getElementById('deleteBookingType').value = bookingType;
+      document.getElementById('deleteModal').style.display = 'flex';
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('deleteModal').style.display = 'none';
+    }
+
     window.onclick = function(event) {
       const modal = document.getElementById('flightDetailsModal');
       if (event.target === modal) modal.style.display = 'none';
+
+      const deleteModal = document.getElementById('deleteModal');
+      if (event.target === deleteModal) deleteModal.style.display = 'none';
     }
   </script>
 </body>

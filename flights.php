@@ -688,10 +688,10 @@ if (isset($_GET['sort']) && !empty($_GET['sort'])) {
                                   $normalized_class = strtolower(str_replace(' ', '_', $class));
 
                                   // Query to count how many seats have been booked for this flight and class
-                                  $booked_query = "SELECT COUNT(*) as booked_count FROM flight_bookings 
-            WHERE flight_id = {$flight['id']} 
-            AND cabin_class = '{$normalized_class}'
-            AND booking_status != 'cancelled'";
+                                  $booked_query = "SELECT SUM(adult_count + children_count) as booked_count FROM flight_bookings 
+                                  WHERE flight_id = {$flight['id']} 
+                                  AND cabin_class = '{$normalized_class}'
+                                  AND booking_status != 'cancelled'";
                                   $booked_result = $conn->query($booked_query);
                                   $booked_seats = 0;
                                   if ($booked_result && $booked_result->num_rows > 0) {

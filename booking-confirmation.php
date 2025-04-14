@@ -4,7 +4,7 @@ include 'connection/connection.php';
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
-  header("Location: login.php");
+  header("Location: login.php?message=" . urlencode("Please login to view your booking"));
   exit();
 }
 
@@ -12,30 +12,51 @@ $user_id = $_SESSION['user_id'];
 
 // Check if we have booking ID and reference
 if (!isset($_GET['booking_id']) || !isset($_GET['reference'])) {
-  header("Location: my-bookings.php");
+  header("Location: my-bookings.php?message=" . urlencode("Invalid booking information"));
   exit();
 }
 
 $booking_id = $_GET['booking_id'];
 $booking_reference = $_GET['reference'];
 
-// Get booking details
-$booking_query = "SELECT tb.*, u.full_name, u.email, u.phone_number 
+// Get booking details with complete fields from transportation_bookings
+$booking_query = "SELECT 
+                    tb.*,
+                    u.full_name, u.email, u.phone_number,
+                    CASE 
+                      WHEN tb.route_name = '0' OR tb.route_name = '' THEN 
+                        (SELECT route_name FROM taxi_routes WHERE id = tb.route_id)
+                      ELSE tb.route_name
+                    END AS display_route_name
                  FROM transportation_bookings tb
                  JOIN users u ON tb.user_id = u.id
                  WHERE tb.id = ? AND tb.booking_reference = ? AND tb.user_id = ?";
+
 $stmt = $conn->prepare($booking_query);
 $stmt->bind_param("isi", $booking_id, $booking_reference, $user_id);
 $stmt->execute();
 $booking_result = $stmt->get_result();
 
 if ($booking_result->num_rows === 0) {
-  // Booking not found or doesn't belong to this user
-  header("Location: my-bookings.php");
+  header("Location: my-bookings.php?message=" . urlencode("Booking not found"));
   exit();
 }
 
 $booking = $booking_result->fetch_assoc();
+
+// Debug: Log the pickup location value
+error_log("Original pickup location value: " . $booking['pickup_location']);
+
+// Only set a default value if the pickup location is literally "0" or completely empty
+if ($booking['pickup_location'] === '0' || $booking['pickup_location'] === '') {
+  // Check if we can retrieve the pickup location from POST data
+  if (isset($_SESSION['last_pickup_location']) && !empty($_SESSION['last_pickup_location'])) {
+    $booking['pickup_location'] = $_SESSION['last_pickup_location'];
+  } else {
+    $booking['pickup_location'] = 'Not specified';
+  }
+}
+
 // Handle PDF generation
 if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
   require_once 'vendor/tecnickcom/tcpdf/tcpdf.php';
@@ -77,6 +98,17 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
   // Set font
   $pdf->SetFont('helvetica', '', 12);
 
+  // Format duration for display if it exists
+  $durationDisplay = '';
+  if (!empty($booking['duration'])) {
+    $durationDisplay = ucwords(str_replace('_', ' ', $booking['duration']));
+  } else {
+    $durationDisplay = 'One Way'; // Default value
+  }
+
+  // Use the display_route_name for the route display
+  $routeDisplay = !empty($booking['display_route_name']) ? $booking['display_route_name'] : 'Not specified';
+
   // Voucher content
   $html = '
   <h1 style="text-align: center; color: #0d9488;">Transportation Booking Voucher</h1>
@@ -94,11 +126,11 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
     </tr>
     <tr>
       <td><strong>Route:</strong></td>
-      <td>' . htmlspecialchars($booking['route_name'] ?? 'N/A') . '</td>
+      <td>' . htmlspecialchars($routeDisplay) . '</td>
     </tr>
     <tr>
       <td><strong>Vehicle:</strong></td>
-      <td>' . htmlspecialchars($booking['vehicle_name'] ?? 'N/A') . '</td>
+      <td>' . htmlspecialchars($booking['vehicle_name']) . '</td>
     </tr>
     <tr>
       <td><strong>Price:</strong></td>
@@ -106,7 +138,7 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
     </tr>
     <tr>
       <td><strong>Date & Time:</strong></td>
-      <td>' . (new DateTime($booking['booking_date']))->format('F j, Y') . ' at ' . date('h:i A', strtotime($booking['booking_time'])) . '</td>
+      <td>' . date('F j, Y', strtotime($booking['booking_date'])) . ' at ' . date('h:i A', strtotime($booking['booking_time'])) . '</td>
     </tr>
     <tr>
       <td><strong>Passengers:</strong></td>
@@ -115,10 +147,6 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
     <tr>
       <td><strong>Pickup Location:</strong></td>
       <td>' . htmlspecialchars($booking['pickup_location']) . '</td>
-    </tr>
-    <tr>
-      <td><strong>Drop-off Location:</strong></td>
-      <td>' . htmlspecialchars($booking['dropoff_location']) . '</td>
     </tr>';
 
   if (!empty($booking['special_requests'])) {
@@ -130,6 +158,10 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
   }
 
   $html .= '
+    <tr>
+      <td><strong>Duration:</strong></td>
+      <td>' . $durationDisplay . '</td>
+    </tr>
     <tr>
       <td><strong>Status:</strong></td>
       <td>' . ucfirst($booking['booking_status']) . '</td>
@@ -183,6 +215,36 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
   $pdf->Output('voucher_' . $booking['booking_reference'] . '.pdf', 'D');
   exit();
 }
+
+// Function to determine status badge colors
+function getStatusBadgeClass($status, $type = 'booking')
+{
+  if ($type === 'booking') {
+    switch ($status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'confirmed':
+        return 'bg-green-100 text-green-800';
+      case 'completed':
+        return 'bg-blue-100 text-blue-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  } else { // payment status
+    switch ($status) {
+      case 'unpaid':
+        return 'bg-gray-100 text-gray-800';
+      case 'paid':
+        return 'bg-green-100 text-green-800';
+      case 'refunded':
+        return 'bg-purple-100 text-purple-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  }
+}
 ?>
 
 <!DOCTYPE html>
@@ -195,6 +257,36 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
     .confirmation-box {
       border: 2px dashed #0d9488;
       background-color: #f0fdfa;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      border-radius: 0.25rem;
+    }
+
+    .booking-item {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 0.5rem;
+    }
+
+    .booking-label {
+      font-size: 0.875rem;
+      color: #6b7280;
+    }
+
+    .booking-value {
+      font-weight: 500;
+      color: #111827;
+    }
+
+    .booking-details .grid>div {
+      padding: 10px;
+      border-radius: 4px;
+      background-color: #f9fafb;
     }
 
     @media print {
@@ -243,107 +335,89 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
 
               <div class="p-4">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p class="text-sm text-gray-500">Service Type</p>
-                    <p class="font-medium"><?php echo ucfirst($booking['service_type']); ?> Service</p>
+                  <div class="booking-item">
+                    <span class="booking-label">Service Type</span>
+                    <span class="booking-value"><?php echo ucfirst($booking['service_type']); ?> Service</span>
                   </div>
 
-                  <div>
-                    <p class="text-sm text-gray-500">Route</p>
-                    <p class="font-medium"><?php echo htmlspecialchars($booking['route_name'] ?? 'N/A'); ?></p>
+                  <div class="booking-item">
+                    <span class="booking-label">Route</span>
+                    <span class="booking-value">
+                      <?php echo htmlspecialchars($booking['display_route_name'] ?? $booking['route_name']); ?>
+                    </span>
                   </div>
 
-                  <div>
-                    <p class="text-sm text-gray-500">Vehicle</p>
-                    <p class="font-medium"><?php echo htmlspecialchars($booking['vehicle_name'] ?? 'N/A'); ?></p>
+                  <div class="booking-item">
+                    <span class="booking-label">Vehicle</span>
+                    <span class="booking-value"><?php echo htmlspecialchars($booking['vehicle_name']); ?></span>
                   </div>
 
-                  <div>
-                    <p class="text-sm text-gray-500">Price</p>
-                    <p class="font-medium text-teal-600"><?php echo number_format($booking['price'], 2); ?> SR</p>
+                  <div class="booking-item">
+                    <span class="booking-label">Price</span>
+                    <span class="booking-value text-teal-600 font-semibold"><?php echo number_format($booking['price'], 2); ?> SR</span>
                   </div>
 
-                  <div>
-                    <p class="text-sm text-gray-500">Date & Time</p>
-                    <p class="font-medium">
+                  <div class="booking-item">
+                    <span class="booking-label">Date & Time</span>
+                    <span class="booking-value">
                       <?php
-                      $date = new DateTime($booking['booking_date']);
-                      echo $date->format('F j, Y') . ' at ' . date('h:i A', strtotime($booking['booking_time']));
+                      echo date('F j, Y', strtotime($booking['booking_date'])) . ' at ' .
+                        date('h:i A', strtotime($booking['booking_time']));
                       ?>
-                    </p>
+                    </span>
                   </div>
 
-                  <div>
-                    <p class="text-sm text-gray-500">Passengers</p>
-                    <p class="font-medium"><?php echo $booking['passengers']; ?> person(s)</p>
+                  <div class="booking-item">
+                    <span class="booking-label">Passengers</span>
+                    <span class="booking-value"><?php echo $booking['passengers']; ?> person(s)</span>
                   </div>
 
-                  <div>
-                    <p class="text-sm text-gray-500">Pickup Location</p>
-                    <p class="font-medium"><?php echo htmlspecialchars($booking['pickup_location']); ?></p>
+                  <div class="booking-item">
+                    <span class="booking-label">Pickup Location</span>
+                    <span class="booking-value"><?php echo htmlspecialchars($booking['pickup_location']); ?></span>
                   </div>
 
-                  <div>
-                    <p class="text-sm text-gray-500">Drop-off Location</p>
-                    <p class="font-medium"><?php echo htmlspecialchars($booking['dropoff_location']); ?></p>
+                  <div class="booking-item">
+                    <span class="booking-label">Duration</span>
+                    <span class="booking-value">
+                      <?php
+                      echo !empty($booking['duration'])
+                        ? ucwords(str_replace('_', ' ', $booking['duration']))
+                        : 'One Way';
+                      ?>
+                    </span>
                   </div>
 
                   <?php if (!empty($booking['special_requests'])): ?>
-                    <div class="md:col-span-2">
-                      <p class="text-sm text-gray-500">Special Requests</p>
-                      <p class="font-medium"><?php echo htmlspecialchars($booking['special_requests']); ?></p>
+                    <div class="booking-item md:col-span-2">
+                      <span class="booking-label">Special Requests</span>
+                      <span class="booking-value"><?php echo htmlspecialchars($booking['special_requests']); ?></span>
                     </div>
                   <?php endif; ?>
 
-                  <div>
-                    <p class="text-sm text-gray-500">Booking Status</p>
-                    <p class="font-medium">
-                      <span class="px-2 py-1 rounded text-xs 
-                      <?php
-                      switch ($booking['booking_status']) {
-                        case 'pending':
-                          echo 'bg-yellow-100 text-yellow-800';
-                          break;
-                        case 'confirmed':
-                          echo 'bg-green-100 text-green-800';
-                          break;
-                        case 'completed':
-                          echo 'bg-blue-100 text-blue-800';
-                          break;
-                        case 'cancelled':
-                          echo 'bg-red-100 text-red-800';
-                          break;
-                        default:
-                          echo 'bg-gray-100 text-gray-800';
-                      }
-                      ?>">
+                  <div class="booking-item">
+                    <span class="booking-label">Booking Status</span>
+                    <span class="booking-value">
+                      <span class="badge <?php echo getStatusBadgeClass($booking['booking_status']); ?>">
                         <?php echo ucfirst($booking['booking_status']); ?>
                       </span>
-                    </p>
+                    </span>
                   </div>
 
-                  <div>
-                    <p class="text-sm text-gray-500">Payment Status</p>
-                    <p class="font-medium">
-                      <span class="px-2 py-1 rounded text-xs 
-                      <?php
-                      switch ($booking['payment_status']) {
-                        case 'unpaid':
-                          echo 'bg-gray-100 text-gray-800';
-                          break;
-                        case 'paid':
-                          echo 'bg-green-100 text-green-800';
-                          break;
-                        case 'refunded':
-                          echo 'bg-purple-100 text-purple-800';
-                          break;
-                        default:
-                          echo 'bg-gray-100 text-gray-800';
-                      }
-                      ?>">
+                  <div class="booking-item">
+                    <span class="booking-label">Payment Status</span>
+                    <span class="booking-value">
+                      <span class="badge <?php echo getStatusBadgeClass($booking['payment_status'], 'payment'); ?>">
                         <?php echo ucfirst($booking['payment_status']); ?>
                       </span>
-                    </p>
+                    </span>
+                  </div>
+
+                  <div class="booking-item">
+                    <span class="booking-label">Booking Date</span>
+                    <span class="booking-value">
+                      <?php echo date('F j, Y g:i A', strtotime($booking['created_at'])); ?>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -357,20 +431,20 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
 
               <div class="p-4">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p class="text-sm text-gray-500">Name</p>
-                    <p class="font-medium"><?php echo htmlspecialchars($booking['full_name'] ?? 'N/A'); ?></p>
+                  <div class="booking-item">
+                    <span class="booking-label">Name</span>
+                    <span class="booking-value"><?php echo htmlspecialchars($booking['full_name'] ?? 'N/A'); ?></span>
                   </div>
 
-                  <div>
-                    <p class="text-sm text-gray-500">Email</p>
-                    <p class="font-medium"><?php echo htmlspecialchars($booking['email'] ?? 'N/A'); ?></p>
+                  <div class="booking-item">
+                    <span class="booking-label">Email</span>
+                    <span class="booking-value"><?php echo htmlspecialchars($booking['email'] ?? 'N/A'); ?></span>
                   </div>
 
                   <?php if (!empty($booking['phone_number'])): ?>
-                    <div>
-                      <p class="text-sm text-gray-500">Phone</p>
-                      <p class="font-medium"><?php echo htmlspecialchars($booking['phone_number']); ?></p>
+                    <div class="booking-item">
+                      <span class="booking-label">Phone</span>
+                      <span class="booking-value"><?php echo htmlspecialchars($booking['phone_number']); ?></span>
                     </div>
                   <?php endif; ?>
                 </div>
@@ -380,30 +454,33 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
             <!-- Action Buttons -->
             <div class="flex flex-wrap justify-between gap-4 no-print">
               <div>
-                <!-- <button onclick="window.print()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition">
-                  <i class="bx bx-printer mr-2"></i> Print Confirmation
-                </button> -->
                 <a href="?booking_id=<?php echo $booking_id; ?>&reference=<?php echo $booking_reference; ?>&generate_pdf=1"
-                  class="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition ml-2">
+                  class="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition">
                   <i class="bx bx-download mr-2"></i> Download PDF Voucher
                 </a>
-                <a href="user/bookings-transport.php?user_id=<?php echo htmlspecialchars($_SESSION['user_id']); ?>" class="inline-block px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition ml-2">
-                  <i class="bx bx-list-ul mr-2"></i> My Bookings
-                </a>
+                <button onclick="printVoucher()"
+                  class="inline-block px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition ml-2">
+                  <i class="bx bx-printer mr-2"></i> Print
+                </button>
               </div>
 
               <div>
                 <?php if ($booking['payment_status'] === 'unpaid'): ?>
-                  <a href="payment.php?booking_id=<?php echo $booking_id; ?>&reference=<?php echo $booking_reference; ?>"
+                  <a href="payment.php?booking_id=<?php echo $booking_id; ?>&reference=<?php echo $booking_reference; ?>&type=transportation"
                     class="px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition">
                     <i class="bx bx-credit-card mr-2"></i> Pay Now
                   </a>
-                <?php elseif ($booking['booking_status'] === 'pending' || $booking['booking_status'] === 'confirmed'): ?>
+                <?php elseif (in_array($booking['booking_status'], ['pending', 'confirmed'])): ?>
                   <button onclick="cancelBooking(<?php echo $booking_id; ?>, '<?php echo $booking_reference; ?>')"
                     class="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition">
                     <i class="bx bx-x-circle mr-2"></i> Cancel Booking
                   </button>
                 <?php endif; ?>
+
+                <a href="user/bookings-transport.php"
+                  class="inline-block px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition ml-2">
+                  <i class="bx bx-list-ul mr-2"></i> My Bookings
+                </a>
               </div>
             </div>
 
@@ -429,8 +506,13 @@ if (isset($_GET['generate_pdf']) && $_GET['generate_pdf'] === '1') {
   <script>
     function cancelBooking(bookingId, bookingReference) {
       if (confirm('Are you sure you want to cancel this booking? This action cannot be undone.')) {
-        window.location.href = 'cancel-booking.php?booking_id=' + bookingId + '&reference=' + bookingReference;
+        window.location.href = 'cancel-booking.php?booking_id=' + bookingId + '&reference=' + bookingReference + '&type=transportation';
       }
+    }
+
+    // Print function
+    function printVoucher() {
+      window.print();
     }
   </script>
 </body>
