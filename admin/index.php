@@ -134,13 +134,14 @@ $bookingData = json_encode([
   'counts' => $bookingCounts
 ]);
 
-// Calculate total revenue (approximation based on available data)
 $revenueQuery = "
   SELECT
-    (SELECT COALESCE(SUM(JSON_EXTRACT(prices, '$.economy')), 0) FROM flights) +
-    (SELECT COALESCE(SUM(price_per_night), 0) FROM hotels) +
-    (SELECT COALESCE(SUM(price), 0) FROM packages) +
-    (SELECT COALESCE(SUM(price), 0) FROM transportation_bookings)
+    (SELECT COALESCE(SUM(price), 0) FROM flight_bookings WHERE booking_status != 'cancelled') +
+    (SELECT COALESCE(SUM(h.price_per_night * DATEDIFF(hb.check_out_date, hb.check_in_date)), 0) 
+     FROM hotel_bookings hb JOIN hotels h ON hb.hotel_id = h.id 
+     WHERE hb.status != 'cancelled') +
+    (SELECT COALESCE(SUM(total_price), 0) FROM package_booking WHERE status != 'canceled') +
+    (SELECT COALESCE(SUM(price), 0) FROM transportation_bookings WHERE booking_status != 'cancelled')
   AS total_revenue";
 $totalRevenue = $conn->query($revenueQuery)->fetch_assoc()['total_revenue'];
 

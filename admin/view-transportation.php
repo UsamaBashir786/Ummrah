@@ -417,7 +417,7 @@ $rentacar_routes = getRentacarRoutes();
 
         <div class="bg-white p-6 rounded-lg shadow-lg">
           <div class="tab-buttons flex justify-center">
-            <button class="tab-btn active" onclick="switchTab('taxi')">Taxi Routes</button>
+            <button class="tab-btn zactive" onclick="switchTab('taxi')">Taxi Routes</button>
             <button class="tab-btn" onclick="switchTab('rentacar')">Rent A Car Routes</button>
           </div>
 
@@ -741,77 +741,121 @@ $rentacar_routes = getRentacarRoutes();
       // Show selected tab
       document.getElementById(tabName + '-tab').classList.add('active');
 
-      // Add active class to clicked button
-      event.target.classList.add('active');
+      // Add active class to the correct button
+      document.querySelector(`.tab-btn[onclick="switchTab('${tabName}')"]`).classList.add('active');
+
+      // Save current tab to localStorage
+      localStorage.setItem('activeTransportTab', tabName);
     }
 
-    // Function to add new rows to taxi table
-    document.getElementById('add-taxi-row').addEventListener('click', function() {
-      const tbody = document.getElementById('new-taxi-routes-body');
-      const rowCount = tbody.rows.length;
-      const newIndex = rowCount;
-      const newRowNumber = <?php echo count($taxi_routes); ?> + 1 + rowCount;
+    // Document ready function
+    document.addEventListener('DOMContentLoaded', function() {
+      // Check for stored tab on page load
+      const storedTab = localStorage.getItem('activeTransportTab');
+      if (storedTab) {
+        // Show the stored tab
+        document.querySelectorAll('.tab-content').forEach(tab => {
+          tab.classList.remove('active');
+        });
 
-      const newRow = document.createElement('tr');
-      newRow.innerHTML = `
-        <td class="py-2 px-4 border-b text-center">
-          <input type="number" name="new_route_number[${newIndex}]" value="${newRowNumber}" class="price-input w-16 text-center">
-        </td>
-        <td class="py-2 px-4 border-b">
-          <input type="text" name="new_route_name[${newIndex}]" placeholder="Enter route name" class="price-input w-full">
-        </td>
-        <td class="py-2 px-4 border-b">
-          <input type="number" name="new_camry_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
-        </td>
-        <td class="py-2 px-4 border-b">
-          <input type="number" name="new_starex_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
-        </td>
-        <td class="py-2 px-4 border-b">
-          <input type="number" name="new_hiace_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
-        </td>
-        <td class="py-2 px-4 border-b text-center">
-          <button type="button" class="text-red-500 hover:text-red-700 delete-new-row">
-            <i class="fas fa-trash"></i>
-          </button>
-        </td>
-      `;
+        const tabContentEl = document.getElementById(storedTab + '-tab');
+        if (tabContentEl) {
+          tabContentEl.classList.add('active');
 
-      tbody.appendChild(newRow);
-      setupDeleteHandlers();
-    });
+          // Update the tab buttons
+          document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+          });
 
-    // Function to add new rows to rentacar table
-    document.getElementById('add-rentacar-row').addEventListener('click', function() {
-      const tbody = document.getElementById('new-rentacar-routes-body');
-      const rowCount = tbody.rows.length;
-      const newIndex = rowCount;
-      const newRowNumber = <?php echo count($rentacar_routes); ?> + 1 + rowCount;
+          const tabBtn = document.querySelector(`.tab-btn[onclick="switchTab('${storedTab}')"]`);
+          if (tabBtn) {
+            tabBtn.classList.add('active');
+          }
+        }
+      }
 
-      const newRow = document.createElement('tr');
-      newRow.innerHTML = `
-        <td class="py-2 px-4 border-b text-center">
-          <input type="number" name="new_route_number[${newIndex}]" value="${newRowNumber}" class="price-input rentacar-input w-16 text-center">
-        </td>
-        <td class="py-2 px-4 border-b">
-          <input type="text" name="new_route_name[${newIndex}]" placeholder="Enter route name" class="price-input rentacar-input w-full">
-        </td>
-        <td class="py-2 px-4 border-b">
-          <input type="number" name="new_gmc_16_19_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
-        </td>
-        <td class="py-2 px-4 border-b">
-          <input type="number" name="new_gmc_22_23_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
-        </td>
-        <td class="py-2 px-4 border-b">
-          <input type="number" name="new_coaster_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
-        </td>
-        <td class="py-2 px-4 border-b text-center">
-          <button type="button" class="text-red-500 hover:text-red-700 delete-new-row">
-            <i class="fas fa-trash"></i>
-          </button>
-        </td>
-      `;
+      // Function to add new rows to taxi table
+      document.getElementById('add-taxi-row').addEventListener('click', function() {
+        const tbody = document.getElementById('new-taxi-routes-body');
+        const rowCount = tbody.rows.length;
+        const newIndex = rowCount;
+        const newRowNumber = <?php echo count($taxi_routes); ?> + 1 + rowCount;
 
-      tbody.appendChild(newRow);
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+      <td class="py-2 px-4 border-b text-center">
+        <input type="number" name="new_route_number[${newIndex}]" value="${newRowNumber}" class="price-input w-16 text-center">
+      </td>
+      <td class="py-2 px-4 border-b">
+        <input type="text" name="new_route_name[${newIndex}]" placeholder="Enter route name" class="price-input w-full">
+      </td>
+      <td class="py-2 px-4 border-b">
+        <input type="number" name="new_camry_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+      </td>
+      <td class="py-2 px-4 border-b">
+        <input type="number" name="new_starex_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+      </td>
+      <td class="py-2 px-4 border-b">
+        <input type="number" name="new_hiace_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+      </td>
+      <td class="py-2 px-4 border-b text-center">
+        <button type="button" class="text-red-500 hover:text-red-700 delete-new-row">
+          <i class="fas fa-trash"></i>
+        </button>
+      </td>
+    `;
+
+        tbody.appendChild(newRow);
+        setupDeleteHandlers();
+      });
+
+      // Function to add new rows to rentacar table
+      document.getElementById('add-rentacar-row').addEventListener('click', function() {
+        const tbody = document.getElementById('new-rentacar-routes-body');
+        const rowCount = tbody.rows.length;
+        const newIndex = rowCount;
+        const newRowNumber = <?php echo count($rentacar_routes); ?> + 1 + rowCount;
+
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+      <td class="py-2 px-4 border-b text-center">
+        <input type="number" name="new_route_number[${newIndex}]" value="${newRowNumber}" class="price-input rentacar-input w-16 text-center">
+      </td>
+      <td class="py-2 px-4 border-b">
+        <input type="text" name="new_route_name[${newIndex}]" placeholder="Enter route name" class="price-input rentacar-input w-full">
+      </td>
+      <td class="py-2 px-4 border-b">
+        <input type="number" name="new_gmc_16_19_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+      </td>
+      <td class="py-2 px-4 border-b">
+        <input type="number" name="new_gmc_22_23_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+      </td>
+      <td class="py-2 px-4 border-b">
+        <input type="number" name="new_coaster_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+      </td>
+      <td class="py-2 px-4 border-b text-center">
+        <button type="button" class="text-red-500 hover:text-red-700 delete-new-row">
+          <i class="fas fa-trash"></i>
+        </button>
+      </td>
+    `;
+
+        tbody.appendChild(newRow);
+        setupDeleteHandlers();
+      });
+
+      // Mobile menu toggle
+      const menuBtn = document.getElementById('menu-btn');
+      const sidebar = document.querySelector('.sidebar');
+
+      if (menuBtn && sidebar) {
+        menuBtn.addEventListener('click', function() {
+          sidebar.classList.toggle('hidden');
+          sidebar.classList.toggle('flex');
+        });
+      }
+
+      // Initial setup
       setupDeleteHandlers();
     });
 
@@ -872,22 +916,6 @@ $rentacar_routes = getRentacarRoutes();
         }
       });
     }
-
-    // Mobile menu toggle
-    document.addEventListener('DOMContentLoaded', function() {
-      const menuBtn = document.getElementById('menu-btn');
-      const sidebar = document.querySelector('.sidebar');
-
-      if (menuBtn && sidebar) {
-        menuBtn.addEventListener('click', function() {
-          sidebar.classList.toggle('hidden');
-          sidebar.classList.toggle('flex');
-        });
-      }
-
-      // Initial setup
-      setupDeleteHandlers();
-    });
   </script>
 
   <?php include 'includes/js-links.php'; ?>
