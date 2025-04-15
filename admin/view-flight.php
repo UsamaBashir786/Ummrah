@@ -641,7 +641,7 @@ function formatDate($date_string, $format = 'M d, Y')
                           <?php echo formatDate($passenger['last_booking']); ?>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <a href="view-user.php?id=<?php echo $passenger['id']; ?>" class="text-teal-600 hover:text-teal-900">View Profile</a>
+                          <a href="user-details.php?id=<?php echo $passenger['id']; ?>" class="text-teal-600 hover:text-teal-900">View Profile</a>
                         </td>
                       </tr>
                     <?php endforeach; ?>
@@ -695,7 +695,7 @@ function formatDate($date_string, $format = 'M d, Y')
                           <div class="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
                             <div>
                               <p class="text-sm text-gray-500">
-                                <a href="view-user.php?id=<?php echo $booking['passenger_id']; ?>" class="font-medium text-gray-900">
+                                <a href="user-details.php?id=<?php echo $booking['passenger_id']; ?>" class="font-medium text-gray-900">
                                   <?php echo htmlspecialchars($booking['passenger_name']); ?>
                                 </a> booked
                                 <a href="view-flight-details.php?id=<?php echo $booking['flight_id']; ?>" class="font-medium text-teal-600 hover:text-teal-800">
@@ -936,7 +936,7 @@ function formatDate($date_string, $format = 'M d, Y')
                               ?>
                                 <div class="space-y-1">
                                   <?php foreach ($booked_users as $user): ?>
-                                    <a href="view-user.php?id=<?php echo $user['id']; ?>" class="flex items-center p-2 rounded-md hover:bg-gray-100 transition-colors">
+                                    <a href="user-details.php?id=<?php echo $user['id']; ?>" class="flex items-center p-2 rounded-md hover:bg-gray-100 transition-colors">
                                       <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal-100 text-teal-800 mr-2">
                                         <?php echo strtoupper(substr($user['name'], 0, 1)); ?>
                                       </span>
