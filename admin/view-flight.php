@@ -1,4 +1,8 @@
 <?php
+
+/************************************************
+ * PHP CODE SECTION - TOP
+ ************************************************/
 session_name("admin_session");
 session_start();
 include '../connection/connection.php';
@@ -82,8 +86,15 @@ if (isset($_GET['delete_id']) && !empty($_GET['delete_id'])) {
   }
 }
 
-// Build the SQL query with filters
-$sql = "SELECT f.*, COUNT(fb.id) as booking_count 
+// Increase GROUP_CONCAT max length to handle many bookings per flight
+try {
+  $conn->query("SET SESSION group_concat_max_len = 1000000");
+} catch (Exception $e) {
+  // If this fails, we'll still work with the default length
+}
+
+$sql = "SELECT f.*, COUNT(fb.id) as booking_count,
+        GROUP_CONCAT(DISTINCT CONCAT(fb.user_id, ':', fb.passenger_name, ':', fb.passenger_email) SEPARATOR '||') as booked_users 
         FROM flights f 
         LEFT JOIN flight_bookings fb ON f.id = fb.flight_id 
         WHERE 1=1 ";
@@ -206,6 +217,89 @@ function getUniqueValues($conn, $table, $column)
 $airlines = getUniqueValues($conn, 'flights', 'airline_name');
 $departure_cities = getUniqueValues($conn, 'flights', 'departure_city');
 $arrival_cities = getUniqueValues($conn, 'flights', 'arrival_city');
+
+$passenger_stats_sql = "SELECT 
+    COUNT(DISTINCT user_id) as total_passengers,
+    COUNT(id) as total_bookings,
+    (SELECT COUNT(DISTINCT user_id) FROM flight_bookings) as registered_users,
+    ROUND(AVG(CASE WHEN id IS NOT NULL THEN 1 ELSE 0 END), 2) as booking_ratio
+    FROM flight_bookings";
+
+try {
+  $passenger_stats_result = $conn->query($passenger_stats_sql);
+  $passenger_stats = $passenger_stats_result->fetch_assoc();
+} catch (Exception $e) {
+  $error_message = "Database error: " . $e->getMessage();
+  $passenger_stats = [
+    'total_passengers' => 0,
+    'total_bookings' => 0,
+    'registered_users' => 0,
+    'booking_ratio' => 0
+  ];
+}
+
+$top_passengers_sql = "SELECT 
+    fb.user_id as id, 
+    fb.passenger_name as full_name, 
+    fb.passenger_email as email, 
+    COUNT(fb.id) as booking_count,
+    MAX(fb.booking_date) as last_booking
+    FROM flight_bookings fb
+    GROUP BY fb.user_id, fb.passenger_name, fb.passenger_email
+    ORDER BY booking_count DESC
+    LIMIT 5";
+
+try {
+  $top_passengers_result = $conn->query($top_passengers_sql);
+  $top_passengers = [];
+
+  if ($top_passengers_result && $top_passengers_result->num_rows > 0) {
+    while ($row = $top_passengers_result->fetch_assoc()) {
+      $top_passengers[] = $row;
+    }
+  }
+} catch (Exception $e) {
+  $error_message = "Database error: " . $e->getMessage();
+  $top_passengers = [];
+}
+$recent_bookings_sql = "SELECT 
+    fb.id as booking_id,
+    fb.booking_date,
+    fb.booking_status,
+    fb.cabin_class as seat_class,
+    fb.price as booking_price,
+    fb.passenger_name as passenger_name,
+    fb.user_id as passenger_id,
+    f.flight_number,
+    f.departure_city,
+    f.arrival_city,
+    f.departure_date,
+    f.id as flight_id
+    FROM flight_bookings fb
+    JOIN flights f ON fb.flight_id = f.id
+    ORDER BY fb.booking_date DESC
+    LIMIT 10";
+
+try {
+  $recent_bookings_result = $conn->query($recent_bookings_sql);
+  $recent_bookings = [];
+
+  if ($recent_bookings_result && $recent_bookings_result->num_rows > 0) {
+    while ($row = $recent_bookings_result->fetch_assoc()) {
+      $recent_bookings[] = $row;
+    }
+  }
+} catch (Exception $e) {
+  $error_message = "Database error: " . $e->getMessage();
+  $recent_bookings = [];
+}
+
+// Helper function to format dates consistently
+function formatDate($date_string, $format = 'M d, Y')
+{
+  $date = new DateTime($date_string);
+  return $date->format($format);
+}
 ?>
 
 <!DOCTYPE html>
@@ -257,6 +351,40 @@ $arrival_cities = getUniqueValues($conn, 'flights', 'arrival_city');
       align-items: center;
       justify-content: center;
       border-radius: 50%;
+    }
+
+    /* NEW: Added styles for passenger badges */
+    .passenger-badge {
+      display: inline-flex;
+      align-items: center;
+      margin-right: 8px;
+      margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+
+    .passenger-badge:hover {
+      transform: translateY(-2px);
+    }
+
+    .passenger-initial {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background-color: #e0f2fe;
+      color: #0369a1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    .user-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border-radius: 6px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      transition: all 0.3s ease;
     }
   </style>
 </head>
@@ -437,6 +565,189 @@ $arrival_cities = getUniqueValues($conn, 'flights', 'arrival_city');
           </div>
         </div>
 
+        <!-- NEW: Passenger Statistics Section -->
+        <div class="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+          <div class="p-4 bg-gray-50 border-b">
+            <h2 class="text-lg font-bold text-gray-800">Passenger Statistics</h2>
+          </div>
+          <div class="p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- Total Passengers -->
+            <div class="bg-blue-50 p-4 rounded-lg">
+              <h3 class="text-blue-800 font-bold mb-2">Active Passengers</h3>
+              <div class="text-3xl font-bold text-gray-800"><?php echo number_format($passenger_stats['total_passengers']); ?></div>
+              <p class="text-sm text-gray-600 mt-1">Users who have made at least one booking</p>
+            </div>
+
+            <!-- Total Bookings -->
+            <div class="bg-green-50 p-4 rounded-lg">
+              <h3 class="text-green-800 font-bold mb-2">Total Bookings</h3>
+              <div class="text-3xl font-bold text-gray-800"><?php echo number_format($passenger_stats['total_bookings']); ?></div>
+              <p class="text-sm text-gray-600 mt-1">All bookings across all flights</p>
+            </div>
+
+            <!-- Registered Users -->
+            <div class="bg-purple-50 p-4 rounded-lg">
+              <h3 class="text-purple-800 font-bold mb-2">Registered Users</h3>
+              <div class="text-3xl font-bold text-gray-800"><?php echo number_format($passenger_stats['registered_users']); ?></div>
+              <p class="text-sm text-gray-600 mt-1">Total customer accounts in system</p>
+            </div>
+
+            <!-- Booking Ratio -->
+            <div class="bg-amber-50 p-4 rounded-lg">
+              <h3 class="text-amber-800 font-bold mb-2">Booking Ratio</h3>
+              <div class="text-3xl font-bold text-gray-800"><?php echo round($passenger_stats['booking_ratio'] * 100); ?>%</div>
+              <p class="text-sm text-gray-600 mt-1">Percentage of users who book flights</p>
+            </div>
+          </div>
+
+          <!-- Top Passengers Table -->
+          <div class="p-4 mt-2">
+            <h3 class="text-lg font-semibold text-gray-800 mb-3">Top Passengers</h3>
+
+            <?php if (!empty($top_passengers)): ?>
+              <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                  <thead class="bg-gray-50">
+                    <tr>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passenger</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bookings</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Booking</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody class="bg-white divide-y divide-gray-200">
+                    <?php foreach ($top_passengers as $passenger): ?>
+                      <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <div class="flex items-center">
+                            <div class="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-teal-100 text-teal-800">
+                              <?php echo strtoupper(substr($passenger['full_name'], 0, 1)); ?>
+                            </div>
+                            <div class="ml-4">
+                              <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($passenger['full_name']); ?></div>
+                            </div>
+                          </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <div class="text-sm text-gray-500"><?php echo htmlspecialchars($passenger['email']); ?></div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            <?php echo $passenger['booking_count']; ?> bookings
+                          </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <?php echo formatDate($passenger['last_booking']); ?>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <a href="view-user.php?id=<?php echo $passenger['id']; ?>" class="text-teal-600 hover:text-teal-900">View Profile</a>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+              <div class="text-right mt-4">
+                <a href="view-users.php" class="text-sm text-teal-600 hover:text-teal-800">View All Passengers <i class="fas fa-arrow-right ml-1"></i></a>
+              </div>
+            <?php else: ?>
+              <p class="text-gray-500 text-center py-4">No passenger data available.</p>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <!-- NEW: Recent Bookings Section with activity timeline -->
+        <div class="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+          <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
+            <h2 class="text-lg font-bold text-gray-800">Recent Booking Activity</h2>
+            <a href="view-bookings.php" class="text-teal-600 hover:text-teal-800">
+              <i class="fas fa-list mr-1"></i> View All Bookings
+            </a>
+          </div>
+
+          <div class="p-4">
+            <?php if (!empty($recent_bookings)): ?>
+              <div class="flow-root">
+                <ul role="list" class="-mb-8">
+                  <?php foreach ($recent_bookings as $index => $booking): ?>
+                    <li>
+                      <div class="relative pb-8">
+                        <?php if ($index !== count($recent_bookings) - 1): ?>
+                          <span class="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+                        <?php endif; ?>
+                        <div class="relative flex space-x-3">
+                          <div>
+                            <?php
+                            $status_colors = [
+                              'confirmed' => 'bg-green-500',
+                              'pending' => 'bg-yellow-500',
+                              'cancelled' => 'bg-red-500',
+                              'completed' => 'bg-blue-500'
+                            ];
+                            $status_color = isset($status_colors[strtolower($booking['booking_status'])]) ?
+                              $status_colors[strtolower($booking['booking_status'])] : 'bg-gray-400';
+                            ?>
+                            <span class="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white <?php echo $status_color; ?>">
+                              <i class="fas fa-ticket-alt text-white"></i>
+                            </span>
+                          </div>
+                          <div class="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
+                            <div>
+                              <p class="text-sm text-gray-500">
+                                <a href="view-user.php?id=<?php echo $booking['passenger_id']; ?>" class="font-medium text-gray-900">
+                                  <?php echo htmlspecialchars($booking['passenger_name']); ?>
+                                </a> booked
+                                <a href="view-flight-details.php?id=<?php echo $booking['flight_id']; ?>" class="font-medium text-teal-600 hover:text-teal-800">
+                                  flight <?php echo htmlspecialchars($booking['flight_number']); ?>
+                                </a>
+                                from <?php echo htmlspecialchars($booking['departure_city']); ?> to
+                                <?php echo htmlspecialchars($booking['arrival_city']); ?>
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                  <?php echo ucfirst(htmlspecialchars($booking['seat_class'])); ?> Class
+                                </span>
+                              </p>
+                            </div>
+                            <div class="text-right text-sm whitespace-nowrap text-gray-500">
+                              <span class="whitespace-nowrap"><?php echo formatDate($booking['booking_date']); ?></span>
+                              <div class="text-xs mt-1">
+                                <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                <?php
+                                switch (strtolower($booking['booking_status'])) {
+                                  case 'confirmed':
+                                    echo 'bg-green-100 text-green-800';
+                                    break;
+                                  case 'pending':
+                                    echo 'bg-yellow-100 text-yellow-800';
+                                    break;
+                                  case 'cancelled':
+                                    echo 'bg-red-100 text-red-800';
+                                    break;
+                                  case 'completed':
+                                    echo 'bg-blue-100 text-blue-800';
+                                    break;
+                                  default:
+                                    echo 'bg-gray-100 text-gray-800';
+                                }
+                                ?>">
+                                  <?php echo ucfirst(htmlspecialchars($booking['booking_status'])); ?>
+                                </span>
+                                <span class="ml-1 text-gray-600">$<?php echo number_format($booking['booking_price'], 2); ?></span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  <?php endforeach; ?>
+                </ul>
+              </div>
+            <?php else: ?>
+              <p class="text-gray-500 text-center py-8">No recent booking activity found.</p>
+            <?php endif; ?>
+          </div>
+        </div>
+
         <!-- Filter Section -->
         <div class="bg-white rounded-lg shadow-md overflow-hidden mb-6">
           <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
@@ -594,6 +905,53 @@ $arrival_cities = getUniqueValues($conn, 'flights', 'arrival_city');
                               <i class="fas fa-users mr-1"></i> <?php echo $flight['booking_count']; ?> Booking<?php echo $flight['booking_count'] > 1 ? 's' : ''; ?>
                             </span>
                           </div>
+
+                          <!-- NEW: Passenger List Toggle Button -->
+                          <div class="mt-2">
+                            <button onclick="toggleUserList('<?php echo $flight['id']; ?>')" class="text-blue-600 hover:text-blue-800 text-xs underline">
+                              <i class="fas fa-users mr-1"></i> View Booked Passengers
+                            </button>
+
+                            <div id="user-list-<?php echo $flight['id']; ?>" class="hidden mt-2 max-h-40 overflow-y-auto user-list bg-white p-2" style="scrollbar-width: thin;">
+                              <?php
+                              // Parse the booked users string
+                              $booked_users_str = isset($flight['booked_users']) ? $flight['booked_users'] : '';
+                              $booked_users = [];
+
+                              if (!empty($booked_users_str)) {
+                                $users_array = explode('||', $booked_users_str);
+                                foreach ($users_array as $user_str) {
+                                  $user_parts = explode(':', $user_str);
+                                  if (count($user_parts) >= 3) {
+                                    $booked_users[] = [
+                                      'id' => $user_parts[0],
+                                      'name' => $user_parts[1],
+                                      'email' => $user_parts[2]
+                                    ];
+                                  }
+                                }
+                              }
+
+                              if (!empty($booked_users)):
+                              ?>
+                                <div class="space-y-1">
+                                  <?php foreach ($booked_users as $user): ?>
+                                    <a href="view-user.php?id=<?php echo $user['id']; ?>" class="flex items-center p-2 rounded-md hover:bg-gray-100 transition-colors">
+                                      <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal-100 text-teal-800 mr-2">
+                                        <?php echo strtoupper(substr($user['name'], 0, 1)); ?>
+                                      </span>
+                                      <div class="flex flex-col">
+                                        <span class="text-xs font-medium"><?php echo htmlspecialchars($user['name']); ?></span>
+                                        <span class="text-xs text-gray-500"><?php echo htmlspecialchars($user['email']); ?></span>
+                                      </div>
+                                    </a>
+                                  <?php endforeach; ?>
+                                </div>
+                              <?php else: ?>
+                                <p class="text-xs text-gray-500 italic">No passenger details available.</p>
+                              <?php endif; ?>
+                            </div>
+                          </div>
                         <?php endif; ?>
                       </td>
                       <td class="px-6 py-4">
@@ -722,7 +1080,7 @@ $arrival_cities = getUniqueValues($conn, 'flights', 'arrival_city');
                         <!-- Outbound schedule -->
                         <div class="flex items-center text-sm text-gray-900 mb-1">
                           <i class="fas fa-plane-departure text-gray-400 mr-1"></i>
-                          <?php echo date('M d, Y', strtotime($flight['departure_date'])); ?>
+                          <?php echo formatDate($flight['departure_date']); ?>
                           <span class="text-xs ml-2"><?php echo date('h:i A', strtotime($flight['departure_time'])); ?></span>
                         </div>
 
@@ -738,7 +1096,7 @@ $arrival_cities = getUniqueValues($conn, 'flights', 'arrival_city');
                         <?php if ($has_return && !empty($return_flight_data['return_date'])): ?>
                           <div class="flex items-center text-sm text-gray-900 mt-3 pt-2 border-t border-gray-100">
                             <i class="fas fa-plane-arrival text-gray-400 mr-1"></i>
-                            <?php echo date('M d, Y', strtotime($return_flight_data['return_date'])); ?>
+                            <?php echo formatDate($return_flight_data['return_date']); ?>
                             <?php if (!empty($return_flight_data['return_time'])): ?>
                               <span class="text-xs ml-2"><?php echo date('h:i A', strtotime($return_flight_data['return_time'])); ?></span>
                             <?php endif; ?>
@@ -792,6 +1150,74 @@ $arrival_cities = getUniqueValues($conn, 'flights', 'arrival_city');
   </div>
 
   <?php include 'includes/js-links.php'; ?>
+
+  <!-- JavaScript Section -->
+  <script>
+    // Toggle user list for each flight
+    function toggleUserList(flightId) {
+      const userList = document.getElementById(`user-list-${flightId}`);
+
+      // Close any other open user lists first
+      document.querySelectorAll('[id^="user-list-"]').forEach(el => {
+        if (el.id !== `user-list-${flightId}`) {
+          el.classList.add('hidden');
+        }
+      });
+
+      // Toggle the selected user list
+      if (userList.classList.contains('hidden')) {
+        userList.classList.remove('hidden');
+
+        // Add a slight animation
+        userList.style.opacity = '0';
+        userList.style.transform = 'translateY(-10px)';
+
+        setTimeout(() => {
+          userList.style.opacity = '1';
+          userList.style.transform = 'translateY(0)';
+        }, 50);
+      } else {
+        // Add closing animation
+        userList.style.opacity = '0';
+        userList.style.transform = 'translateY(-10px)';
+
+        setTimeout(() => {
+          userList.classList.add('hidden');
+        }, 200);
+      }
+    }
+
+    // Add click listener to close user lists when clicking outside
+    document.addEventListener('click', function(event) {
+      const isUserListButton = event.target.closest('button') &&
+        event.target.closest('button').onclick &&
+        event.target.closest('button').onclick.toString().includes('toggleUserList');
+
+      const isInsideUserList = event.target.closest('[id^="user-list-"]');
+
+      if (!isUserListButton && !isInsideUserList) {
+        document.querySelectorAll('[id^="user-list-"]').forEach(el => {
+          el.classList.add('hidden');
+        });
+      }
+    });
+
+    // Initialize any date pickers
+    document.addEventListener('DOMContentLoaded', function() {
+      // Add any initialization code here
+
+      // Highlight flights with bookings
+      document.querySelectorAll('.has-bookings').forEach(row => {
+        row.addEventListener('mouseover', function() {
+          this.style.backgroundColor = '#fff7ed';
+        });
+
+        row.addEventListener('mouseout', function() {
+          this.style.backgroundColor = '#fffbeb';
+        });
+      });
+    });
+  </script>
 </body>
 
 </html>
