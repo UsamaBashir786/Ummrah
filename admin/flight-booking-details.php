@@ -71,14 +71,14 @@ $departure_datetime = DateTime::createFromFormat(
   'Y-m-d H:i:s',
   $booking['departure_date'] . ' ' . $booking['departure_time']
 );
-$formatted_departure = $departure_datetime ? $departure_datetime->format('F d, Y h:i A') : 'N/A';
+$formatted_departure = $departure_datetime ? $departure_datetime->format('F d, Y H:i') : 'N/A';
 
 $arrival_datetime = null;
 $formatted_arrival = 'N/A';
 if ($departure_datetime && !empty($booking['flight_duration'])) {
   $arrival_datetime = clone $departure_datetime;
   $arrival_datetime->modify("+{$booking['flight_duration']} hours");
-  $formatted_arrival = $arrival_datetime->format('F d, Y h:i A');
+  $formatted_arrival = $arrival_datetime->format('F d, Y H:i');
 }
 
 // Format duration
@@ -367,7 +367,7 @@ if (isset($_POST['update_payment'])) {
                     <div class="ticket-segment text-center">
                       <div class="text-2xl font-bold text-gray-800"><?php echo htmlspecialchars($booking['departure_city']); ?></div>
                       <div class="text-base font-medium text-teal-600 mt-1">
-                        <?php echo $departure_datetime ? $departure_datetime->format('h:i A') : 'N/A'; ?>
+                        <?php echo $departure_datetime ? $departure_datetime->format('H:i') : 'N/A'; ?>
                       </div>
                       <div class="text-xs text-gray-500">
                         <?php echo $departure_datetime ? $departure_datetime->format('d M Y') : 'N/A'; ?>
@@ -376,7 +376,7 @@ if (isset($_POST['update_payment'])) {
                     <div class="ticket-segment text-center">
                       <div class="text-2xl font-bold text-gray-800"><?php echo htmlspecialchars($booking['arrival_city']); ?></div>
                       <div class="text-base font-medium text-teal-600 mt-1">
-                        <?php echo $arrival_datetime ? $arrival_datetime->format('h:i A') : 'N/A'; ?>
+                        <?php echo $arrival_datetime ? $arrival_datetime->format('H:i') : 'N/A'; ?>
                       </div>
                       <div class="text-xs text-gray-500">
                         <?php echo $arrival_datetime ? $arrival_datetime->format('d M Y') : 'N/A'; ?>

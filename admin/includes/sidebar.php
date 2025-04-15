@@ -102,8 +102,8 @@
         <i class="fas fa-chevron-down text-sm transition-transform duration-200"></i>
       </button>
       <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="transportation-dropdown">
-        <a href="view-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">View Transportation</a>
-        <a href="add-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Transportation</a>
+        <a href="view-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Manage Transportation</a>
+        <!-- <a href="add-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Transportation</a> -->
         <a href="booked-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">booked transportation</a>
       </div>
     </div>

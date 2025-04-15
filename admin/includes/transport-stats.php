@@ -419,7 +419,7 @@ $is_filtered = ($filter_type || $search_query || $year_filter || $route_filter);
         </div>
         <div class="flex justify-between items-center">
           <span class="text-white text-opacity-80">Total Price Value:</span>
-          <span class="text-2xl font-bold">SAR <?php echo number_format($transport_stats['combined']['total_price'], 2); ?></span>
+          <span class="text-2xl font-bold">PKR <?php echo number_format($transport_stats['combined']['total_price'], 2); ?></span>
         </div>
       </div>
     </div>
@@ -451,7 +451,7 @@ $is_filtered = ($filter_type || $search_query || $year_filter || $route_filter);
         </div>
         <div class="flex justify-between items-center">
           <span class="text-gray-600">Total Price Value:</span>
-          <span class="text-xl font-bold text-teal-600">SAR <?php echo number_format($transport_stats['taxi']['total_price'], 2); ?></span>
+          <span class="text-xl font-bold text-teal-600">PKR <?php echo number_format($transport_stats['taxi']['total_price'], 2); ?></span>
         </div>
       </div>
       <div class="mt-4 pt-4 border-t border-gray-200">
@@ -459,15 +459,15 @@ $is_filtered = ($filter_type || $search_query || $year_filter || $route_filter);
         <div class="grid grid-cols-3 gap-2 text-center">
           <div class="bg-gray-100 rounded p-2">
             <div class="text-xs text-gray-500">Camry/Sonata</div>
-            <div class="font-semibold text-teal-600">SAR <?php echo number_format($transport_stats['taxi']['total_camry_price'], 2); ?></div>
+            <div class="font-semibold text-teal-600">PKR <?php echo number_format($transport_stats['taxi']['total_camry_price'], 2); ?></div>
           </div>
           <div class="bg-gray-100 rounded p-2">
             <div class="text-xs text-gray-500">Starex/Staria</div>
-            <div class="font-semibold text-teal-600">SAR <?php echo number_format($transport_stats['taxi']['total_starex_price'], 2); ?></div>
+            <div class="font-semibold text-teal-600">PKR <?php echo number_format($transport_stats['taxi']['total_starex_price'], 2); ?></div>
           </div>
           <div class="bg-gray-100 rounded p-2">
             <div class="text-xs text-gray-500">Hiace</div>
-            <div class="font-semibold text-teal-600">SAR <?php echo number_format($transport_stats['taxi']['total_hiace_price'], 2); ?></div>
+            <div class="font-semibold text-teal-600">PKR <?php echo number_format($transport_stats['taxi']['total_hiace_price'], 2); ?></div>
           </div>
         </div>
       </div>
@@ -500,7 +500,7 @@ $is_filtered = ($filter_type || $search_query || $year_filter || $route_filter);
         </div>
         <div class="flex justify-between items-center">
           <span class="text-gray-600">Total Price Value:</span>
-          <span class="text-xl font-bold text-blue-600">SAR <?php echo number_format($transport_stats['rentacar']['total_price'], 2); ?></span>
+          <span class="text-xl font-bold text-blue-600">PKR <?php echo number_format($transport_stats['rentacar']['total_price'], 2); ?></span>
         </div>
       </div>
       <div class="mt-4 pt-4 border-t border-gray-200">
@@ -508,15 +508,15 @@ $is_filtered = ($filter_type || $search_query || $year_filter || $route_filter);
         <div class="grid grid-cols-3 gap-2 text-center">
           <div class="bg-gray-100 rounded p-2">
             <div class="text-xs text-gray-500">GMC 16-19</div>
-            <div class="font-semibold text-blue-600">SAR <?php echo number_format($transport_stats['rentacar']['total_gmc_16_19_price'], 2); ?></div>
+            <div class="font-semibold text-blue-600">PKR <?php echo number_format($transport_stats['rentacar']['total_gmc_16_19_price'], 2); ?></div>
           </div>
           <div class="bg-gray-100 rounded p-2">
             <div class="text-xs text-gray-500">GMC 22-23</div>
-            <div class="font-semibold text-blue-600">SAR <?php echo number_format($transport_stats['rentacar']['total_gmc_22_23_price'], 2); ?></div>
+            <div class="font-semibold text-blue-600">PKR <?php echo number_format($transport_stats['rentacar']['total_gmc_22_23_price'], 2); ?></div>
           </div>
           <div class="bg-gray-100 rounded p-2">
             <div class="text-xs text-gray-500">Coaster</div>
-            <div class="font-semibold text-blue-600">SAR <?php echo number_format($transport_stats['rentacar']['total_coaster_price'], 2); ?></div>
+            <div class="font-semibold text-blue-600">PKR <?php echo number_format($transport_stats['rentacar']['total_coaster_price'], 2); ?></div>
           </div>
         </div>
       </div>
@@ -556,9 +556,9 @@ $is_filtered = ($filter_type || $search_query || $year_filter || $route_filter);
                   <tr>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><?php echo $route['route_number']; ?></td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?php echo $route['route_name']; ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">SAR <?php echo number_format($route['camry_sonata_price'], 2); ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">SAR <?php echo number_format($route['starex_staria_price'], 2); ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">SAR <?php echo number_format($route['hiace_price'], 2); ?></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">PKR <?php echo number_format($route['camry_sonata_price'], 2); ?></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">PKR <?php echo number_format($route['starex_staria_price'], 2); ?></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">PKR <?php echo number_format($route['hiace_price'], 2); ?></td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>
@@ -601,9 +601,9 @@ $is_filtered = ($filter_type || $search_query || $year_filter || $route_filter);
                   <tr>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><?php echo $route['route_number']; ?></td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?php echo $route['route_name']; ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">SAR <?php echo number_format($route['gmc_16_19_price'], 2); ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">SAR <?php echo number_format($route['gmc_22_23_price'], 2); ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">SAR <?php echo number_format($route['coaster_price'], 2); ?></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">PKR <?php echo number_format($route['gmc_16_19_price'], 2); ?></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">PKR <?php echo number_format($route['gmc_22_23_price'], 2); ?></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">PKR <?php echo number_format($route['coaster_price'], 2); ?></td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>

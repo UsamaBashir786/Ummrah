@@ -111,8 +111,8 @@ if ($result && $result->num_rows > 0) {
           </div>
         </div>
         <div class="flex items-center">
-          <a href="add-user.php" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center">
-            <i class="fas fa-plus mr-2"></i> Add User
+          <a href="index.php" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center">
+            <i class="fas fa-arrow-left mr-2"></i> Back
           </a>
         </div>
       </div>

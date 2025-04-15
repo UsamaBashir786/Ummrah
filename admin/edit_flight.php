@@ -411,7 +411,6 @@ $has_stops = ($stops === "direct") ? 0 : 1;
                 </div>
               </div>
             </div>
-
             <!-- Schedule and Duration -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
@@ -420,8 +419,94 @@ $has_stops = ($stops === "direct") ? 0 : 1;
               </div>
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Departure Time <span class="text-red-500">*</span></label>
-                <input type="time" name="departure_time" class="w-full px-4 py-2 border rounded-lg" value="<?php echo $flight['departure_time']; ?>" required>
+                <input
+                  type="text"
+                  name="departure_time"
+                  class="w-full px-4 py-2 border rounded-lg"
+                  placeholder="HH:MM (24-hour format)"
+                  pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]"
+                  value="<?php echo $flight['departure_time']; ?>"
+                  required>
+                <small class="text-gray-500">Enter time in 24-hour format (00:00 to 23:59)</small>
               </div>
+              <div>
+                <label class="block text-gray-700 font-semibold mb-2">Flight Duration (hours) <span class="text-red-500">*</span></label>
+                <input type="text" name="flight_duration" class="w-full px-4 py-2 border rounded-lg" placeholder="e.g., 5.5" value="<?php echo $flight['flight_duration']; ?>" required>
+              </div>
+            </div>
+
+            <script>
+              document.addEventListener('DOMContentLoaded', function() {
+                // Get the time input
+                const timeInput = document.querySelector('input[name="departure_time"]');
+
+                // Add validation and formatting
+                timeInput.addEventListener('input', function(e) {
+                  let value = e.target.value;
+
+                  // Only allow digits and colon
+                  value = value.replace(/[^0-9:]/g, '');
+
+                  // Auto-add colon after 2 digits if not already there
+                  if (value.length === 2 && !value.includes(':')) {
+                    value += ':';
+                  }
+
+                  // Limit to 5 chars (HH:MM)
+                  if (value.length > 5) {
+                    value = value.substring(0, 5);
+                  }
+
+                  // Validate hours (00-23)
+                  if (value.includes(':') && value.split(':')[0].length === 2) {
+                    const hours = parseInt(value.split(':')[0]);
+                    if (hours > 23) {
+                      value = '23' + value.substring(2);
+                    }
+                  }
+
+                  // Update the input value
+                  e.target.value = value;
+                });
+
+                // Do the same for return time if it exists
+                const returnTimeInput = document.querySelector('input[name="return_time"]');
+                if (returnTimeInput) {
+                  // Apply the same pattern and processing
+                  returnTimeInput.type = 'text';
+                  returnTimeInput.setAttribute('pattern', '([01]?[0-9]|2[0-3]):[0-5][0-9]');
+                  returnTimeInput.setAttribute('placeholder', 'HH:MM (24-hour format)');
+
+                  returnTimeInput.addEventListener('input', function(e) {
+                    let value = e.target.value;
+                    value = value.replace(/[^0-9:]/g, '');
+                    if (value.length === 2 && !value.includes(':')) {
+                      value += ':';
+                    }
+                    if (value.length > 5) {
+                      value = value.substring(0, 5);
+                    }
+                    if (value.includes(':') && value.split(':')[0].length === 2) {
+                      const hours = parseInt(value.split(':')[0]);
+                      if (hours > 23) {
+                        value = '23' + value.substring(2);
+                      }
+                    }
+                    e.target.value = value;
+                  });
+                }
+              });
+            </script>
+            <!-- Schedule and Duration -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label class="block text-gray-700 font-semibold mb-2">Departure Date <span class="text-red-500">*</span></label>
+                <input type="date" name="departure_date" class="w-full px-4 py-2 border rounded-lg" value="<?php echo $flight['departure_date']; ?>" required>
+              </div>
+              <!-- <div>
+                <label class="block text-gray-700 font-semibold mb-2">Departure Time <span class="text-red-500">*</span></label>
+                <input type="time" name="departure_time" class="w-full px-4 py-2 border rounded-lg" value="<?php echo $flight['departure_time']; ?>" required>
+              </div> -->
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Flight Duration (hours) <span class="text-red-500">*</span></label>
                 <input type="text" name="flight_duration" class="w-full px-4 py-2 border rounded-lg" placeholder="e.g., 5.5" value="<?php echo $flight['flight_duration'] ?? ''; ?>" required>
@@ -781,6 +866,143 @@ $has_stops = ($stops === "direct") ? 0 : 1;
           toggleReturnStopsSection(true);
         }
       }
+    });
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const flightForm = document.getElementById('flightForm');
+
+      // Validate Departure Date
+      const departureDateInput = document.querySelector('input[name="departure_date"]');
+      const returnDateInput = document.querySelector('input[name="return_date"]');
+
+      // Set min date to today
+      const today = new Date().toISOString().split('T')[0];
+      departureDateInput.setAttribute('min', today);
+
+      if (returnDateInput) {
+        returnDateInput.setAttribute('min', today);
+      }
+
+      // Validate Flight Duration
+      const flightDurationInput = document.querySelector('input[name="flight_duration"]');
+      const returnFlightDurationInput = document.querySelector('input[name="return_flight_duration"]');
+
+      function validateFlightDuration(input) {
+        input.addEventListener('input', function() {
+          const duration = parseFloat(this.value);
+          if (duration > 8) {
+            this.setCustomValidity('Flight duration cannot exceed 8 hours');
+            this.reportValidity();
+          } else if (duration <= 0) {
+            this.setCustomValidity('Flight duration must be a positive number');
+            this.reportValidity();
+          } else {
+            this.setCustomValidity('');
+          }
+        });
+      }
+
+      validateFlightDuration(flightDurationInput);
+      if (returnFlightDurationInput) {
+        validateFlightDuration(returnFlightDurationInput);
+      }
+
+      // Validate Distance
+      const distanceInput = document.querySelector('input[name="distance"]');
+
+      distanceInput.addEventListener('input', function() {
+        const distance = parseFloat(this.value);
+        // Typical long-haul flight distance range (approximately 3000-6000 km)
+        if (distance > 6000 || distance <= 0) {
+          this.setCustomValidity('Distance must be between 1 and 6000 km');
+          this.reportValidity();
+        } else {
+          this.setCustomValidity('');
+        }
+      });
+
+      // Validate Pricing
+      const economyPriceInput = document.querySelector('input[name="economy_price"]');
+      const businessPriceInput = document.querySelector('input[name="business_price"]');
+      const firstClassPriceInput = document.querySelector('input[name="first_class_price"]');
+
+      function validatePricing() {
+        const economyPrice = parseFloat(economyPriceInput.value);
+        const businessPrice = parseFloat(businessPriceInput.value);
+        const firstClassPrice = parseFloat(firstClassPriceInput.value);
+
+        // Validate prices are positive
+        if (economyPrice <= 0 || businessPrice <= 0 || firstClassPrice <= 0) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Invalid Pricing',
+            text: 'Prices must be positive numbers',
+            confirmButtonText: 'OK'
+          });
+          return false;
+        }
+
+        // Validate price hierarchy
+        if (businessPrice <= economyPrice || firstClassPrice <= businessPrice) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Invalid Pricing',
+            text: 'Prices must increase: Economy < Business < First Class',
+            confirmButtonText: 'OK'
+          });
+          return false;
+        }
+
+        return true;
+      }
+
+      // Validate Seats
+      const economySeatsInput = document.querySelector('input[name="economy_seats"]');
+      const businessSeatsInput = document.querySelector('input[name="business_seats"]');
+      const firstClassSeatsInput = document.querySelector('input[name="first_class_seats"]');
+
+      function validateSeats() {
+        const validateSeatInput = (input, className) => {
+          const seats = parseInt(input.value);
+
+          // Check if seats are a reasonable number for a typical aircraft
+          if (seats <= 0 || seats > 500) {
+            input.setCustomValidity(`Invalid number of ${className} seats`);
+            input.reportValidity();
+            return false;
+          }
+
+          input.setCustomValidity('');
+          return true;
+        };
+
+        const economyValid = validateSeatInput(economySeatsInput, 'economy');
+        const businessValid = validateSeatInput(businessSeatsInput, 'business');
+        const firstClassValid = validateSeatInput(firstClassSeatsInput, 'first class');
+
+        return economyValid && businessValid && firstClassValid;
+      }
+
+      // Form submission validation
+      flightForm.addEventListener('submit', function(event) {
+        // Stop form submission if validations fail
+        if (!validatePricing() || !validateSeats()) {
+          event.preventDefault();
+        }
+
+        // Additional validations already handled by HTML5 validation and previous event listeners
+      });
+
+      // Optional: Real-time price validation on input
+      [economyPriceInput, businessPriceInput, firstClassPriceInput].forEach(input => {
+        input.addEventListener('change', validatePricing);
+      });
+
+      // Optional: Real-time seats validation on input
+      [economySeatsInput, businessSeatsInput, firstClassSeatsInput].forEach(input => {
+        input.addEventListener('change', validateSeats);
+      });
     });
   </script>
 </body>

@@ -1081,7 +1081,7 @@ function formatDate($date_string, $format = 'M d, Y')
                         <div class="flex items-center text-sm text-gray-900 mb-1">
                           <i class="fas fa-plane-departure text-gray-400 mr-1"></i>
                           <?php echo formatDate($flight['departure_date']); ?>
-                          <span class="text-xs ml-2"><?php echo date('h:i A', strtotime($flight['departure_time'])); ?></span>
+                          <span class="text-xs ml-2 flight-time-display"><?php echo date('H:i', strtotime($flight['departure_time'])); ?></span>
                         </div>
 
                         <!-- Flight duration if available -->
@@ -1098,7 +1098,7 @@ function formatDate($date_string, $format = 'M d, Y')
                             <i class="fas fa-plane-arrival text-gray-400 mr-1"></i>
                             <?php echo formatDate($return_flight_data['return_date']); ?>
                             <?php if (!empty($return_flight_data['return_time'])): ?>
-                              <span class="text-xs ml-2"><?php echo date('h:i A', strtotime($return_flight_data['return_time'])); ?></span>
+                              <span class="text-xs ml-2 flight-time-display"><?php echo date('H:i', strtotime($return_flight_data['return_time'])); ?></span>
                             <?php endif; ?>
                           </div>
 
@@ -1216,6 +1216,97 @@ function formatDate($date_string, $format = 'M d, Y')
           this.style.backgroundColor = '#fffbeb';
         });
       });
+    });
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Function to format time inputs for 24-hour display
+      function setup24HourTimeInput(input) {
+        if (!input) return;
+
+        // Add input event handler for formatting
+        input.addEventListener('input', function(e) {
+          let value = e.target.value;
+
+          // Only allow digits and colon
+          value = value.replace(/[^0-9:]/g, '');
+
+          // Auto-add colon after 2 digits if not already there
+          if (value.length === 2 && !value.includes(':')) {
+            value += ':';
+          }
+
+          // Limit to 5 chars (HH:MM)
+          if (value.length > 5) {
+            value = value.substring(0, 5);
+          }
+
+          // Validate hours (00-23)
+          if (value.includes(':') && value.split(':')[0].length === 2) {
+            const hours = parseInt(value.split(':')[0]);
+            if (hours > 23) {
+              value = '23' + value.substring(2);
+            }
+          }
+
+          // Validate minutes (00-59)
+          if (value.includes(':') && value.split(':')[1] && value.split(':')[1].length === 2) {
+            const minutes = parseInt(value.split(':')[1]);
+            if (minutes > 59) {
+              value = value.split(':')[0] + ':59';
+            }
+          }
+
+          // Update the input value
+          e.target.value = value;
+        });
+
+        // Add blur event to ensure proper format on exit
+        input.addEventListener('blur', function(e) {
+          let value = e.target.value;
+
+          if (value && !value.includes(':')) {
+            // If only hours were entered, add ":00" for minutes
+            if (value.length <= 2) {
+              const hours = parseInt(value);
+              if (hours >= 0 && hours <= 23) {
+                value = hours.toString().padStart(2, '0') + ':00';
+              }
+            }
+          } else if (value.includes(':')) {
+            // If there's a colon, make sure both parts are valid
+            const parts = value.split(':');
+            if (parts[0] && parts[1]) {
+              // Both hours and minutes exist
+              const hours = parseInt(parts[0]);
+              const minutes = parseInt(parts[1]);
+
+              if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+                // Format with leading zeros
+                value = hours.toString().padStart(2, '0') + ':' + minutes.toString().padStart(2, '0');
+              }
+            } else if (parts[0] && parts[1] === '') {
+              // Hours with empty minutes
+              const hours = parseInt(parts[0]);
+              if (!isNaN(hours) && hours >= 0 && hours <= 23) {
+                value = hours.toString().padStart(2, '0') + ':00';
+              }
+            }
+          }
+
+          e.target.value = value;
+        });
+      }
+
+      // Apply to departure time input
+      const departureTimeInput = document.querySelector('input[name="departure_time"]');
+      setup24HourTimeInput(departureTimeInput);
+
+      // Apply to return time input if it exists
+      const returnTimeInput = document.querySelector('input[name="return_time"]');
+      if (returnTimeInput) {
+        setup24HourTimeInput(returnTimeInput);
+      }
     });
   </script>
 </body>

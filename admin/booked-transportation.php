@@ -347,11 +347,11 @@ if (isset($_GET['success'])) {
                         <td class="py-3 px-4">
                           <div class="text-sm text-gray-900"><?php echo htmlspecialchars($booking['route_name']); ?></div>
                           <div class="text-xs text-gray-500 mt-1">
-                            <span class="block truncate max-w-xs" title="<?php echo htmlspecialchars($booking['pickup_location']); ?>">
-                              From: <?php echo htmlspecialchars($booking['pickup_location']); ?>
+                            <span class="block truncate max-w-xs" title="<?php echo isset($booking['pickup_location']) ? htmlspecialchars($booking['pickup_location']) : ''; ?>">
+                              From: <?php echo isset($booking['pickup_location']) ? htmlspecialchars($booking['pickup_location']) : 'N/A'; ?>
                             </span>
-                            <span class="block truncate max-w-xs" title="<?php echo htmlspecialchars($booking['dropoff_location']); ?>">
-                              To: <?php echo htmlspecialchars($booking['dropoff_location']); ?>
+                            <span class="block truncate max-w-xs" title="<?php echo isset($booking['dropoff_location']) ? htmlspecialchars($booking['dropoff_location']) : ''; ?>">
+                              To: <?php echo isset($booking['dropoff_location']) ? htmlspecialchars($booking['dropoff_location']) : 'N/A'; ?>
                             </span>
                           </div>
                         </td>

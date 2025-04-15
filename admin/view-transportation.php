@@ -15,7 +15,15 @@ function getTaxiRoutes()
   global $conn;
   $sql = "SELECT * FROM taxi_routes WHERE year = 2024 ORDER BY route_number";
   $result = $conn->query($sql);
-  return $result->fetch_all(MYSQLI_ASSOC);
+  $routes = array();
+
+  if ($result) {
+    while ($row = $result->fetch_assoc()) {
+      $routes[] = $row;
+    }
+  }
+
+  return $routes;
 }
 
 // Function to get rent a car routes
@@ -24,7 +32,15 @@ function getRentacarRoutes()
   global $conn;
   $sql = "SELECT * FROM rentacar_routes WHERE year = 2024 ORDER BY route_number";
   $result = $conn->query($sql);
-  return $result->fetch_all(MYSQLI_ASSOC);
+  $routes = array();
+
+  if ($result) {
+    while ($row = $result->fetch_assoc()) {
+      $routes[] = $row;
+    }
+  }
+
+  return $routes;
 }
 
 // Handling CRUD operations
@@ -463,9 +479,9 @@ $rentacar_routes = getRentacarRoutes();
                     <tr class="bg-teal-600 text-white">
                       <th class="py-2 px-4 border-b w-16 text-center">#</th>
                       <th class="py-2 px-4 border-b text-left">Route</th>
-                      <th class="py-2 px-4 border-b text-center">Camry / Sonata</th>
-                      <th class="py-2 px-4 border-b text-center">Starex / Staria</th>
-                      <th class="py-2 px-4 border-b text-center">Hiace</th>
+                      <th class="py-2 px-4 border-b text-center">Camry / Sonata (PKR)</th>
+                      <th class="py-2 px-4 border-b text-center">Starex / Staria (PKR)</th>
+                      <th class="py-2 px-4 border-b text-center">Hiace (PKR)</th>
                       <th class="py-2 px-4 border-b w-16 text-center">Action</th>
                     </tr>
                   </thead>
@@ -484,12 +500,15 @@ $rentacar_routes = getRentacarRoutes();
                           </td>
                           <td class="py-2 px-4 border-b">
                             <input type="number" name="camry_price[<?php echo $index; ?>]" value="<?php echo $route['camry_sonata_price']; ?>" min="0" step="0.01" class="price-input w-full text-center" required>
+                            <span class="text-xs text-gray-500">PKR</span>
                           </td>
                           <td class="py-2 px-4 border-b">
                             <input type="number" name="starex_price[<?php echo $index; ?>]" value="<?php echo $route['starex_staria_price']; ?>" min="0" step="0.01" class="price-input w-full text-center" required>
+                            <span class="text-xs text-gray-500">PKR</span>
                           </td>
                           <td class="py-2 px-4 border-b">
                             <input type="number" name="hiace_price[<?php echo $index; ?>]" value="<?php echo $route['hiace_price']; ?>" min="0" step="0.01" class="price-input w-full text-center" required>
+                            <span class="text-xs text-gray-500">PKR</span>
                           </td>
                           <td class="py-2 px-4 border-b text-center">
                             <button type="button" class="text-red-500 hover:text-red-700" onclick="confirmDeleteTaxiRoute(<?php echo $route['id']; ?>)">
@@ -518,9 +537,9 @@ $rentacar_routes = getRentacarRoutes();
                     <tr class="bg-teal-600 text-white">
                       <th class="py-2 px-4 border-b w-16 text-center">#</th>
                       <th class="py-2 px-4 border-b text-left">Route</th>
-                      <th class="py-2 px-4 border-b text-center">Camry / Sonata</th>
-                      <th class="py-2 px-4 border-b text-center">Starex / Staria</th>
-                      <th class="py-2 px-4 border-b text-center">Hiace</th>
+                      <th class="py-2 px-4 border-b text-center">Camry / Sonata (PKR)</th>
+                      <th class="py-2 px-4 border-b text-center">Starex / Staria (PKR)</th>
+                      <th class="py-2 px-4 border-b text-center">Hiace (PKR)</th>
                       <th class="py-2 px-4 border-b w-16 text-center">Action</th>
                     </tr>
                   </thead>
@@ -534,12 +553,15 @@ $rentacar_routes = getRentacarRoutes();
                       </td>
                       <td class="py-2 px-4 border-b">
                         <input type="number" name="new_camry_price[0]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+                        <span class="text-xs text-gray-500">PKR</span>
                       </td>
                       <td class="py-2 px-4 border-b">
                         <input type="number" name="new_starex_price[0]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+                        <span class="text-xs text-gray-500">PKR</span>
                       </td>
                       <td class="py-2 px-4 border-b">
                         <input type="number" name="new_hiace_price[0]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+                        <span class="text-xs text-gray-500">PKR</span>
                       </td>
                       <td class="py-2 px-4 border-b text-center">
                         <button type="button" class="text-red-500 hover:text-red-700 delete-new-row" disabled>
@@ -557,13 +579,13 @@ $rentacar_routes = getRentacarRoutes();
               </div>
 
               <!-- Submit Buttons -->
-              <div class="flex flex-wrap gap-4">
+              <div class="flex flex-wrap gap-4 text-center mx-auto">
                 <button type="submit" class="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700">
                   <i class="fas fa-save mr-2"></i>Save All Changes
                 </button>
-                <a href="transportation-management.php" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 inline-flex items-center">
+                <!-- <a href="transportation-management.php" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 inline-flex items-center">
                   <i class="fas fa-times mr-2"></i>Cancel
-                </a>
+                </a> -->
               </div>
             </form>
           </div>
@@ -607,9 +629,9 @@ $rentacar_routes = getRentacarRoutes();
                     <tr class="bg-blue-600 text-white">
                       <th class="py-2 px-4 border-b w-16 text-center">#</th>
                       <th class="py-2 px-4 border-b text-left">Route</th>
-                      <th class="py-2 px-4 border-b text-center">GMC 16-19</th>
-                      <th class="py-2 px-4 border-b text-center">GMC 22-23</th>
-                      <th class="py-2 px-4 border-b text-center">COASTER</th>
+                      <th class="py-2 px-4 border-b text-center">GMC 16-19 (PKR)</th>
+                      <th class="py-2 px-4 border-b text-center">GMC 22-23 (PKR)</th>
+                      <th class="py-2 px-4 border-b text-center">COASTER (PKR)</th>
                       <th class="py-2 px-4 border-b w-16 text-center">Action</th>
                     </tr>
                   </thead>
@@ -628,12 +650,15 @@ $rentacar_routes = getRentacarRoutes();
                           </td>
                           <td class="py-2 px-4 border-b">
                             <input type="number" name="gmc_16_19_price[<?php echo $index; ?>]" value="<?php echo $route['gmc_16_19_price']; ?>" min="0" step="0.01" class="price-input rentacar-input w-full text-center" required>
+                            <span class="text-xs text-gray-500">PKR</span>
                           </td>
                           <td class="py-2 px-4 border-b">
                             <input type="number" name="gmc_22_23_price[<?php echo $index; ?>]" value="<?php echo $route['gmc_22_23_price']; ?>" min="0" step="0.01" class="price-input rentacar-input w-full text-center" required>
+                            <span class="text-xs text-gray-500">PKR</span>
                           </td>
                           <td class="py-2 px-4 border-b">
                             <input type="number" name="coaster_price[<?php echo $index; ?>]" value="<?php echo $route['coaster_price']; ?>" min="0" step="0.01" class="price-input rentacar-input w-full text-center" required>
+                            <span class="text-xs text-gray-500">PKR</span>
                           </td>
                           <td class="py-2 px-4 border-b text-center">
                             <button type="button" class="text-red-500 hover:text-red-700" onclick="confirmDeleteRentacarRoute(<?php echo $route['id']; ?>)">
@@ -662,9 +687,9 @@ $rentacar_routes = getRentacarRoutes();
                     <tr class="bg-blue-600 text-white">
                       <th class="py-2 px-4 border-b w-16 text-center">#</th>
                       <th class="py-2 px-4 border-b text-left">Route</th>
-                      <th class="py-2 px-4 border-b text-center">GMC 16-19</th>
-                      <th class="py-2 px-4 border-b text-center">GMC 22-23</th>
-                      <th class="py-2 px-4 border-b text-center">COASTER</th>
+                      <th class="py-2 px-4 border-b text-center">GMC 16-19 (PKR)</th>
+                      <th class="py-2 px-4 border-b text-center">GMC 22-23 (PKR)</th>
+                      <th class="py-2 px-4 border-b text-center">COASTER (PKR)</th>
                       <th class="py-2 px-4 border-b w-16 text-center">Action</th>
                     </tr>
                   </thead>
@@ -678,12 +703,15 @@ $rentacar_routes = getRentacarRoutes();
                       </td>
                       <td class="py-2 px-4 border-b">
                         <input type="number" name="new_gmc_16_19_price[0]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+                        <span class="text-xs text-gray-500">PKR</span>
                       </td>
                       <td class="py-2 px-4 border-b">
                         <input type="number" name="new_gmc_22_23_price[0]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+                        <span class="text-xs text-gray-500">PKR</span>
                       </td>
                       <td class="py-2 px-4 border-b">
                         <input type="number" name="new_coaster_price[0]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+                        <span class="text-xs text-gray-500">PKR</span>
                       </td>
                       <td class="py-2 px-4 border-b text-center">
                         <button type="button" class="text-red-500 hover:text-red-700 delete-new-row" disabled>
@@ -794,12 +822,15 @@ $rentacar_routes = getRentacarRoutes();
       </td>
       <td class="py-2 px-4 border-b">
         <input type="number" name="new_camry_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+        <span class="text-xs text-gray-500">PKR</span>
       </td>
       <td class="py-2 px-4 border-b">
         <input type="number" name="new_starex_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+        <span class="text-xs text-gray-500">PKR</span>
       </td>
       <td class="py-2 px-4 border-b">
         <input type="number" name="new_hiace_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input w-full text-center">
+        <span class="text-xs text-gray-500">PKR</span>
       </td>
       <td class="py-2 px-4 border-b text-center">
         <button type="button" class="text-red-500 hover:text-red-700 delete-new-row">
@@ -829,12 +860,15 @@ $rentacar_routes = getRentacarRoutes();
       </td>
       <td class="py-2 px-4 border-b">
         <input type="number" name="new_gmc_16_19_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+        <span class="text-xs text-gray-500">PKR</span>
       </td>
       <td class="py-2 px-4 border-b">
         <input type="number" name="new_gmc_22_23_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+        <span class="text-xs text-gray-500">PKR</span>
       </td>
       <td class="py-2 px-4 border-b">
         <input type="number" name="new_coaster_price[${newIndex}]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+        <span class="text-xs text-gray-500">PKR</span>
       </td>
       <td class="py-2 px-4 border-b text-center">
         <button type="button" class="text-red-500 hover:text-red-700 delete-new-row">
