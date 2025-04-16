@@ -733,9 +733,9 @@ $rentacar_routes = getRentacarRoutes();
                 <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
                   <i class="fas fa-save mr-2"></i>Save All Changes
                 </button>
-                <a href="transportation-management.php" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 inline-flex items-center">
+                <!-- <a href="transportation-management.php" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 inline-flex items-center">
                   <i class="fas fa-times mr-2"></i>Cancel
-                </a>
+                </a> -->
               </div>
             </form>
           </div>

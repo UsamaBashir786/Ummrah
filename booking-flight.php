@@ -510,7 +510,8 @@ if ($flight_details) {
                       <div class="seat <?php echo $seat_status; ?>"
                         data-seat-id="<?php echo htmlspecialchars($seat_id); ?>"
                         data-cabin-class="<?php echo htmlspecialchars($cabin_class); ?>"
-                        <?php echo $is_booked ? 'disabled' : ''; ?>>
+                        <?php echo $is_booked ? 'disabled' : ''; ?>
+                        style="<?php echo $is_booked ? 'background-color: black; color: white; border-color: black;' : ''; ?>">
                         <?php echo htmlspecialchars($seat_id); ?>
                       </div>
                     <?php endforeach; ?>
