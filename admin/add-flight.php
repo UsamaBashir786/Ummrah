@@ -443,8 +443,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label class="block text-gray-700 font-semibold mb-2">
                       Stop City <span class="text-red-500">*</span>
                     </label>
-                    <input type="text" name="stop_city[]" class="stop-city w-full px-4 py-2 border rounded-lg"
-                      maxlength="20" placeholder="e.g., Dubai" required>
+                    <input
+                      type="text"
+                      name="stop_city[]"
+                      class="stop-city w-full px-4 py-2 border rounded-lg"
+                      maxlength="12"
+                      placeholder="e.g., Dubai"
+                      required>
                   </div>
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">
@@ -458,29 +463,46 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                       oninput="validateStopDuration(this)"
                       required>
                   </div>
+                </div>
 
-                  <script>
-                    function validateStopDuration(inputElement) {
-                      let value = inputElement.value;
+                <script>
+                  function validateStopDuration(inputElement) {
+                    let value = inputElement.value;
 
-                      if (!/^[1-5]$/.test(value)) {
-                        inputElement.value = value.replace(/[^1-5]/g, ''); // Only allow numbers 1 to 5
-                      }
-
-                      if (parseInt(value) > 5) {
-                        inputElement.value = "5";
-                      }
+                    if (!/^[1-5]$/.test(value)) {
+                      inputElement.value = value.replace(/[^1-5]/g, ''); // Only allow numbers 1 to 5
                     }
 
-                    // Apply validation to all input elements with class 'stop-duration-input'
-                    document.querySelectorAll('.stop-duration-input').forEach(function(input) {
-                      input.addEventListener('input', function() {
-                        validateStopDuration(input);
-                      });
-                    });
-                  </script>
+                    if (parseInt(value) > 5) {
+                      inputElement.value = "5";
+                    }
+                  }
 
-                </div>
+                  // Apply validation to all input elements with class 'stop-duration-input'
+                  document.querySelectorAll('.stop-duration-input').forEach(function(input) {
+                    input.addEventListener('input', function() {
+                      validateStopDuration(input);
+                    });
+                  });
+
+                  // Allow only letters in Stop City (max 12 characters)
+                  document.addEventListener('input', function(e) {
+                    if (e.target.classList.contains('stop-city')) {
+                      e.target.value = e.target.value.replace(/[^a-zA-Z\s]/g, '').slice(0, 12);
+                    }
+                  });
+
+                  // Dynamically add more stops
+                  document.getElementById('add-stop').addEventListener('click', function() {
+                    const stopRow = document.querySelector('.stop-row').cloneNode(true);
+
+                    stopRow.querySelectorAll('input').forEach(input => {
+                      input.value = '';
+                    });
+
+                    document.getElementById('stops-container').insertBefore(stopRow, this.closest('.flex'));
+                  });
+                </script>
 
                 <div class="flex justify-end">
                   <button type="button" id="add-stop" class="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600">
@@ -489,31 +511,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
               </div>
 
-              <script>
-                // Allow only letters in Stop City and max length 20
-                document.addEventListener('input', function(e) {
-                  if (e.target.classList.contains('stop-city')) {
-                    e.target.value = e.target.value.replace(/[^a-zA-Z\s]/g, '').slice(0, 20);
-                  }
-
-                  if (e.target.classList.contains('stop-duration')) {
-                    let val = parseInt(e.target.value, 10);
-                    if (val > 3) e.target.value = 3;
-                    if (val < 1 && e.target.value !== '') e.target.value = 1;
-                  }
-                });
-
-                // Dynamically add more stops
-                document.getElementById('add-stop').addEventListener('click', function() {
-                  const stopRow = document.querySelector('.stop-row').cloneNode(true);
-
-                  stopRow.querySelectorAll('input').forEach(input => {
-                    input.value = '';
-                  });
-
-                  document.getElementById('stops-container').insertBefore(stopRow, this.closest('.flex'));
-                });
-              </script>
 
             </div>
 
@@ -758,9 +755,40 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <input type="time" name="return_time" class="w-full px-4 py-2 border rounded-lg return-required" required>
                   </div>
                   <div>
-                    <label class="block text-gray-700 font-semibold mb-2">Return Flight Duration (hours) <span class="text-red-500">*</span></label>
-                    <input type="text" name="return_flight_duration" class="w-full px-4 py-2 border rounded-lg return-required" placeholder="e.g., 5.5" required>
+                    <label class="block text-gray-700 font-semibold mb-2">
+                      Return Flight Duration (hours) <span class="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="return_flight_duration"
+                      class="w-full px-4 py-2 border rounded-lg return-duration-input"
+                      placeholder="e.g., 5.5"
+                      required>
                   </div>
+
+                  <script>
+                    function validateReturnFlightDuration(inputElement) {
+                      let value = inputElement.value;
+
+                      // Allow only numbers and one decimal point
+                      if (!/^\d*\.?\d{0,1}$/.test(value)) {
+                        inputElement.value = value.slice(0, -1); // Remove last character if invalid
+                      }
+
+                      // Allow maximum value of 8
+                      if (parseFloat(value) > 8) {
+                        inputElement.value = "8"; // Set value to 8 if it exceeds 8
+                      }
+                    }
+
+                    // Apply validation to all input elements with class 'return-duration-input'
+                    document.querySelectorAll('.return-duration-input').forEach(function(input) {
+                      input.addEventListener('input', function() {
+                        validateReturnFlightDuration(input);
+                      });
+                    });
+                  </script>
+
                 </div>
 
                 <!-- Return Flight Stops -->
@@ -784,11 +812,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div class="return-stop-row grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label class="block text-gray-700 font-semibold mb-2">Return Stop City <span class="text-red-500">*</span></label>
-                        <input type="text" name="return_stop_city[]" class="w-full px-4 py-2 border rounded-lg return-stop-required" placeholder="e.g., Dubai" required>
+                        <input type="text" name="return_stop_city[]" class="w-full px-4 py-2 border rounded-lg return-stop-city" placeholder="e.g., Dubai" maxlength="12" required>
                       </div>
                       <div>
                         <label class="block text-gray-700 font-semibold mb-2">Return Stop Duration (hours) <span class="text-red-500">*</span></label>
-                        <input type="text" name="return_stop_duration[]" class="w-full px-4 py-2 border rounded-lg return-stop-required" placeholder="e.g., 2" required>
+                        <input type="text" name="return_stop_duration[]" class="w-full px-4 py-2 border rounded-lg return-stop-duration" placeholder="e.g., 2" required>
                       </div>
                     </div>
 
@@ -798,6 +826,55 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                       </button>
                     </div>
                   </div>
+
+                  <script>
+                    // Validate Return Stop City (letters and spaces only, max length 12)
+                    function validateReturnStopCity(inputElement) {
+                      let value = inputElement.value;
+                      inputElement.value = value.replace(/[^a-zA-Z\s]/g, '').slice(0, 12); // Allow only letters and spaces, max length 12
+                    }
+
+                    // Validate Return Stop Duration (only numbers 1-5)
+                    function validateReturnStopDuration(inputElement) {
+                      let value = inputElement.value;
+
+                      // Allow only numbers 1 to 5
+                      if (!/^[1-5]$/.test(value)) {
+                        inputElement.value = value.replace(/[^1-5]/g, ''); // Only allow numbers 1 to 5
+                      }
+
+                      // If the number is more than 5, set it to 5
+                      if (parseInt(value) > 5) {
+                        inputElement.value = "5";
+                      }
+                    }
+
+                    // Apply validation to all input elements with class 'return-stop-city'
+                    document.querySelectorAll('.return-stop-city').forEach(function(input) {
+                      input.addEventListener('input', function() {
+                        validateReturnStopCity(input);
+                      });
+                    });
+
+                    // Apply validation to all input elements with class 'return-stop-duration'
+                    document.querySelectorAll('.return-stop-duration').forEach(function(input) {
+                      input.addEventListener('input', function() {
+                        validateReturnStopDuration(input);
+                      });
+                    });
+
+                    // Dynamically add more return stops
+                    document.getElementById('add-return-stop').addEventListener('click', function() {
+                      const returnStopRow = document.querySelector('.return-stop-row').cloneNode(true);
+
+                      returnStopRow.querySelectorAll('input').forEach(input => {
+                        input.value = '';
+                      });
+
+                      document.getElementById('return-stops-container').insertBefore(returnStopRow, this.closest('.flex'));
+                    });
+                  </script>
+
                 </div>
               </div>
             </div>
@@ -930,43 +1007,110 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
               <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <label class="block text-gray-700 font-semibold mb-2">Economy Price ($) <span class="text-red-500">*</span></label>
-                  <input type="number" name="economy_price" class="w-full px-4 py-2 border rounded-lg" placeholder="850" required>
+                  <label class="block text-gray-700 font-semibold mb-2">Economy Price (PKR) <span class="text-red-500">*</span></label>
+                  <input type="number" name="economy_price" class="w-full px-4 py-2 border rounded-lg economy-price" placeholder="242,250" required>
+                  <div class="error-message text-red-500 text-sm hidden">Economy price must be less than Business price.</div>
                 </div>
                 <div>
-                  <label class="block text-gray-700 font-semibold mb-2">Business Price ($) <span class="text-red-500">*</span></label>
-                  <input type="number" name="business_price" class="w-full px-4 py-2 border rounded-lg" placeholder="1500" required>
+                  <label class="block text-gray-700 font-semibold mb-2">Business Price (PKR) <span class="text-red-500">*</span></label>
+                  <input type="number" name="business_price" class="w-full px-4 py-2 border rounded-lg business-price" placeholder="427,500" required>
+                  <div class="error-message text-red-500 text-sm hidden">Business price must be less than First Class price.</div>
                 </div>
                 <div>
-                  <label class="block text-gray-700 font-semibold mb-2">First Class Price ($) <span class="text-red-500">*</span></label>
-                  <input type="number" name="first_class_price" class="w-full px-4 py-2 border rounded-lg" placeholder="2500" required>
+                  <label class="block text-gray-700 font-semibold mb-2">First Class Price (PKR) <span class="text-red-500">*</span></label>
+                  <input type="number" name="first_class_price" class="w-full px-4 py-2 border rounded-lg first-class-price" placeholder="712,500" required>
+                  <div class="error-message text-red-500 text-sm hidden">First Class price cannot be less than Business price.</div>
                 </div>
               </div>
             </div>
 
-            <!-- Capacity Section -->
-            <div class="border-t border-gray-200 pt-6 mt-6">
-              <div class="mb-4">
-                <h2 class="text-xl font-bold text-teal-700">
-                  <i class="fas fa-chair mr-2"></i>Seat Information
-                </h2>
-              </div>
+            <script>
+              // Function to validate pricing and ensure real-time checks within PKR ranges
+              function validatePricing(inputElement, className) {
+                const value = parseInt(inputElement.value);
+                let minAmount, maxAmount;
 
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label class="block text-gray-700 font-semibold mb-2">Economy Seats <span class="text-red-500">*</span></label>
-                  <input type="number" name="economy_seats" class="w-full px-4 py-2 border rounded-lg" placeholder="200" required>
-                </div>
-                <div>
-                  <label class="block text-gray-700 font-semibold mb-2">Business Seats <span class="text-red-500">*</span></label>
-                  <input type="number" name="business_seats" class="w-full px-4 py-2 border rounded-lg" placeholder="30" required>
-                </div>
-                <div>
-                  <label class="block text-gray-700 font-semibold mb-2">First Class Seats <span class="text-red-500">*</span></label>
-                  <input type="number" name="first_class_seats" class="w-full px-4 py-2 border rounded-lg" placeholder="10" required>
-                </div>
-              </div>
-            </div>
+                // Set price limits in PKR based on class
+                if (className === 'economy-price') {
+                  minAmount = 242250; // Minimum PKR for economy
+                  maxAmount = 342000; // Maximum PKR for economy
+                } else if (className === 'business-price') {
+                  minAmount = 427500; // Minimum PKR for business
+                  maxAmount = 513000; // Maximum PKR for business
+                } else if (className === 'first-class-price') {
+                  minAmount = 712500; // Minimum PKR for first class
+                  maxAmount = 855000; // Maximum PKR for first class
+                }
+
+                // Check if the entered value is less than the minimum or greater than the maximum
+                if (value < minAmount) {
+                  inputElement.value = minAmount; // Set to min amount
+                  showError(inputElement, `Price cannot be less than the minimum value of ${minAmount.toLocaleString()} PKR.`);
+                } else if (value > maxAmount) {
+                  inputElement.value = maxAmount; // Set to max amount
+                  showError(inputElement, `Price cannot be greater than the maximum value of ${maxAmount.toLocaleString()} PKR.`);
+                } else {
+                  hideError(inputElement);
+                }
+
+                // Ensure that the pricing follows the rule Economy < Business < First Class
+                const economyPrice = parseInt(document.querySelector('.economy-price').value);
+                const businessPrice = parseInt(document.querySelector('.business-price').value);
+                const firstClassPrice = parseInt(document.querySelector('.first-class-price').value);
+
+                const economyError = document.querySelector('.economy-price + .error-message');
+                const businessError = document.querySelector('.business-price + .error-message');
+                const firstClassError = document.querySelector('.first-class-price + .error-message');
+
+                // If Economy is greater than or equal to Business
+                if (economyPrice >= businessPrice && businessPrice !== 0) {
+                  economyError.textContent = "Economy price must be less than Business price.";
+                  economyError.classList.remove('hidden');
+                } else {
+                  economyError.classList.add('hidden');
+                }
+
+                // If Business is greater than or equal to First Class
+                if (businessPrice >= firstClassPrice && firstClassPrice !== 0) {
+                  businessError.textContent = "Business price must be less than First Class price.";
+                  businessError.classList.remove('hidden');
+                } else {
+                  businessError.classList.add('hidden');
+                }
+
+                // If First Class is greater than or equal to Business
+                if (firstClassPrice <= businessPrice && firstClassPrice !== 0) {
+                  firstClassError.textContent = "First Class price cannot be less than Business price.";
+                  firstClassError.classList.remove('hidden');
+                } else {
+                  firstClassError.classList.add('hidden');
+                }
+              }
+
+              // Function to show error message
+              function showError(inputElement, message) {
+                const errorElement = inputElement.nextElementSibling;
+                errorElement.textContent = message;
+                errorElement.classList.remove('hidden');
+              }
+
+              // Function to hide error message
+              function hideError(inputElement) {
+                const errorElement = inputElement.nextElementSibling;
+                errorElement.classList.add('hidden');
+              }
+
+              // Apply validation on input for all pricing fields
+              document.querySelectorAll('.economy-price, .business-price, .first-class-price').forEach(function(input) {
+                input.addEventListener('input', function() {
+                  validatePricing(input, input.classList.contains('economy-price') ? 'economy-price' :
+                    input.classList.contains('business-price') ? 'business-price' : 'first-class-price');
+                });
+              });
+            </script>
+
+
+
 
             <!-- Flight Notes -->
             <div>
