@@ -1110,13 +1110,65 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </script>
 
 
+            <!-- Capacity Section -->
+            <div class="border-t border-gray-200 pt-6 mt-6">
+              <div class="mb-4">
+                <h2 class="text-xl font-bold text-teal-700">
+                  <i class="fas fa-chair mr-2"></i>Seat Information
+                </h2>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label class="block text-gray-700 font-semibold mb-2">Economy Seats <span class="text-red-500">*</span></label>
+                  <input type="number" name="economy_seats" id="economy_seats" class="w-full px-4 py-2 border rounded-lg" placeholder="200" min="100" max="500" required>
+                </div>
+                <div>
+                  <label class="block text-gray-700 font-semibold mb-2">Business Seats <span class="text-red-500">*</span></label>
+                  <input type="number" name="business_seats" id="business_seats" class="w-full px-4 py-2 border rounded-lg" placeholder="30" min="10" max="100" required>
+                </div>
+                <div>
+                  <label class="block text-gray-700 font-semibold mb-2">First Class Seats <span class="text-red-500">*</span></label>
+                  <input type="number" name="first_class_seats" id="first_class_seats" class="w-full px-4 py-2 border rounded-lg" placeholder="10" min="5" max="50" required>
+                </div>
+              </div>
+            </div>
+
+            <!-- JavaScript Validation -->
+            <script>
+              function enforceLimit(id, min, max) {
+                const input = document.getElementById(id);
+                input.addEventListener('input', function() {
+                  let value = parseInt(this.value);
+                  if (isNaN(value)) return;
+                  if (value < min) this.value = min;
+                  if (value > max) this.value = max;
+                });
+              }
+
+              enforceLimit("economy_seats", 100, 500);
+              enforceLimit("business_seats", 10, 100);
+              enforceLimit("first_class_seats", 5, 50);
+            </script>
 
 
             <!-- Flight Notes -->
             <div>
               <label class="block text-gray-700 font-semibold mb-2">Flight Notes (Optional)</label>
-              <textarea name="flight_notes" class="w-full px-4 py-2 border rounded-lg" rows="3" placeholder="Any additional information about this flight"></textarea>
+              <textarea name="flight_notes" id="flight_notes" class="w-full px-4 py-2 border rounded-lg" rows="3" placeholder="Any additional information about this flight"></textarea>
             </div>
+
+            <!-- JavaScript Validation -->
+            <script>
+              document.getElementById('flight_notes').addEventListener('input', function() {
+                // Allow only letters, numbers, and spaces
+                const cleanText = this.value.replace(/[^a-zA-Z0-9\s]/g, '');
+                if (this.value !== cleanText) {
+                  this.value = cleanText;
+                }
+              });
+            </script>
+
 
             <!-- Submit Buttons -->
             <div class="flex gap-4">
