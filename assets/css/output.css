@@ -5254,6 +5254,11 @@
       color: var(--color-gray-400);
     }
   }
+  .dark\:text-red-400 {
+    @media (prefers-color-scheme: dark) {
+      color: var(--color-red-400);
+    }
+  }
   .dark\:focus\:border-teal-300 {
     @media (prefers-color-scheme: dark) {
       &:focus {
