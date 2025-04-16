@@ -595,7 +595,7 @@ $recent_activities = $activity_stmt->get_result();
                       </div>
                       <div class="mt-3">
                         <button onclick="<?php echo $detail_url; ?>" class="text-blue-600 text-sm hover:text-blue-800 transition">
-                          View Details
+                          <!-- View Details -->
                         </button>
                       </div>
                     </div>
