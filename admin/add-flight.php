@@ -3,16 +3,236 @@ session_name("admin_session");
 session_start();
 include 'connection/connection.php';
 
-// Process form submission
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-  // Uncomment for debugging
-  /*
-    echo "<pre>RAW POST DATA:";
-    print_r($_POST);
-    echo "</pre>";
-    exit();
-    */
+// Handle AJAX validation requests
+if (isset($_POST['validation_check']) && $_POST['validation_check'] === 'true') {
+  $response = array('status' => 'success', 'errors' => array());
 
+  // Extract the field being validated
+  $field_name = $_POST['field_name'] ?? '';
+  $field_value = $_POST['field_value'] ?? '';
+
+  // Validate based on field
+  switch ($field_name) {
+    case 'airline_name':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Airline name is required';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'flight_number':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Flight number is required';
+        $response['status'] = 'error';
+      } else if (!preg_match('/^[A-Z]{2,3}-\d{1,4}$/', $field_value)) {
+        $response['errors'][] = 'Flight number must be in format: 2-3 letters, dash, 1-4 numbers (e.g., PK-309)';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'departure_city':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Departure city is required';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'arrival_city':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Arrival city is required';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'departure_date':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Departure date is required';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'departure_time':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Departure time is required';
+        $response['status'] = 'error';
+      } else if (!preg_match('/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/', $field_value)) {
+        $response['errors'][] = 'Departure time must be in HH:MM (24-hour) format';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'flight_duration':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Flight duration is required';
+        $response['status'] = 'error';
+      } else if (floatval($field_value) <= 0 || floatval($field_value) > 8) {
+        $response['errors'][] = 'Flight duration must be between 0 and 8 hours';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'distance':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Distance is required';
+        $response['status'] = 'error';
+      } else if (intval($field_value) <= 0 || intval($field_value) > 20000) {
+        $response['errors'][] = 'Distance must be between 1 and 20,000 kilometers';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'return_date':
+      if (!empty($_POST['has_return']) && $_POST['has_return'] === '1' && empty($field_value)) {
+        $response['errors'][] = 'Return date is required for round trips';
+        $response['status'] = 'error';
+      }
+      if (!empty($field_value) && !empty($_POST['departure_date'])) {
+        $dep_date = strtotime($_POST['departure_date']);
+        $ret_date = strtotime($field_value);
+        if ($ret_date <= $dep_date) {
+          $response['errors'][] = 'Return date must be after departure date';
+          $response['status'] = 'error';
+        }
+      }
+      break;
+
+    case 'return_time':
+      if (!empty($_POST['has_return']) && $_POST['has_return'] === '1' && empty($field_value)) {
+        $response['errors'][] = 'Return time is required for round trips';
+        $response['status'] = 'error';
+      }
+      if (!empty($field_value) && !preg_match('/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/', $field_value)) {
+        $response['errors'][] = 'Return time must be in HH:MM (24-hour) format';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'return_flight_number':
+      if (!empty($_POST['has_return']) && $_POST['has_return'] === '1' && empty($field_value)) {
+        $response['errors'][] = 'Return flight number is required for round trips';
+        $response['status'] = 'error';
+      }
+      if (!empty($field_value) && !preg_match('/^[A-Z]{2,3}-\d{1,4}$/', $field_value)) {
+        $response['errors'][] = 'Return flight number must be in format: 2-3 letters, dash, 1-4 numbers (e.g., PK-310)';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'return_flight_duration':
+      if (!empty($_POST['has_return']) && $_POST['has_return'] === '1' && empty($field_value)) {
+        $response['errors'][] = 'Return flight duration is required for round trips';
+        $response['status'] = 'error';
+      }
+      if (!empty($field_value) && (floatval($field_value) <= 0 || floatval($field_value) > 8)) {
+        $response['errors'][] = 'Return flight duration must be between 0 and 8 hours';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'economy_price':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Economy price is required';
+        $response['status'] = 'error';
+      } else if (floatval($field_value) < 242250 || floatval($field_value) > 342000) {
+        $response['errors'][] = 'Economy price must be between 242,250 PKR and 342,000 PKR';
+        $response['status'] = 'error';
+      }
+
+      // Check price relationship with business class
+      if (
+        isset($_POST['business_price']) && !empty($_POST['business_price']) &&
+        floatval($field_value) >= floatval($_POST['business_price'])
+      ) {
+        $response['errors'][] = 'Economy price must be less than business price';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'business_price':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Business price is required';
+        $response['status'] = 'error';
+      } else if (floatval($field_value) < 427500 || floatval($field_value) > 513000) {
+        $response['errors'][] = 'Business price must be between 427,500 PKR and 513,000 PKR';
+        $response['status'] = 'error';
+      }
+
+      // Check price relationships
+      if (
+        isset($_POST['economy_price']) && !empty($_POST['economy_price']) &&
+        floatval($field_value) <= floatval($_POST['economy_price'])
+      ) {
+        $response['errors'][] = 'Business price must be greater than economy price';
+        $response['status'] = 'error';
+      }
+
+      if (
+        isset($_POST['first_class_price']) && !empty($_POST['first_class_price']) &&
+        floatval($field_value) >= floatval($_POST['first_class_price'])
+      ) {
+        $response['errors'][] = 'Business price must be less than first class price';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'first_class_price':
+      if (empty($field_value)) {
+        $response['errors'][] = 'First class price is required';
+        $response['status'] = 'error';
+      } else if (floatval($field_value) < 712500 || floatval($field_value) > 855000) {
+        $response['errors'][] = 'First class price must be between 712,500 PKR and 855,000 PKR';
+        $response['status'] = 'error';
+      }
+
+      // Check price relationship with business class
+      if (
+        isset($_POST['business_price']) && !empty($_POST['business_price']) &&
+        floatval($field_value) <= floatval($_POST['business_price'])
+      ) {
+        $response['errors'][] = 'First class price must be greater than business price';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'economy_seats':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Economy seats is required';
+        $response['status'] = 'error';
+      } else if (intval($field_value) < 100 || intval($field_value) > 500) {
+        $response['errors'][] = 'Economy seats must be between 100 and 500';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'business_seats':
+      if (empty($field_value)) {
+        $response['errors'][] = 'Business seats is required';
+        $response['status'] = 'error';
+      } else if (intval($field_value) < 10 || intval($field_value) > 100) {
+        $response['errors'][] = 'Business seats must be between 10 and 100';
+        $response['status'] = 'error';
+      }
+      break;
+
+    case 'first_class_seats':
+      if (empty($field_value)) {
+        $response['errors'][] = 'First class seats is required';
+        $response['status'] = 'error';
+      } else if (intval($field_value) < 5 || intval($field_value) > 50) {
+        $response['errors'][] = 'First class seats must be between 5 and 50';
+        $response['status'] = 'error';
+      }
+      break;
+  }
+
+  // Return JSON response
+  header('Content-Type: application/json');
+  echo json_encode($response);
+  exit;
+}
+
+// Process form submission (your original code with some minor adjustments to work with AJAX)
+if ($_SERVER["REQUEST_METHOD"] == "POST" && !isset($_POST['validation_check'])) {
   $airline_name = trim($_POST['airline_name']);
   $flight_number = trim($_POST['flight_number']);
   $departure_city = trim($_POST['departure_city']);
@@ -20,7 +240,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $departure_date = trim($_POST['departure_date']);
   $departure_time = trim($_POST['departure_time']);
   $flight_duration = trim($_POST['flight_duration']);
-  $distance = trim($_POST['distance'] ?? ''); // New distance field
+  $distance = trim($_POST['distance'] ?? '');
   $flight_notes = trim($_POST['flight_notes'] ?? '');
 
   // Return flight information
@@ -275,6 +495,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <head>
   <?php include 'includes/css-links.php'; ?>
+  <style>
+    .error-feedback {
+      color: #dc3545;
+      font-size: 0.875rem;
+      margin-top: 0.25rem;
+      display: none;
+    }
+
+    .is-invalid {
+      border-color: #dc3545 !important;
+    }
+
+    .is-valid {
+      border-color: #198754 !important;
+    }
+  </style>
 </head>
 
 <body class="bg-gray-50">
@@ -323,7 +559,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Airline Name <span class="text-red-500">*</span></label>
-                <select name="airline_name" class="w-full px-4 py-2 border rounded-lg" required>
+                <select name="airline_name" id="airline_name" class="w-full px-4 py-2 border rounded-lg validate-field" required data-validate="true">
                   <option value="">Select Airline</option>
                   <option value="PIA">PIA Airlines</option>
                   <option value="Emirates">Emirates</option>
@@ -331,92 +567,74 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   <option value="Saudi">Saudi Airlines</option>
                   <option value="Flynas">Flynas Airlines</option>
                 </select>
+                <div class="error-feedback" id="airline_name-error"></div>
               </div>
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">
                   Flight Number <span class="text-red-500">*</span>
                 </label>
-                <input type="text" name="flight_number" id="flight_number"
-                  class="w-full px-4 py-2 border rounded-lg"
-                  placeholder="e.g., PK-309" required maxlength="9" />
-                <small id="flight-error" class="text-red-500 text-sm hidden mt-1">
-                  Format: 2–3 capital letters, dash, 1–4 numbers (e.g., PK-309)
-                </small>
+                <input
+                  type="text"
+                  name="flight_number"
+                  id="flight_number"
+                  class="w-full px-4 py-2 border rounded-lg validate-field"
+                  placeholder="e.g., PK-309"
+                  required
+                  maxlength="9"
+                  data-validate="true" />
+                <div class="error-feedback" id="flight_number-error"></div>
               </div>
-
               <script>
-                const flightInput = document.getElementById('flight_number');
-                const flightError = document.getElementById('flight-error');
+                document.getElementById('flight_number').addEventListener('input', function(e) {
+                  let value = e.target.value;
 
-                flightInput.addEventListener('input', function() {
-                  let raw = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                  let formatted = '';
+                  // Allow only 2-3 English letters at the beginning
+                  value = value.replace(/[^A-Za-z-0-9]/g, ''); // Removes non-alphanumeric characters (except for '-')
 
-                  // Extract letters first
-                  const letters = raw.match(/^[A-Z]{0,3}/)?.[0] || '';
-                  const numbers = raw.slice(letters.length).replace(/\D/g, ''); // Only digits after letters
+                  // Limit the first part to 2-3 letters
+                  let firstPart = value.match(/^[A-Za-z]{0,3}/);
+                  firstPart = firstPart ? firstPart[0] : '';
 
-                  // Auto-insert dash if letters are 2 or 3
-                  if (letters.length >= 2) {
-                    formatted = letters + '-' + numbers;
+                  // Automatically insert dash after the first 2-3 letters
+                  let secondPart = value.slice(firstPart.length).replace(/[^0-9]/g, ''); // Only allow numbers after the dash
+
+                  if (firstPart.length >= 2) {
+                    secondPart = secondPart.slice(0, 3); // Limit to 3 digits after the dash
+                  }
+
+                  // Combine the two parts
+                  e.target.value = firstPart + (firstPart.length >= 2 ? '-' : '') + secondPart;
+
+                  // Provide error message if the input doesn't follow the required format
+                  if (firstPart.length < 2 || secondPart.length < 3) {
+                    document.getElementById('flight_number-error').textContent = "Please enter a valid flight number (e.g., PK-309).";
                   } else {
-                    formatted = letters;
-                  }
-
-                  // Apply formatted value
-                  this.value = formatted;
-
-                  // Validate final format
-                  const validPattern = /^[A-Z]{2,3}-\d{1,4}$/;
-                  if (validPattern.test(formatted)) {
-                    flightError.classList.add('hidden');
-                  } else {
-                    flightError.classList.remove('hidden');
-                  }
-                });
-
-                // Prevent user from typing numbers first
-                flightInput.addEventListener('keypress', function(e) {
-                  const value = this.value.toUpperCase();
-                  const char = e.key.toUpperCase();
-
-                  // Block number if user hasn’t typed 2 letters yet
-                  if (!value.includes('-') && /[0-9]/.test(char)) {
-                    e.preventDefault();
-                  }
-
-                  // Block non-letter characters before dash
-                  if (!value.includes('-') && !/[A-Z]/.test(char)) {
-                    e.preventDefault();
-                  }
-
-                  // After dash, only allow numbers
-                  if (value.includes('-') && !/[0-9]/.test(char)) {
-                    e.preventDefault();
+                    document.getElementById('flight_number-error').textContent = "";
                   }
                 });
               </script>
-
             </div>
 
             <!-- Route Information -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Departure City <span class="text-red-500">*</span></label>
-                <select name="departure_city" class="w-full px-4 py-2 border rounded-lg" required>
+                <select name="departure_city" id="departure_city" class="w-full px-4 py-2 border rounded-lg validate-field" required data-validate="true">
                   <option value="">Select City</option>
                   <option value="Karachi">Karachi</option>
                   <option value="Lahore">Lahore</option>
                   <option value="Islamabad">Islamabad</option>
                 </select>
+                <div class="error-feedback" id="departure_city-error"></div>
               </div>
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Arrival City <span class="text-red-500">*</span></label>
-                <select name="arrival_city" class="w-full px-4 py-2 border rounded-lg" required>
+                <select name="arrival_city" id="arrival_city" class="w-full px-4 py-2 border rounded-lg validate-field" required data-validate="true">
                   <option value="">Select City</option>
                   <option value="Jeddah">Jeddah</option>
                   <option value="Medina">Medina</option>
                 </select>
+                <div class="error-feedback" id="arrival_city-error"></div>
               </div>
             </div>
 
@@ -448,8 +666,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                       name="stop_city[]"
                       class="stop-city w-full px-4 py-2 border rounded-lg"
                       maxlength="12"
-                      placeholder="e.g., Dubai"
-                      required>
+                      placeholder="e.g., Dubai">
                   </div>
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">
@@ -459,50 +676,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                       type="text"
                       name="stop_duration[]"
                       class="stop-duration-input w-full px-4 py-2 border rounded-lg"
-                      placeholder="e.g., 4"
-                      oninput="validateStopDuration(this)"
-                      required>
+                      placeholder="e.g., 4">
                   </div>
                 </div>
-
-                <script>
-                  function validateStopDuration(inputElement) {
-                    let value = inputElement.value;
-
-                    if (!/^[1-5]$/.test(value)) {
-                      inputElement.value = value.replace(/[^1-5]/g, ''); // Only allow numbers 1 to 5
-                    }
-
-                    if (parseInt(value) > 5) {
-                      inputElement.value = "5";
-                    }
-                  }
-
-                  // Apply validation to all input elements with class 'stop-duration-input'
-                  document.querySelectorAll('.stop-duration-input').forEach(function(input) {
-                    input.addEventListener('input', function() {
-                      validateStopDuration(input);
-                    });
-                  });
-
-                  // Allow only letters in Stop City (max 12 characters)
-                  document.addEventListener('input', function(e) {
-                    if (e.target.classList.contains('stop-city')) {
-                      e.target.value = e.target.value.replace(/[^a-zA-Z\s]/g, '').slice(0, 12);
-                    }
-                  });
-
-                  // Dynamically add more stops
-                  document.getElementById('add-stop').addEventListener('click', function() {
-                    const stopRow = document.querySelector('.stop-row').cloneNode(true);
-
-                    stopRow.querySelectorAll('input').forEach(input => {
-                      input.value = '';
-                    });
-
-                    document.getElementById('stops-container').insertBefore(stopRow, this.closest('.flex'));
-                  });
-                </script>
 
                 <div class="flex justify-end">
                   <button type="button" id="add-stop" class="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600">
@@ -510,8 +686,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   </button>
                 </div>
               </div>
-
-
             </div>
 
             <!-- Schedule and Duration -->
@@ -524,100 +698,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   type="date"
                   name="departure_date"
                   id="departure_date"
-                  class="w-full px-4 py-2 border rounded-lg"
+                  class="w-full px-4 py-2 border rounded-lg validate-field"
                   min="1940-01-01"
                   required
+                  data-validate="true"
                   onkeydown="return false;">
+                <div class="error-feedback" id="departure_date-error"></div>
               </div>
-
-              <script>
-                // Force calendar to open on click or focus
-                const dateInput = document.getElementById('departure_date');
-
-                dateInput.addEventListener('focus', function() {
-                  this.showPicker && this.showPicker(); // Modern browser support
-                });
-
-                dateInput.addEventListener('click', function() {
-                  this.showPicker && this.showPicker(); // Re-open on click
-                });
-              </script>
-
-              <!-- Replace your existing time input with this -->
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Departure Time <span class="text-red-500">*</span></label>
                 <input
                   type="text"
                   name="departure_time"
-                  class="w-full px-4 py-2 border rounded-lg"
+                  id="departure_time"
+                  class="w-full px-4 py-2 border rounded-lg validate-field"
                   placeholder="HH:MM (24-hour format)"
                   pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]"
-                  required>
+                  required
+                  data-validate="true">
                 <small class="text-gray-500">Enter time in 24-hour format (00:00 to 23:59)</small>
+                <div class="error-feedback" id="departure_time-error"></div>
               </div>
-
-              <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                  // Get the time input
-                  const timeInput = document.querySelector('input[name="departure_time"]');
-
-                  // Add validation and formatting
-                  timeInput.addEventListener('input', function(e) {
-                    let value = e.target.value;
-
-                    // Only allow digits and colon
-                    value = value.replace(/[^0-9:]/g, '');
-
-                    // Auto-add colon after 2 digits if not already there
-                    if (value.length === 2 && !value.includes(':')) {
-                      value += ':';
-                    }
-
-                    // Limit to 5 chars (HH:MM)
-                    if (value.length > 5) {
-                      value = value.substring(0, 5);
-                    }
-
-                    // Validate hours (00-23)
-                    if (value.includes(':') && value.split(':')[0].length === 2) {
-                      const hours = parseInt(value.split(':')[0]);
-                      if (hours > 23) {
-                        value = '23' + value.substring(2);
-                      }
-                    }
-
-                    // Update the input value
-                    e.target.value = value;
-                  });
-
-                  // Do the same for return time if it exists
-                  const returnTimeInput = document.querySelector('input[name="return_time"]');
-                  if (returnTimeInput) {
-                    // Apply the same pattern and processing
-                    returnTimeInput.type = 'text';
-                    returnTimeInput.setAttribute('pattern', '([01]?[0-9]|2[0-3]):[0-5][0-9]');
-                    returnTimeInput.setAttribute('placeholder', 'HH:MM (24-hour format)');
-
-                    returnTimeInput.addEventListener('input', function(e) {
-                      let value = e.target.value;
-                      value = value.replace(/[^0-9:]/g, '');
-                      if (value.length === 2 && !value.includes(':')) {
-                        value += ':';
-                      }
-                      if (value.length > 5) {
-                        value = value.substring(0, 5);
-                      }
-                      if (value.includes(':') && value.split(':')[0].length === 2) {
-                        const hours = parseInt(value.split(':')[0]);
-                        if (hours > 23) {
-                          value = '23' + value.substring(2);
-                        }
-                      }
-                      e.target.value = value;
-                    });
-                  }
-                });
-              </script>
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">
                   Flight Duration (hours) <span class="text-red-500">*</span>
@@ -626,38 +727,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   type="number"
                   name="flight_duration"
                   id="flight_duration"
-                  class="w-full px-4 py-2 border rounded-lg"
+                  class="w-full px-4 py-2 border rounded-lg validate-field"
                   placeholder="e.g., 5.5"
                   step="0.1"
                   min="0"
                   max="8"
-                  required>
+                  required
+                  data-validate="true">
+                <div class="error-feedback" id="flight_duration-error"></div>
               </div>
-
               <script>
-                const durationInput = document.getElementById('flight_duration');
+                document.getElementById('flight_duration').addEventListener('input', function() {
+                  let inputValue = parseFloat(this.value);
 
-                durationInput.addEventListener('input', function() {
-                  let value = parseFloat(this.value);
-
-                  if (value > 8) {
-                    this.value = 8;
-                  } else if (value < 0) {
-                    this.value = 0;
-                  }
-                });
-
-                durationInput.addEventListener('keydown', function(e) {
-                  const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', '.', 'Enter'];
-                  if (
-                    !allowedKeys.includes(e.key) &&
-                    (isNaN(e.key) || e.key === ' ')
-                  ) {
-                    e.preventDefault();
+                  if (inputValue > 5) {
+                    this.value = 5;
+                    document.getElementById('flight_duration-error').textContent = "Flight duration cannot exceed 5 hours.";
+                  } else {
+                    document.getElementById('flight_duration-error').textContent = "";
                   }
                 });
               </script>
-
             </div>
 
             <!-- Distance Field -->
@@ -669,39 +759,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 type="number"
                 name="distance"
                 id="distance"
-                class="w-full px-4 py-2 border rounded-lg"
+                class="w-full px-4 py-2 border rounded-lg validate-field"
                 placeholder="e.g., 3500"
                 step="1"
                 min="0"
                 max="20000"
-                required>
+                required
+                data-validate="true">
+              <div class="error-feedback" id="distance-error"></div>
             </div>
-
             <script>
-              const distanceInput = document.getElementById('distance');
+              document.getElementById('distance').addEventListener('input', function() {
+                let inputValue = parseInt(this.value);
 
-              distanceInput.addEventListener('input', function() {
-                let value = parseInt(this.value);
-
-                if (value > 20000) {
+                if (inputValue > 20000) {
                   this.value = 20000;
-                } else if (value < 0) {
-                  this.value = 0;
-                }
-              });
-
-              distanceInput.addEventListener('keydown', function(e) {
-                const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Enter'];
-                if (
-                  !allowedKeys.includes(e.key) &&
-                  (isNaN(e.key) || e.key === ' ')
-                ) {
-                  e.preventDefault();
+                  document.getElementById('distance-error').textContent = "Distance cannot exceed 20,000 km.";
+                } else {
+                  document.getElementById('distance-error').textContent = "";
                 }
               });
             </script>
-
-
             <!-- Return Flight Section -->
             <div class="border-t border-gray-200 pt-6 mt-6">
               <div class="mb-4">
@@ -729,7 +807,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">Return Airline <span class="text-red-500">*</span></label>
-                    <select name="return_airline" class="w-full px-4 py-2 border rounded-lg return-required">
+                    <select name="return_airline" id="return_airline" class="w-full px-4 py-2 border rounded-lg return-required validate-field" data-validate="true">
                       <option value="">Select Airline</option>
                       <option value="PIA">PIA Airlines</option>
                       <option value="Emirates">Emirates</option>
@@ -738,57 +816,66 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                       <option value="Flynas">Flynas Airlines</option>
                       <option value="same">Same as Outbound</option>
                     </select>
+                    <div class="error-feedback" id="return_airline-error"></div>
                   </div>
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">Return Flight Number <span class="text-red-500">*</span></label>
-                    <input type="text" name="return_flight_number" class="w-full px-4 py-2 border rounded-lg return-required" placeholder="e.g., PK-310" id="return_flight_number">
+                    <input type="text" name="return_flight_number" id="return_flight_number" class="w-full px-4 py-2 border rounded-lg return-required validate-field" placeholder="e.g., PK-310" data-validate="true" maxlength="7">
+                    <div class="error-feedback" id="return_flight_number-error"></div>
                   </div>
+                  <script>
+                    document.getElementById('return_flight_number').addEventListener('input', function(e) {
+                      let value = e.target.value;
+
+                      // Allow only 2-3 English letters at the beginning
+                      value = value.replace(/[^A-Za-z-0-9]/g, ''); // Removes non-alphanumeric characters (except for '-')
+
+                      // Limit the first part to 2-3 letters
+                      let firstPart = value.match(/^[A-Za-z]{0,3}/);
+                      firstPart = firstPart ? firstPart[0] : '';
+
+                      // Automatically insert dash after the first 2-3 letters
+                      let secondPart = value.slice(firstPart.length).replace(/[^0-9]/g, ''); // Only allow numbers after the dash
+
+                      if (firstPart.length >= 2) {
+                        secondPart = secondPart.slice(0, 3); // Limit to 3 digits after the dash
+                      }
+
+                      // Combine the two parts
+                      e.target.value = firstPart + (firstPart.length >= 2 ? '-' : '') + secondPart;
+
+                      // Provide error message if the input doesn't follow the required format
+                      if (firstPart.length < 2 || secondPart.length < 3) {
+                        document.getElementById('return_flight_number-error').textContent = "Please enter a valid flight number (e.g., PK-310).";
+                      } else {
+                        document.getElementById('return_flight_number-error').textContent = "";
+                      }
+                    });
+                  </script>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">Return Date <span class="text-red-500">*</span></label>
-                    <input type="date" name="return_date" class="w-full px-4 py-2 border rounded-lg return-required" id="return_date" required>
+                    <input type="date" name="return_date" id="return_date" class="w-full px-4 py-2 border rounded-lg return-required validate-field" data-validate="true">
+                    <div class="error-feedback" id="return_date-error"></div>
                   </div>
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">Return Time <span class="text-red-500">*</span></label>
-                    <input type="time" name="return_time" class="w-full px-4 py-2 border rounded-lg return-required" required>
+                    <input type="text" name="return_time" id="return_time" class="w-full px-4 py-2 border rounded-lg return-required validate-field" placeholder="HH:MM (24-hour format)" data-validate="true">
+                    <div class="error-feedback" id="return_time-error"></div>
                   </div>
                   <div>
-                    <label class="block text-gray-700 font-semibold mb-2">
-                      Return Flight Duration (hours) <span class="text-red-500">*</span>
-                    </label>
+                    <label class="block text-gray-700 font-semibold mb-2">Return Flight Duration (hours) <span class="text-red-500">*</span></label>
                     <input
                       type="text"
                       name="return_flight_duration"
-                      class="w-full px-4 py-2 border rounded-lg return-duration-input"
+                      id="return_flight_duration"
+                      class="w-full px-4 py-2 border rounded-lg return-required validate-field return-duration-input"
                       placeholder="e.g., 5.5"
-                      required>
+                      data-validate="true">
+                    <div class="error-feedback" id="return_flight_duration-error"></div>
                   </div>
-
-                  <script>
-                    function validateReturnFlightDuration(inputElement) {
-                      let value = inputElement.value;
-
-                      // Allow only numbers and one decimal point
-                      if (!/^\d*\.?\d{0,1}$/.test(value)) {
-                        inputElement.value = value.slice(0, -1); // Remove last character if invalid
-                      }
-
-                      // Allow maximum value of 8
-                      if (parseFloat(value) > 8) {
-                        inputElement.value = "8"; // Set value to 8 if it exceeds 8
-                      }
-                    }
-
-                    // Apply validation to all input elements with class 'return-duration-input'
-                    document.querySelectorAll('.return-duration-input').forEach(function(input) {
-                      input.addEventListener('input', function() {
-                        validateReturnFlightDuration(input);
-                      });
-                    });
-                  </script>
-
                 </div>
 
                 <!-- Return Flight Stops -->
@@ -812,11 +899,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div class="return-stop-row grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label class="block text-gray-700 font-semibold mb-2">Return Stop City <span class="text-red-500">*</span></label>
-                        <input type="text" name="return_stop_city[]" class="w-full px-4 py-2 border rounded-lg return-stop-city" placeholder="e.g., Dubai" maxlength="12" required>
+                        <input type="text" name="return_stop_city[]" class="w-full px-4 py-2 border rounded-lg return-stop-city" placeholder="e.g., Dubai" maxlength="12">
                       </div>
                       <div>
                         <label class="block text-gray-700 font-semibold mb-2">Return Stop Duration (hours) <span class="text-red-500">*</span></label>
-                        <input type="text" name="return_stop_duration[]" class="w-full px-4 py-2 border rounded-lg return-stop-duration" placeholder="e.g., 2" required>
+                        <input type="text" name="return_stop_duration[]" class="w-full px-4 py-2 border rounded-lg return-stop-duration" placeholder="e.g., 2">
                       </div>
                     </div>
 
@@ -826,176 +913,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                       </button>
                     </div>
                   </div>
-
-                  <script>
-                    // Validate Return Stop City (letters and spaces only, max length 12)
-                    function validateReturnStopCity(inputElement) {
-                      let value = inputElement.value;
-                      inputElement.value = value.replace(/[^a-zA-Z\s]/g, '').slice(0, 12); // Allow only letters and spaces, max length 12
-                    }
-
-                    // Validate Return Stop Duration (only numbers 1-5)
-                    function validateReturnStopDuration(inputElement) {
-                      let value = inputElement.value;
-
-                      // Allow only numbers 1 to 5
-                      if (!/^[1-5]$/.test(value)) {
-                        inputElement.value = value.replace(/[^1-5]/g, ''); // Only allow numbers 1 to 5
-                      }
-
-                      // If the number is more than 5, set it to 5
-                      if (parseInt(value) > 5) {
-                        inputElement.value = "5";
-                      }
-                    }
-
-                    // Apply validation to all input elements with class 'return-stop-city'
-                    document.querySelectorAll('.return-stop-city').forEach(function(input) {
-                      input.addEventListener('input', function() {
-                        validateReturnStopCity(input);
-                      });
-                    });
-
-                    // Apply validation to all input elements with class 'return-stop-duration'
-                    document.querySelectorAll('.return-stop-duration').forEach(function(input) {
-                      input.addEventListener('input', function() {
-                        validateReturnStopDuration(input);
-                      });
-                    });
-
-                    // Dynamically add more return stops
-                    document.getElementById('add-return-stop').addEventListener('click', function() {
-                      const returnStopRow = document.querySelector('.return-stop-row').cloneNode(true);
-
-                      returnStopRow.querySelectorAll('input').forEach(input => {
-                        input.value = '';
-                      });
-
-                      document.getElementById('return-stops-container').insertBefore(returnStopRow, this.closest('.flex'));
-                    });
-                  </script>
-
                 </div>
               </div>
             </div>
-
-            <script>
-              // Toggle the visibility of the Return Flight Section
-              function toggleReturnSection(show) {
-                const returnContainer = document.getElementById('return-container');
-                if (show) {
-                  returnContainer.classList.remove('hidden');
-                } else {
-                  returnContainer.classList.add('hidden');
-                }
-              }
-
-              // Toggle the visibility of the Return Stops Section
-              function toggleReturnStopsSection(show) {
-                const returnStopsContainer = document.getElementById('return-stops-container');
-                if (show) {
-                  returnStopsContainer.classList.remove('hidden');
-                } else {
-                  returnStopsContainer.classList.add('hidden');
-                }
-              }
-
-              // Auto-open date picker when focused or clicked
-              const returnDateInput = document.getElementById('return_date');
-              returnDateInput.addEventListener('focus', () => {
-                returnDateInput.showPicker?.(); // Open calendar immediately on focus (if supported)
-              });
-              returnDateInput.addEventListener('click', () => {
-                returnDateInput.showPicker?.(); // Open calendar on click
-              });
-
-              // IMPROVED Flight Number validation
-              function setupFlightNumberValidation(inputId) {
-                const flightNumberInput = document.getElementById(inputId);
-                if (!flightNumberInput) return;
-
-                flightNumberInput.addEventListener('input', function(e) {
-                  let value = e.target.value.toUpperCase();
-                  let cursorPosition = this.selectionStart;
-                  let oldLength = value.length;
-
-                  // Extract parts: letters before dash, numbers after dash
-                  const parts = value.split('-');
-                  let letters = '';
-                  let numbers = '';
-
-                  // Process the letters part (allow EITHER 2 OR 3 capital letters)
-                  if (parts.length > 0) {
-                    letters = parts[0].replace(/[^A-Z]/g, '');
-                    // Limit to maximum 3 letters
-                    if (letters.length > 3) {
-                      letters = letters.substring(0, 3);
-                    }
-
-                    // Get numbers if dash exists
-                    if (value.includes('-') && parts.length > 1) {
-                      numbers = parts[1].replace(/[^0-9]/g, '');
-                      // Limit to max 3 digits
-                      if (numbers.length > 3) {
-                        numbers = numbers.substring(0, 3);
-                      }
-                    }
-                  }
-
-                  // Build the new formatted value
-                  let newValue = letters;
-
-                  // Auto-add dash when there are EITHER 2 OR 3 letters
-                  if (letters.length >= 2 && letters.length <= 3) {
-                    newValue += '-';
-
-                    // Add numbers if any
-                    if (numbers) {
-                      newValue += numbers;
-                    }
-                  }
-
-                  // Update the input value if changed
-                  if (newValue !== value) {
-                    this.value = newValue;
-
-                    // Adjust cursor position for auto-dash insertion
-                    if (newValue.length !== oldLength) {
-                      const addedDash = (newValue.includes('-') && !value.includes('-'));
-                      if (addedDash && cursorPosition >= letters.length) {
-                        cursorPosition++;
-                      }
-                      this.setSelectionRange(cursorPosition, cursorPosition);
-                    }
-                  }
-                });
-              }
-
-              // Add Return Stop button functionality
-              document.getElementById('add-return-stop').addEventListener('click', function() {
-                const container = document.getElementById('return-stops-container');
-                const stopRows = container.querySelectorAll('.return-stop-row');
-                const newRow = stopRows[0].cloneNode(true);
-
-                // Clear input values in the new row
-                const inputs = newRow.querySelectorAll('input');
-                inputs.forEach(input => {
-                  input.value = '';
-                });
-
-                // Insert before the Add button
-                container.insertBefore(newRow, document.querySelector('#return-stops-container .flex.justify-end'));
-              });
-
-              // Initialize validation for flight number inputs when the page loads
-              document.addEventListener('DOMContentLoaded', function() {
-                // Set up validation for return flight number
-                setupFlightNumberValidation('return_flight_number');
-
-                // If you have an outbound flight number input, uncomment the line below
-                // setupFlightNumberValidation('flight_number');
-              });
-            </script>
 
             <!-- Pricing Section -->
             <div class="border-t border-gray-200 pt-6 mt-6">
@@ -1008,109 +928,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label class="block text-gray-700 font-semibold mb-2">Economy Price (PKR) <span class="text-red-500">*</span></label>
-                  <input type="number" name="economy_price" class="w-full px-4 py-2 border rounded-lg economy-price" placeholder="242,250" required>
-                  <div class="error-message text-red-500 text-sm hidden">Economy price must be less than Business price.</div>
+                  <input type="number" name="economy_price" id="economy_price" class="w-full px-4 py-2 border rounded-lg validate-field economy-price" placeholder="242,250" required data-validate="true">
+                  <div class="error-feedback" id="economy_price-error"></div>
                 </div>
                 <div>
                   <label class="block text-gray-700 font-semibold mb-2">Business Price (PKR) <span class="text-red-500">*</span></label>
-                  <input type="number" name="business_price" class="w-full px-4 py-2 border rounded-lg business-price" placeholder="427,500" required>
-                  <div class="error-message text-red-500 text-sm hidden">Business price must be less than First Class price.</div>
+                  <input type="number" name="business_price" id="business_price" class="w-full px-4 py-2 border rounded-lg validate-field business-price" placeholder="427,500" required data-validate="true">
+                  <div class="error-feedback" id="business_price-error"></div>
                 </div>
                 <div>
                   <label class="block text-gray-700 font-semibold mb-2">First Class Price (PKR) <span class="text-red-500">*</span></label>
-                  <input type="number" name="first_class_price" class="w-full px-4 py-2 border rounded-lg first-class-price" placeholder="712,500" required>
-                  <div class="error-message text-red-500 text-sm hidden">First Class price cannot be less than Business price.</div>
+                  <input type="number" name="first_class_price" id="first_class_price" class="w-full px-4 py-2 border rounded-lg validate-field first-class-price" placeholder="712,500" required data-validate="true">
+                  <div class="error-feedback" id="first_class_price-error"></div>
                 </div>
               </div>
             </div>
 
-            <script>
-              // Function to validate pricing and ensure real-time checks within PKR ranges
-              function validatePricing(inputElement, className) {
-                const value = parseInt(inputElement.value);
-                let minAmount, maxAmount;
-
-                // Set price limits in PKR based on class
-                if (className === 'economy-price') {
-                  minAmount = 242250; // Minimum PKR for economy
-                  maxAmount = 342000; // Maximum PKR for economy
-                } else if (className === 'business-price') {
-                  minAmount = 427500; // Minimum PKR for business
-                  maxAmount = 513000; // Maximum PKR for business
-                } else if (className === 'first-class-price') {
-                  minAmount = 712500; // Minimum PKR for first class
-                  maxAmount = 855000; // Maximum PKR for first class
-                }
-
-                // Check if the entered value is less than the minimum or greater than the maximum
-                if (value < minAmount) {
-                  inputElement.value = minAmount; // Set to min amount
-                  showError(inputElement, `Price cannot be less than the minimum value of ${minAmount.toLocaleString()} PKR.`);
-                } else if (value > maxAmount) {
-                  inputElement.value = maxAmount; // Set to max amount
-                  showError(inputElement, `Price cannot be greater than the maximum value of ${maxAmount.toLocaleString()} PKR.`);
-                } else {
-                  hideError(inputElement);
-                }
-
-                // Ensure that the pricing follows the rule Economy < Business < First Class
-                const economyPrice = parseInt(document.querySelector('.economy-price').value);
-                const businessPrice = parseInt(document.querySelector('.business-price').value);
-                const firstClassPrice = parseInt(document.querySelector('.first-class-price').value);
-
-                const economyError = document.querySelector('.economy-price + .error-message');
-                const businessError = document.querySelector('.business-price + .error-message');
-                const firstClassError = document.querySelector('.first-class-price + .error-message');
-
-                // If Economy is greater than or equal to Business
-                if (economyPrice >= businessPrice && businessPrice !== 0) {
-                  economyError.textContent = "Economy price must be less than Business price.";
-                  economyError.classList.remove('hidden');
-                } else {
-                  economyError.classList.add('hidden');
-                }
-
-                // If Business is greater than or equal to First Class
-                if (businessPrice >= firstClassPrice && firstClassPrice !== 0) {
-                  businessError.textContent = "Business price must be less than First Class price.";
-                  businessError.classList.remove('hidden');
-                } else {
-                  businessError.classList.add('hidden');
-                }
-
-                // If First Class is greater than or equal to Business
-                if (firstClassPrice <= businessPrice && firstClassPrice !== 0) {
-                  firstClassError.textContent = "First Class price cannot be less than Business price.";
-                  firstClassError.classList.remove('hidden');
-                } else {
-                  firstClassError.classList.add('hidden');
-                }
-              }
-
-              // Function to show error message
-              function showError(inputElement, message) {
-                const errorElement = inputElement.nextElementSibling;
-                errorElement.textContent = message;
-                errorElement.classList.remove('hidden');
-              }
-
-              // Function to hide error message
-              function hideError(inputElement) {
-                const errorElement = inputElement.nextElementSibling;
-                errorElement.classList.add('hidden');
-              }
-
-              // Apply validation on input for all pricing fields
-              document.querySelectorAll('.economy-price, .business-price, .first-class-price').forEach(function(input) {
-                input.addEventListener('input', function() {
-                  validatePricing(input, input.classList.contains('economy-price') ? 'economy-price' :
-                    input.classList.contains('business-price') ? 'business-price' : 'first-class-price');
-                });
-              });
-            </script>
-
-
-            <!-- Capacity Section -->
+            <!-- Seat Information -->
             <div class="border-t border-gray-200 pt-6 mt-6">
               <div class="mb-4">
                 <h2 class="text-xl font-bold text-teal-700">
@@ -1121,36 +955,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label class="block text-gray-700 font-semibold mb-2">Economy Seats <span class="text-red-500">*</span></label>
-                  <input type="number" name="economy_seats" id="economy_seats" class="w-full px-4 py-2 border rounded-lg" placeholder="200" min="100" max="500" required>
+                  <input type="number" name="economy_seats" id="economy_seats" class="w-full px-4 py-2 border rounded-lg validate-field" placeholder="200" min="100" max="500" required data-validate="true">
+                  <div class="error-feedback" id="economy_seats-error"></div>
                 </div>
                 <div>
                   <label class="block text-gray-700 font-semibold mb-2">Business Seats <span class="text-red-500">*</span></label>
-                  <input type="number" name="business_seats" id="business_seats" class="w-full px-4 py-2 border rounded-lg" placeholder="30" min="10" max="100" required>
+                  <input type="number" name="business_seats" id="business_seats" class="w-full px-4 py-2 border rounded-lg validate-field" placeholder="30" min="10" max="100" required data-validate="true">
+                  <div class="error-feedback" id="business_seats-error"></div>
                 </div>
                 <div>
                   <label class="block text-gray-700 font-semibold mb-2">First Class Seats <span class="text-red-500">*</span></label>
-                  <input type="number" name="first_class_seats" id="first_class_seats" class="w-full px-4 py-2 border rounded-lg" placeholder="10" min="5" max="50" required>
+                  <input type="number" name="first_class_seats" id="first_class_seats" class="w-full px-4 py-2 border rounded-lg validate-field" placeholder="10" min="5" max="50" required data-validate="true">
+                  <div class="error-feedback" id="first_class_seats-error"></div>
                 </div>
               </div>
             </div>
-
-            <!-- JavaScript Validation -->
-            <script>
-              function enforceLimit(id, min, max) {
-                const input = document.getElementById(id);
-                input.addEventListener('input', function() {
-                  let value = parseInt(this.value);
-                  if (isNaN(value)) return;
-                  if (value < min) this.value = min;
-                  if (value > max) this.value = max;
-                });
-              }
-
-              enforceLimit("economy_seats", 100, 500);
-              enforceLimit("business_seats", 10, 100);
-              enforceLimit("first_class_seats", 5, 50);
-            </script>
-
 
             <!-- Flight Notes -->
             <div>
@@ -1158,21 +977,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               <textarea name="flight_notes" id="flight_notes" class="w-full px-4 py-2 border rounded-lg" rows="3" placeholder="Any additional information about this flight"></textarea>
             </div>
 
-            <!-- JavaScript Validation -->
-            <script>
-              document.getElementById('flight_notes').addEventListener('input', function() {
-                // Allow only letters, numbers, and spaces
-                const cleanText = this.value.replace(/[^a-zA-Z0-9\s]/g, '');
-                if (this.value !== cleanText) {
-                  this.value = cleanText;
-                }
-              });
-            </script>
-
-
             <!-- Submit Buttons -->
             <div class="flex gap-4">
-              <button type="submit" class="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700">
+              <button type="submit" id="submit-btn" class="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700">
                 <i class="fas fa-save mr-2"></i> Save Flight
               </button>
               <button type="reset" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">
@@ -1187,100 +994,247 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
   <?php include 'includes/js-links.php'; ?>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
   <script>
-    // Function to toggle stops section visibility
-    function toggleStopsSection(show) {
-      const stopsContainer = document.getElementById('stops-container');
-      if (show) {
-        stopsContainer.classList.remove('hidden');
-        document.querySelectorAll('input[name="stop_city[]"]').forEach(input => {
-          input.setAttribute('required', 'required');
-        });
-        document.querySelectorAll('input[name="stop_duration[]"]').forEach(input => {
-          input.setAttribute('required', 'required');
-        });
-      } else {
-        stopsContainer.classList.add('hidden');
-        document.querySelectorAll('input[name="stop_city[]"]').forEach(input => {
-          input.removeAttribute('required');
-        });
-        document.querySelectorAll('input[name="stop_duration[]"]').forEach(input => {
-          input.removeAttribute('required');
-        });
-      }
-    }
-
-    // Function to toggle return flight section visibility
-    function toggleReturnSection(show) {
-      const returnContainer = document.getElementById('return-container');
-      const returnRequiredFields = document.querySelectorAll('.return-required');
-
-      if (show) {
-        returnContainer.classList.remove('hidden');
-        returnRequiredFields.forEach(field => {
-          field.setAttribute('required', 'required');
-        });
-      } else {
-        returnContainer.classList.add('hidden');
-        returnRequiredFields.forEach(field => {
-          field.removeAttribute('required');
-        });
-
-        // Also uncheck and disable return stops
-        document.querySelector('input[name="has_return_stops"][value="0"]').checked = true;
-        toggleReturnStopsSection(false);
-      }
-    }
-
-    // Function to toggle return stops section visibility
-    function toggleReturnStopsSection(show) {
-      const returnStopsContainer = document.getElementById('return-stops-container');
-      const returnStopRequiredFields = document.querySelectorAll('.return-stop-required');
-
-      if (show) {
-        returnStopsContainer.classList.remove('hidden');
-        returnStopRequiredFields.forEach(field => {
-          field.setAttribute('required', 'required');
-        });
-      } else {
-        returnStopsContainer.classList.add('hidden');
-        returnStopRequiredFields.forEach(field => {
-          field.removeAttribute('required');
-        });
-      }
-    }
-
-    // Add event listener for the "Add Another Stop" button
     document.addEventListener('DOMContentLoaded', function() {
-      const addStopBtn = document.getElementById('add-stop');
-      const stopsContainer = document.getElementById('stops-container');
+      // Set default date to today
+      const dateField = document.querySelector('input[name="departure_date"]');
+      if (dateField) {
+        const today = new Date();
+        const formattedDate = today.toISOString().split('T')[0];
+        dateField.value = formattedDate;
+      }
 
+      // Function to toggle stops section visibility
+      window.toggleStopsSection = function(show) {
+        const stopsContainer = document.getElementById('stops-container');
+        if (show) {
+          stopsContainer.classList.remove('hidden');
+          document.querySelectorAll('input[name="stop_city[]"]').forEach(input => {
+            input.setAttribute('required', 'required');
+          });
+          document.querySelectorAll('input[name="stop_duration[]"]').forEach(input => {
+            input.setAttribute('required', 'required');
+          });
+        } else {
+          stopsContainer.classList.add('hidden');
+          document.querySelectorAll('input[name="stop_city[]"]').forEach(input => {
+            input.removeAttribute('required');
+          });
+          document.querySelectorAll('input[name="stop_duration[]"]').forEach(input => {
+            input.removeAttribute('required');
+          });
+        }
+      };
+
+      // Function to toggle return flight section visibility
+      window.toggleReturnSection = function(show) {
+        const returnContainer = document.getElementById('return-container');
+        const returnRequiredFields = document.querySelectorAll('.return-required');
+
+        if (show) {
+          returnContainer.classList.remove('hidden');
+          returnRequiredFields.forEach(field => {
+            field.setAttribute('required', 'required');
+          });
+        } else {
+          returnContainer.classList.add('hidden');
+          returnRequiredFields.forEach(field => {
+            field.removeAttribute('required');
+          });
+
+          // Also uncheck and disable return stops
+          document.querySelector('input[name="has_return_stops"][value="0"]').checked = true;
+          toggleReturnStopsSection(false);
+        }
+      };
+
+      // Function to toggle return stops section visibility
+      window.toggleReturnStopsSection = function(show) {
+        const returnStopsContainer = document.getElementById('return-stops-container');
+
+        if (show) {
+          returnStopsContainer.classList.remove('hidden');
+          document.querySelectorAll('input[name="return_stop_city[]"]').forEach(input => {
+            input.setAttribute('required', 'required');
+          });
+          document.querySelectorAll('input[name="return_stop_duration[]"]').forEach(input => {
+            input.setAttribute('required', 'required');
+          });
+        } else {
+          returnStopsContainer.classList.add('hidden');
+          document.querySelectorAll('input[name="return_stop_city[]"]').forEach(input => {
+            input.removeAttribute('required');
+          });
+          document.querySelectorAll('input[name="return_stop_duration[]"]').forEach(input => {
+            input.removeAttribute('required');
+          });
+        }
+      };
+
+      // Flight Number Validation
+      const flightInput = document.getElementById('flight_number');
+      const flightError = document.getElementById('flight_number-error');
+
+      flightInput.addEventListener('input', function() {
+        let raw = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        let formatted = '';
+
+        // Extract letters first
+        const letters = raw.match(/^[A-Z]{0,3}/)?.[0] || '';
+        const numbers = raw.slice(letters.length).replace(/\D/g, ''); // Only digits after letters
+
+        // Auto-insert dash if letters are 2 or 3
+        if (letters.length >= 2) {
+          formatted = letters + '-' + numbers;
+        } else {
+          formatted = letters;
+        }
+
+        // Apply formatted value
+        this.value = formatted;
+
+        // Validate the field
+        validateField(this);
+      });
+
+      // Prevent user from typing numbers first
+      flightInput.addEventListener('keypress', function(e) {
+        const value = this.value.toUpperCase();
+        const char = e.key.toUpperCase();
+
+        // Block number if user hasn't typed 2 letters yet
+        if (!value.includes('-') && /[0-9]/.test(char)) {
+          e.preventDefault();
+        }
+
+        // Block non-letter characters before dash
+        if (!value.includes('-') && !/[A-Z]/.test(char)) {
+          e.preventDefault();
+        }
+
+        // After dash, only allow numbers
+        if (value.includes('-') && !/[0-9]/.test(char)) {
+          e.preventDefault();
+        }
+      });
+
+      // Stop Duration Validation
+      function validateStopDuration(inputElement) {
+        let value = inputElement.value;
+
+        if (!/^[1-5]$/.test(value)) {
+          inputElement.value = value.replace(/[^1-5]/g, ''); // Only allow numbers 1 to 5
+        }
+
+        if (parseInt(value) > 5) {
+          inputElement.value = "5";
+        }
+      }
+
+      // Apply validation to all stop duration inputs
+      document.addEventListener('input', function(e) {
+        if (e.target.classList.contains('stop-duration-input')) {
+          validateStopDuration(e.target);
+        }
+
+        // Allow only letters in Stop City (max 12 characters)
+        if (e.target.classList.contains('stop-city')) {
+          e.target.value = e.target.value.replace(/[^a-zA-Z\s]/g, '').slice(0, 12);
+        }
+      });
+
+      // Dynamically add more stops
+      const addStopBtn = document.getElementById('add-stop');
       addStopBtn.addEventListener('click', function() {
         const stopRow = document.querySelector('.stop-row').cloneNode(true);
-        const inputs = stopRow.querySelectorAll('input');
 
-        // Clear the inputs in the cloned row
-        inputs.forEach(input => {
+        stopRow.querySelectorAll('input').forEach(input => {
           input.value = '';
           if (document.querySelector('input[name="has_stops"]:checked').value === "1") {
             input.setAttribute('required', 'required');
           }
         });
 
-        // Insert the new row before the add button
-        stopsContainer.insertBefore(stopRow, addStopBtn.parentNode);
+        document.getElementById('stops-container').insertBefore(stopRow, this.closest('.flex'));
+      });
+
+      // Return flight number validation
+      const returnFlightInput = document.getElementById('return_flight_number');
+      if (returnFlightInput) {
+        returnFlightInput.addEventListener('input', function() {
+          let raw = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          let formatted = '';
+
+          // Extract letters first
+          const letters = raw.match(/^[A-Z]{0,3}/)?.[0] || '';
+          const numbers = raw.slice(letters.length).replace(/\D/g, ''); // Only digits after letters
+
+          // Auto-insert dash if letters are 2 or 3
+          if (letters.length >= 2) {
+            formatted = letters + '-' + numbers;
+          } else {
+            formatted = letters;
+          }
+
+          // Apply formatted value
+          this.value = formatted;
+
+          // Validate the field
+          validateField(this);
+        });
+
+        // Prevent user from typing numbers first
+        returnFlightInput.addEventListener('keypress', function(e) {
+          const value = this.value.toUpperCase();
+          const char = e.key.toUpperCase();
+
+          // Block number if user hasn't typed 2 letters yet
+          if (!value.includes('-') && /[0-9]/.test(char)) {
+            e.preventDefault();
+          }
+
+          // Block non-letter characters before dash
+          if (!value.includes('-') && !/[A-Z]/.test(char)) {
+            e.preventDefault();
+          }
+
+          // After dash, only allow numbers
+          if (value.includes('-') && !/[0-9]/.test(char)) {
+            e.preventDefault();
+          }
+        });
+      }
+
+      // Return flight duration validation
+      function validateReturnFlightDuration(inputElement) {
+        let value = inputElement.value;
+
+        // Allow only numbers and one decimal point
+        if (!/^\d*\.?\d{0,1}$/.test(value)) {
+          inputElement.value = value.slice(0, -1); // Remove last character if invalid
+        }
+
+        // Allow maximum value of 8
+        if (parseFloat(value) > 8) {
+          inputElement.value = "8"; // Set value to 8 if it exceeds 8
+        }
+      }
+
+      // Apply validation to return duration inputs
+      document.addEventListener('input', function(e) {
+        if (e.target.classList.contains('return-duration-input')) {
+          validateReturnFlightDuration(e.target);
+        }
       });
 
       // Add event listener for the "Add Another Return Stop" button
       const addReturnStopBtn = document.getElementById('add-return-stop');
-      const returnStopsContainer = document.getElementById('return-stops-container');
-
       if (addReturnStopBtn) {
         addReturnStopBtn.addEventListener('click', function() {
           const returnStopRow = document.querySelector('.return-stop-row').cloneNode(true);
           const inputs = returnStopRow.querySelectorAll('input');
 
-          // Clear the inputs in the cloned row
           inputs.forEach(input => {
             input.value = '';
             if (document.querySelector('input[name="has_return_stops"]:checked').value === "1" &&
@@ -1289,10 +1243,79 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
           });
 
-          // Insert the new row before the add button
-          returnStopsContainer.insertBefore(returnStopRow, addReturnStopBtn.parentNode);
+          document.getElementById('return-stops-container').insertBefore(returnStopRow, this.closest('.flex'));
         });
       }
+
+      // Return stop city and duration validation
+      document.addEventListener('input', function(e) {
+        // Validate Return Stop City (letters and spaces only, max length 12)
+        if (e.target.classList.contains('return-stop-city')) {
+          e.target.value = e.target.value.replace(/[^a-zA-Z\s]/g, '').slice(0, 12);
+        }
+
+        // Validate Return Stop Duration (only numbers 1-5)
+        if (e.target.classList.contains('return-stop-duration')) {
+          let value = e.target.value;
+
+          if (!/^[1-5]$/.test(value)) {
+            e.target.value = value.replace(/[^1-5]/g, '');
+          }
+
+          if (parseInt(value) > 5) {
+            e.target.value = "5";
+          }
+        }
+      });
+
+      // Time format validation
+      const timeInputs = document.querySelectorAll('input[name="departure_time"], input[name="return_time"]');
+      timeInputs.forEach(input => {
+        input.addEventListener('input', function(e) {
+          let value = e.target.value;
+
+          // Only allow digits and colon
+          value = value.replace(/[^0-9:]/g, '');
+
+          // Auto-add colon after 2 digits if not already there
+          if (value.length === 2 && !value.includes(':')) {
+            value += ':';
+          }
+
+          // Limit to 5 chars (HH:MM)
+          if (value.length > 5) {
+            value = value.substring(0, 5);
+          }
+
+          // Validate hours (00-23)
+          if (value.includes(':') && value.split(':')[0].length === 2) {
+            const hours = parseInt(value.split(':')[0]);
+            if (hours > 23) {
+              value = '23' + value.substring(2);
+            }
+          }
+
+          // Update the input value
+          e.target.value = value;
+
+          // Validate the field if it has validation
+          if (e.target.classList.contains('validate-field')) {
+            validateField(e.target);
+          }
+        });
+      });
+
+      // Auto-open date pickers
+      const dateInputs = document.querySelectorAll('input[type="date"]');
+      dateInputs.forEach(input => {
+        input.addEventListener('focus', function() {
+          this.showPicker && this.showPicker();
+        });
+
+        input.addEventListener('click', function() {
+          this.showPicker && this.showPicker();
+        });
+      });
 
       // Handle return airline dropdown
       const returnAirlineSelect = document.querySelector('select[name="return_airline"]');
@@ -1323,27 +1346,199 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         });
       }
 
-      // Form validation
-      const flightForm = document.getElementById('flightForm');
-      if (flightForm) {
-        flightForm.addEventListener('submit', function(event) {
-          // Check return date is after departure date if round trip
-          if (document.querySelector('input[name="has_return"]:checked').value === "1") {
-            const departureDate = new Date(document.querySelector('input[name="departure_date"]').value);
-            const returnDate = new Date(document.querySelector('input[name="return_date"]').value);
+      // Flight notes validation
+      document.getElementById('flight_notes').addEventListener('input', function() {
+        // Allow only letters, numbers, and spaces
+        const cleanText = this.value.replace(/[^a-zA-Z0-9\s]/g, '');
+        if (this.value !== cleanText) {
+          this.value = cleanText;
+        }
+      });
 
-            if (returnDate <= departureDate) {
-              event.preventDefault();
-              Swal.fire({
-                icon: 'error',
-                title: 'Invalid Return Date',
-                text: 'Return date must be after departure date',
-                confirmButtonText: 'OK'
-              });
+      // Price validation
+      function validatePricing(inputElement) {
+        const className = inputElement.id;
+        const value = parseInt(inputElement.value);
+        let minAmount, maxAmount;
+
+        // Set price limits in PKR based on class
+        if (className === 'economy_price') {
+          minAmount = 242250; // Minimum PKR for economy
+          maxAmount = 342000; // Maximum PKR for economy
+        } else if (className === 'business_price') {
+          minAmount = 427500; // Minimum PKR for business
+          maxAmount = 513000; // Maximum PKR for business
+        } else if (className === 'first_class_price') {
+          minAmount = 712500; // Minimum PKR for first class
+          maxAmount = 855000; // Maximum PKR for first class
+        }
+
+        // Check if the entered value is less than the minimum or greater than the maximum
+        if (value < minAmount) {
+          inputElement.value = minAmount; // Set to min amount
+        } else if (value > maxAmount) {
+          inputElement.value = maxAmount; // Set to max amount
+        }
+
+        // Validate the field via AJAX
+        validateField(inputElement);
+      }
+
+      // Apply price validation to price inputs
+      document.querySelectorAll('#economy_price, #business_price, #first_class_price').forEach(input => {
+        input.addEventListener('input', function() {
+          validatePricing(this);
+        });
+
+        input.addEventListener('blur', function() {
+          validatePricing(this);
+        });
+      });
+
+      // Seat count validation
+      function validateSeats(inputElement) {
+        const id = inputElement.id;
+        let min, max;
+
+        if (id === 'economy_seats') {
+          min = 100;
+          max = 500;
+        } else if (id === 'business_seats') {
+          min = 10;
+          max = 100;
+        } else if (id === 'first_class_seats') {
+          min = 5;
+          max = 50;
+        }
+
+        let value = parseInt(inputElement.value);
+        if (isNaN(value)) return;
+
+        if (value < min) inputElement.value = min;
+        if (value > max) inputElement.value = max;
+
+        // Validate via AJAX
+        validateField(inputElement);
+      }
+
+      // Apply seat validation
+      document.querySelectorAll('#economy_seats, #business_seats, #first_class_seats').forEach(input => {
+        input.addEventListener('input', function() {
+          validateSeats(this);
+        });
+
+        input.addEventListener('blur', function() {
+          validateSeats(this);
+        });
+      });
+
+      // AJAX validation for fields
+      function validateField(field) {
+        if (!field.dataset.validate) return;
+
+        const fieldName = field.name;
+        const fieldValue = field.value;
+        const errorElement = document.getElementById(`${field.id}-error`);
+
+        // Create FormData object to send all form data for context
+        const formData = new FormData(document.getElementById('flightForm'));
+        formData.append('validation_check', 'true');
+        formData.append('field_name', fieldName);
+        formData.append('field_value', fieldValue);
+
+        // Send AJAX request
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.status === 'error') {
+              field.classList.add('is-invalid');
+              field.classList.remove('is-valid');
+              errorElement.style.display = 'block';
+              errorElement.textContent = data.errors.join(', ');
+            } else {
+              field.classList.remove('is-invalid');
+              field.classList.add('is-valid');
+              errorElement.style.display = 'none';
+              errorElement.textContent = '';
+            }
+          })
+          .catch(error => {
+            console.error('Error validating field:', error);
+          });
+      }
+
+      // Validate all fields on form submission
+      const form = document.getElementById('flightForm');
+      form.addEventListener('submit', function(e) {
+        let hasErrors = false;
+
+        // Validate all required fields
+        document.querySelectorAll('.validate-field').forEach(field => {
+          if (field.required || field.value !== '') {
+            validateField(field);
+
+            // Check if this field has errors
+            const errorElement = document.getElementById(`${field.id}-error`);
+            if (errorElement && errorElement.style.display === 'block') {
+              hasErrors = true;
             }
           }
         });
-      }
+
+        // Special case for return date - check if it's after departure date
+        if (document.querySelector('input[name="has_return"]:checked').value === "1") {
+          const departureDate = new Date(document.querySelector('input[name="departure_date"]').value);
+          const returnDate = new Date(document.querySelector('input[name="return_date"]').value);
+
+          if (returnDate <= departureDate) {
+            e.preventDefault();
+            const returnDateField = document.getElementById('return_date');
+            const returnDateError = document.getElementById('return_date-error');
+
+            returnDateField.classList.add('is-invalid');
+            returnDateField.classList.remove('is-valid');
+            returnDateError.style.display = 'block';
+            returnDateError.textContent = 'Return date must be after departure date';
+
+            hasErrors = true;
+          }
+        }
+
+        // If there are validation errors, prevent form submission
+        if (hasErrors) {
+          e.preventDefault();
+
+          // Scroll to the first error
+          const firstErrorField = document.querySelector('.is-invalid');
+          if (firstErrorField) {
+            firstErrorField.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center'
+            });
+          }
+
+          Swal.fire({
+            icon: 'error',
+            title: 'Validation Error',
+            text: 'Please fix all errors before submitting',
+            confirmButtonText: 'OK'
+          });
+        }
+      });
+
+      // Add event listeners for validation on field change/blur
+      document.querySelectorAll('.validate-field').forEach(field => {
+        field.addEventListener('blur', function() {
+          validateField(this);
+        });
+
+        field.addEventListener('change', function() {
+          validateField(this);
+        });
+      });
     });
   </script>
 </body>

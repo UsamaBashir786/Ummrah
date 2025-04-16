@@ -1067,6 +1067,9 @@
   .table {
     display: table;
   }
+  .table\! {
+    display: table !important;
+  }
   .table-caption {
     display: table-caption;
   }
