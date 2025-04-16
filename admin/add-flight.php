@@ -333,9 +333,70 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </select>
               </div>
               <div>
-                <label class="block text-gray-700 font-semibold mb-2">Flight Number <span class="text-red-500">*</span></label>
-                <input type="text" name="flight_number" class="w-full px-4 py-2 border rounded-lg" placeholder="e.g., PK-309" required>
+                <label class="block text-gray-700 font-semibold mb-2">
+                  Flight Number <span class="text-red-500">*</span>
+                </label>
+                <input type="text" name="flight_number" id="flight_number"
+                  class="w-full px-4 py-2 border rounded-lg"
+                  placeholder="e.g., PK-309" required maxlength="9" />
+                <small id="flight-error" class="text-red-500 text-sm hidden mt-1">
+                  Format: 2–3 capital letters, dash, 1–4 numbers (e.g., PK-309)
+                </small>
               </div>
+
+              <script>
+                const flightInput = document.getElementById('flight_number');
+                const flightError = document.getElementById('flight-error');
+
+                flightInput.addEventListener('input', function() {
+                  let raw = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                  let formatted = '';
+
+                  // Extract letters first
+                  const letters = raw.match(/^[A-Z]{0,3}/)?.[0] || '';
+                  const numbers = raw.slice(letters.length).replace(/\D/g, ''); // Only digits after letters
+
+                  // Auto-insert dash if letters are 2 or 3
+                  if (letters.length >= 2) {
+                    formatted = letters + '-' + numbers;
+                  } else {
+                    formatted = letters;
+                  }
+
+                  // Apply formatted value
+                  this.value = formatted;
+
+                  // Validate final format
+                  const validPattern = /^[A-Z]{2,3}-\d{1,4}$/;
+                  if (validPattern.test(formatted)) {
+                    flightError.classList.add('hidden');
+                  } else {
+                    flightError.classList.remove('hidden');
+                  }
+                });
+
+                // Prevent user from typing numbers first
+                flightInput.addEventListener('keypress', function(e) {
+                  const value = this.value.toUpperCase();
+                  const char = e.key.toUpperCase();
+
+                  // Block number if user hasn’t typed 2 letters yet
+                  if (!value.includes('-') && /[0-9]/.test(char)) {
+                    e.preventDefault();
+                  }
+
+                  // Block non-letter characters before dash
+                  if (!value.includes('-') && !/[A-Z]/.test(char)) {
+                    e.preventDefault();
+                  }
+
+                  // After dash, only allow numbers
+                  if (value.includes('-') && !/[0-9]/.test(char)) {
+                    e.preventDefault();
+                  }
+                });
+              </script>
+
             </div>
 
             <!-- Route Information -->
@@ -379,13 +440,46 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <!-- Initial stop row -->
                 <div class="stop-row grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label class="block text-gray-700 font-semibold mb-2">Stop City <span class="text-red-500">*</span></label>
-                    <input type="text" name="stop_city[]" class="w-full px-4 py-2 border rounded-lg" placeholder="e.g., Dubai">
+                    <label class="block text-gray-700 font-semibold mb-2">
+                      Stop City <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" name="stop_city[]" class="stop-city w-full px-4 py-2 border rounded-lg"
+                      maxlength="20" placeholder="e.g., Dubai" required>
                   </div>
                   <div>
-                    <label class="block text-gray-700 font-semibold mb-2">Stop Duration (hours) <span class="text-red-500">*</span></label>
-                    <input type="text" name="stop_duration[]" class="w-full px-4 py-2 border rounded-lg" placeholder="e.g., 2">
+                    <label class="block text-gray-700 font-semibold mb-2">
+                      Stop Duration (hours) <span class="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="stop_duration[]"
+                      class="stop-duration-input w-full px-4 py-2 border rounded-lg"
+                      placeholder="e.g., 4"
+                      oninput="validateStopDuration(this)"
+                      required>
                   </div>
+
+                  <script>
+                    function validateStopDuration(inputElement) {
+                      let value = inputElement.value;
+
+                      if (!/^[1-5]$/.test(value)) {
+                        inputElement.value = value.replace(/[^1-5]/g, ''); // Only allow numbers 1 to 5
+                      }
+
+                      if (parseInt(value) > 5) {
+                        inputElement.value = "5";
+                      }
+                    }
+
+                    // Apply validation to all input elements with class 'stop-duration-input'
+                    document.querySelectorAll('.stop-duration-input').forEach(function(input) {
+                      input.addEventListener('input', function() {
+                        validateStopDuration(input);
+                      });
+                    });
+                  </script>
+
                 </div>
 
                 <div class="flex justify-end">
@@ -394,14 +488,64 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   </button>
                 </div>
               </div>
+
+              <script>
+                // Allow only letters in Stop City and max length 20
+                document.addEventListener('input', function(e) {
+                  if (e.target.classList.contains('stop-city')) {
+                    e.target.value = e.target.value.replace(/[^a-zA-Z\s]/g, '').slice(0, 20);
+                  }
+
+                  if (e.target.classList.contains('stop-duration')) {
+                    let val = parseInt(e.target.value, 10);
+                    if (val > 3) e.target.value = 3;
+                    if (val < 1 && e.target.value !== '') e.target.value = 1;
+                  }
+                });
+
+                // Dynamically add more stops
+                document.getElementById('add-stop').addEventListener('click', function() {
+                  const stopRow = document.querySelector('.stop-row').cloneNode(true);
+
+                  stopRow.querySelectorAll('input').forEach(input => {
+                    input.value = '';
+                  });
+
+                  document.getElementById('stops-container').insertBefore(stopRow, this.closest('.flex'));
+                });
+              </script>
+
             </div>
 
             <!-- Schedule and Duration -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label class="block text-gray-700 font-semibold mb-2">Departure Date <span class="text-red-500">*</span></label>
-                <input type="date" name="departure_date" class="w-full px-4 py-2 border rounded-lg" required>
+                <label class="block text-gray-700 font-semibold mb-2">
+                  Departure Date <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  name="departure_date"
+                  id="departure_date"
+                  class="w-full px-4 py-2 border rounded-lg"
+                  min="1940-01-01"
+                  required
+                  onkeydown="return false;">
               </div>
+
+              <script>
+                // Force calendar to open on click or focus
+                const dateInput = document.getElementById('departure_date');
+
+                dateInput.addEventListener('focus', function() {
+                  this.showPicker && this.showPicker(); // Modern browser support
+                });
+
+                dateInput.addEventListener('click', function() {
+                  this.showPicker && this.showPicker(); // Re-open on click
+                });
+              </script>
+
               <!-- Replace your existing time input with this -->
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Departure Time <span class="text-red-500">*</span></label>
@@ -478,16 +622,88 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 });
               </script>
               <div>
-                <label class="block text-gray-700 font-semibold mb-2">Flight Duration (hours) <span class="text-red-500">*</span></label>
-                <input type="text" name="flight_duration" class="w-full px-4 py-2 border rounded-lg" placeholder="e.g., 5.5" required>
+                <label class="block text-gray-700 font-semibold mb-2">
+                  Flight Duration (hours) <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  name="flight_duration"
+                  id="flight_duration"
+                  class="w-full px-4 py-2 border rounded-lg"
+                  placeholder="e.g., 5.5"
+                  step="0.1"
+                  min="0"
+                  max="8"
+                  required>
               </div>
+
+              <script>
+                const durationInput = document.getElementById('flight_duration');
+
+                durationInput.addEventListener('input', function() {
+                  let value = parseFloat(this.value);
+
+                  if (value > 8) {
+                    this.value = 8;
+                  } else if (value < 0) {
+                    this.value = 0;
+                  }
+                });
+
+                durationInput.addEventListener('keydown', function(e) {
+                  const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', '.', 'Enter'];
+                  if (
+                    !allowedKeys.includes(e.key) &&
+                    (isNaN(e.key) || e.key === ' ')
+                  ) {
+                    e.preventDefault();
+                  }
+                });
+              </script>
+
             </div>
 
             <!-- Distance Field -->
             <div>
-              <label class="block text-gray-700 font-semibold mb-2">Distance (km) <span class="text-red-500">*</span></label>
-              <input type="text" name="distance" class="w-full px-4 py-2 border rounded-lg" placeholder="e.g., 3500" required>
+              <label class="block text-gray-700 font-semibold mb-2">
+                Distance (km) <span class="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                name="distance"
+                id="distance"
+                class="w-full px-4 py-2 border rounded-lg"
+                placeholder="e.g., 3500"
+                step="1"
+                min="0"
+                max="20000"
+                required>
             </div>
+
+            <script>
+              const distanceInput = document.getElementById('distance');
+
+              distanceInput.addEventListener('input', function() {
+                let value = parseInt(this.value);
+
+                if (value > 20000) {
+                  this.value = 20000;
+                } else if (value < 0) {
+                  this.value = 0;
+                }
+              });
+
+              distanceInput.addEventListener('keydown', function(e) {
+                const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Enter'];
+                if (
+                  !allowedKeys.includes(e.key) &&
+                  (isNaN(e.key) || e.key === ' ')
+                ) {
+                  e.preventDefault();
+                }
+              });
+            </script>
+
 
             <!-- Return Flight Section -->
             <div class="border-t border-gray-200 pt-6 mt-6">
@@ -528,22 +744,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   </div>
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">Return Flight Number <span class="text-red-500">*</span></label>
-                    <input type="text" name="return_flight_number" class="w-full px-4 py-2 border rounded-lg return-required" placeholder="e.g., PK-310">
+                    <input type="text" name="return_flight_number" class="w-full px-4 py-2 border rounded-lg return-required" placeholder="e.g., PK-310" id="return_flight_number">
                   </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">Return Date <span class="text-red-500">*</span></label>
-                    <input type="date" name="return_date" class="w-full px-4 py-2 border rounded-lg return-required">
+                    <input type="date" name="return_date" class="w-full px-4 py-2 border rounded-lg return-required" id="return_date" required>
                   </div>
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">Return Time <span class="text-red-500">*</span></label>
-                    <input type="time" name="return_time" class="w-full px-4 py-2 border rounded-lg return-required">
+                    <input type="time" name="return_time" class="w-full px-4 py-2 border rounded-lg return-required" required>
                   </div>
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">Return Flight Duration (hours) <span class="text-red-500">*</span></label>
-                    <input type="text" name="return_flight_duration" class="w-full px-4 py-2 border rounded-lg return-required" placeholder="e.g., 5.5">
+                    <input type="text" name="return_flight_duration" class="w-full px-4 py-2 border rounded-lg return-required" placeholder="e.g., 5.5" required>
                   </div>
                 </div>
 
@@ -568,11 +784,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div class="return-stop-row grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label class="block text-gray-700 font-semibold mb-2">Return Stop City <span class="text-red-500">*</span></label>
-                        <input type="text" name="return_stop_city[]" class="w-full px-4 py-2 border rounded-lg return-stop-required" placeholder="e.g., Dubai">
+                        <input type="text" name="return_stop_city[]" class="w-full px-4 py-2 border rounded-lg return-stop-required" placeholder="e.g., Dubai" required>
                       </div>
                       <div>
                         <label class="block text-gray-700 font-semibold mb-2">Return Stop Duration (hours) <span class="text-red-500">*</span></label>
-                        <input type="text" name="return_stop_duration[]" class="w-full px-4 py-2 border rounded-lg return-stop-required" placeholder="e.g., 2">
+                        <input type="text" name="return_stop_duration[]" class="w-full px-4 py-2 border rounded-lg return-stop-required" placeholder="e.g., 2" required>
                       </div>
                     </div>
 
@@ -585,6 +801,124 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
               </div>
             </div>
+
+            <script>
+              // Toggle the visibility of the Return Flight Section
+              function toggleReturnSection(show) {
+                const returnContainer = document.getElementById('return-container');
+                if (show) {
+                  returnContainer.classList.remove('hidden');
+                } else {
+                  returnContainer.classList.add('hidden');
+                }
+              }
+
+              // Toggle the visibility of the Return Stops Section
+              function toggleReturnStopsSection(show) {
+                const returnStopsContainer = document.getElementById('return-stops-container');
+                if (show) {
+                  returnStopsContainer.classList.remove('hidden');
+                } else {
+                  returnStopsContainer.classList.add('hidden');
+                }
+              }
+
+              // Auto-open date picker when focused or clicked
+              const returnDateInput = document.getElementById('return_date');
+              returnDateInput.addEventListener('focus', () => {
+                returnDateInput.showPicker?.(); // Open calendar immediately on focus (if supported)
+              });
+              returnDateInput.addEventListener('click', () => {
+                returnDateInput.showPicker?.(); // Open calendar on click
+              });
+
+              // IMPROVED Flight Number validation
+              function setupFlightNumberValidation(inputId) {
+                const flightNumberInput = document.getElementById(inputId);
+                if (!flightNumberInput) return;
+
+                flightNumberInput.addEventListener('input', function(e) {
+                  let value = e.target.value.toUpperCase();
+                  let cursorPosition = this.selectionStart;
+                  let oldLength = value.length;
+
+                  // Extract parts: letters before dash, numbers after dash
+                  const parts = value.split('-');
+                  let letters = '';
+                  let numbers = '';
+
+                  // Process the letters part (allow EITHER 2 OR 3 capital letters)
+                  if (parts.length > 0) {
+                    letters = parts[0].replace(/[^A-Z]/g, '');
+                    // Limit to maximum 3 letters
+                    if (letters.length > 3) {
+                      letters = letters.substring(0, 3);
+                    }
+
+                    // Get numbers if dash exists
+                    if (value.includes('-') && parts.length > 1) {
+                      numbers = parts[1].replace(/[^0-9]/g, '');
+                      // Limit to max 3 digits
+                      if (numbers.length > 3) {
+                        numbers = numbers.substring(0, 3);
+                      }
+                    }
+                  }
+
+                  // Build the new formatted value
+                  let newValue = letters;
+
+                  // Auto-add dash when there are EITHER 2 OR 3 letters
+                  if (letters.length >= 2 && letters.length <= 3) {
+                    newValue += '-';
+
+                    // Add numbers if any
+                    if (numbers) {
+                      newValue += numbers;
+                    }
+                  }
+
+                  // Update the input value if changed
+                  if (newValue !== value) {
+                    this.value = newValue;
+
+                    // Adjust cursor position for auto-dash insertion
+                    if (newValue.length !== oldLength) {
+                      const addedDash = (newValue.includes('-') && !value.includes('-'));
+                      if (addedDash && cursorPosition >= letters.length) {
+                        cursorPosition++;
+                      }
+                      this.setSelectionRange(cursorPosition, cursorPosition);
+                    }
+                  }
+                });
+              }
+
+              // Add Return Stop button functionality
+              document.getElementById('add-return-stop').addEventListener('click', function() {
+                const container = document.getElementById('return-stops-container');
+                const stopRows = container.querySelectorAll('.return-stop-row');
+                const newRow = stopRows[0].cloneNode(true);
+
+                // Clear input values in the new row
+                const inputs = newRow.querySelectorAll('input');
+                inputs.forEach(input => {
+                  input.value = '';
+                });
+
+                // Insert before the Add button
+                container.insertBefore(newRow, document.querySelector('#return-stops-container .flex.justify-end'));
+              });
+
+              // Initialize validation for flight number inputs when the page loads
+              document.addEventListener('DOMContentLoaded', function() {
+                // Set up validation for return flight number
+                setupFlightNumberValidation('return_flight_number');
+
+                // If you have an outbound flight number input, uncomment the line below
+                // setupFlightNumberValidation('flight_number');
+              });
+            </script>
 
             <!-- Pricing Section -->
             <div class="border-t border-gray-200 pt-6 mt-6">
@@ -814,143 +1148,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
           }
         });
       }
-    });
-  </script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const flightForm = document.getElementById('flightForm');
-
-      // Validate Departure Date
-      const departureDateInput = document.querySelector('input[name="departure_date"]');
-      const returnDateInput = document.querySelector('input[name="return_date"]');
-
-      // Set min date to today
-      const today = new Date().toISOString().split('T')[0];
-      departureDateInput.setAttribute('min', today);
-
-      if (returnDateInput) {
-        returnDateInput.setAttribute('min', today);
-      }
-
-      // Validate Flight Duration
-      const flightDurationInput = document.querySelector('input[name="flight_duration"]');
-      const returnFlightDurationInput = document.querySelector('input[name="return_flight_duration"]');
-
-      function validateFlightDuration(input) {
-        input.addEventListener('input', function() {
-          const duration = parseFloat(this.value);
-          if (duration > 8) {
-            this.setCustomValidity('Flight duration cannot exceed 8 hours');
-            this.reportValidity();
-          } else if (duration <= 0) {
-            this.setCustomValidity('Flight duration must be a positive number');
-            this.reportValidity();
-          } else {
-            this.setCustomValidity('');
-          }
-        });
-      }
-
-      validateFlightDuration(flightDurationInput);
-      if (returnFlightDurationInput) {
-        validateFlightDuration(returnFlightDurationInput);
-      }
-
-      // Validate Distance
-      const distanceInput = document.querySelector('input[name="distance"]');
-
-      distanceInput.addEventListener('input', function() {
-        const distance = parseFloat(this.value);
-        // Typical long-haul flight distance range (approximately 3000-6000 km)
-        if (distance > 6000 || distance <= 0) {
-          this.setCustomValidity('Distance must be between 1 and 6000 km');
-          this.reportValidity();
-        } else {
-          this.setCustomValidity('');
-        }
-      });
-
-      // Validate Pricing
-      const economyPriceInput = document.querySelector('input[name="economy_price"]');
-      const businessPriceInput = document.querySelector('input[name="business_price"]');
-      const firstClassPriceInput = document.querySelector('input[name="first_class_price"]');
-
-      function validatePricing() {
-        const economyPrice = parseFloat(economyPriceInput.value);
-        const businessPrice = parseFloat(businessPriceInput.value);
-        const firstClassPrice = parseFloat(firstClassPriceInput.value);
-
-        // Validate prices are positive
-        if (economyPrice <= 0 || businessPrice <= 0 || firstClassPrice <= 0) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Invalid Pricing',
-            text: 'Prices must be positive numbers',
-            confirmButtonText: 'OK'
-          });
-          return false;
-        }
-
-        // Validate price hierarchy
-        if (businessPrice <= economyPrice || firstClassPrice <= businessPrice) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Invalid Pricing',
-            text: 'Prices must increase: Economy < Business < First Class',
-            confirmButtonText: 'OK'
-          });
-          return false;
-        }
-
-        return true;
-      }
-
-      // Validate Seats
-      const economySeatsInput = document.querySelector('input[name="economy_seats"]');
-      const businessSeatsInput = document.querySelector('input[name="business_seats"]');
-      const firstClassSeatsInput = document.querySelector('input[name="first_class_seats"]');
-
-      function validateSeats() {
-        const validateSeatInput = (input, className) => {
-          const seats = parseInt(input.value);
-
-          // Check if seats are a reasonable number for a typical aircraft
-          if (seats <= 0 || seats > 500) {
-            input.setCustomValidity(`Invalid number of ${className} seats`);
-            input.reportValidity();
-            return false;
-          }
-
-          input.setCustomValidity('');
-          return true;
-        };
-
-        const economyValid = validateSeatInput(economySeatsInput, 'economy');
-        const businessValid = validateSeatInput(businessSeatsInput, 'business');
-        const firstClassValid = validateSeatInput(firstClassSeatsInput, 'first class');
-
-        return economyValid && businessValid && firstClassValid;
-      }
-
-      // Form submission validation
-      flightForm.addEventListener('submit', function(event) {
-        // Stop form submission if validations fail
-        if (!validatePricing() || !validateSeats()) {
-          event.preventDefault();
-        }
-
-        // Additional validations already handled by HTML5 validation and previous event listeners
-      });
-
-      // Optional: Real-time price validation on input
-      [economyPriceInput, businessPriceInput, firstClassPriceInput].forEach(input => {
-        input.addEventListener('change', validatePricing);
-      });
-
-      // Optional: Real-time seats validation on input
-      [economySeatsInput, businessSeatsInput, firstClassSeatsInput].forEach(input => {
-        input.addEventListener('change', validateSeats);
-      });
     });
   </script>
 </body>
