@@ -59,7 +59,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_transportation'])
 <head>
   <?php include 'includes/css-links.php'; ?>
   <link href="https://unpkg.com/boxicons/css/boxicons.min.css" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.1/gsap.min.js"></script>
+  <script PKRc="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.1/gsap.min.js"></script>
   <style>
     .price-table {
       border-collapse: separate;
@@ -229,9 +229,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_transportation'])
                 <tr>
                   <td><?php echo $route['route_number']; ?></td>
                   <td class="text-left font-medium"><?php echo htmlspecialchars($route['route_name']); ?></td>
-                  <td><?php echo $route['camry_sonata_price']; ?> SR</td>
-                  <td><?php echo $route['starex_staria_price']; ?> SR</td>
-                  <td><?php echo $route['hiace_price']; ?> SR</td>
+                  <td><?php echo $route['camry_sonata_price']; ?> PKR</td>
+                  <td><?php echo $route['starex_staria_price']; ?> PKR</td>
+                  <td><?php echo $route['hiace_price']; ?> PKR</td>
                   <td>
                     <div class="flex flex-wrap justify-center gap-2">
                       <form method="POST" action="">
@@ -308,9 +308,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_transportation'])
                 <tr class="rentacar-row">
                   <td><?php echo $route['route_number']; ?></td>
                   <td class="text-left font-medium"><?php echo htmlspecialchars($route['route_name']); ?></td>
-                  <td><?php echo $route['gmc_16_19_price']; ?> SR</td>
-                  <td><?php echo $route['gmc_22_23_price']; ?> SR</td>
-                  <td><?php echo $route['coaster_price']; ?> SR</td>
+                  <td><?php echo $route['gmc_16_19_price']; ?> PKR</td>
+                  <td><?php echo $route['gmc_22_23_price']; ?> PKR</td>
+                  <td><?php echo $route['coaster_price']; ?> PKR</td>
                   <td>
                     <div class="flex flex-wrap justify-center gap-2">
                       <form method="POST" action="">

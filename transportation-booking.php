@@ -24,15 +24,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_booking'])) {
   // Process form submission
   $service_type = $_POST['service_type'];
   $route_id = $_POST['route_id'];
-  $route_name = $_POST['route_name'];
+  $route_name = $_POST['route_name']; // This comes from the database/pre-selected
   $vehicle_type = $_POST['vehicle_type'];
   $vehicle_name = $_POST['vehicle_name'];
   $base_price = $_POST['base_price'];
   $booking_date = $_POST['booking_date'];
   $booking_time = $_POST['booking_time'];
-  $pickup_location = $_POST['pickup_location'];
+  $pickup_location = $_POST['pickup_location']; // This is entered by user
   $passengers = $_POST['passengers'];
-  $special_requests = $_POST['special_requests'];
+  $special_requests = $_POST['special_requests'] ?? '';
   $duration = isset($_POST['duration']) ? $_POST['duration'] : null;
 
   // Calculate final price based on passengers
@@ -66,58 +66,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_booking'])) {
     $booking_status = "pending";
     $booking_timestamp = date("Y-m-d H:i:s");
 
-    // First verify your table structure with:
-    // SHOW COLUMNS FROM transportation_bookings;
+    // Create a direct SQL query with explicit values for debugging
+    $sql = "INSERT INTO transportation_bookings 
+           (user_id, booking_reference, service_type, route_id, route_name, 
+            vehicle_type, vehicle_name, price, booking_date, booking_time, 
+            pickup_location, passengers, special_requests, duration,
+            booking_status, created_at) 
+           VALUES 
+           ('$user_id', '$booking_reference', '$service_type', '$route_id', '$route_name', 
+            '$vehicle_type', '$vehicle_name', '$price', '$booking_date', '$booking_time', 
+            '$pickup_location', '$passengers', '$special_requests', " . ($duration ? "'$duration'" : "NULL") . ", 
+            '$booking_status', '$booking_timestamp')";
 
-    // Then adjust this query to match exactly
-    $insert_query = "INSERT INTO transportation_bookings 
-                     (user_id, booking_reference, service_type, route_id, route_name, 
-                      vehicle_type, vehicle_name, price, booking_date, booking_time, 
-                      pickup_location, passengers, special_requests, duration,
-                      booking_status, created_at) 
-                     VALUES 
-                     (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-    $stmt = $conn->prepare($insert_query);
-    if (!$stmt) {
-      die("Prepare failed: " . $conn->error);
-    }
-
-    $stmt->bind_param(
-      "issiisssssisssss",
-      $user_id,
-      $booking_reference,
-      $service_type,
-      $route_id,
-      $route_name,
-      $vehicle_type,
-      $vehicle_name,
-      $price,
-      $booking_date,
-      $booking_time,
-      $pickup_location,
-      $passengers,
-      $special_requests,
-      $duration,
-      $booking_status,
-      $booking_timestamp
-    );
-
-    if ($stmt->execute()) {
+    if ($conn->query($sql)) {
       // Booking successful
       $booking_id = $conn->insert_id;
       // Redirect to confirmation page
       header("Location: booking-confirmation.php?booking_id=$booking_id&reference=$booking_reference");
       exit();
     } else {
-      $errors[] = "Database error: " . $stmt->error;
+      $errors[] = "Database error: " . $conn->error;
     }
   }
 } else if (isset($_GET['service_type']) && isset($_GET['route_id']) && isset($_GET['vehicle_type'])) {
   // If coming from price list page with GET parameters
   $service_type = $_GET['service_type'];
   $route_id = $_GET['route_id'];
-  $route_name = $_GET['route_name'] ?? '';
+  $route_name = $_GET['route_name'] ?? '';  // This is from the database
   $vehicle_type = $_GET['vehicle_type'];
   $vehicle_name = $_GET['vehicle_name'] ?? '';
   $base_price = $_GET['price'] ?? 0;
@@ -131,7 +106,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_booking'])) {
   // If coming from price list page with POST parameters
   $service_type = $_POST['service_type'];
   $route_id = $_POST['route_id'];
-  $route_name = $_POST['route_name'] ?? '';
+  $route_name = $_POST['route_name'] ?? '';  // This is from the database
   $vehicle_type = $_POST['vehicle_type'];
   $vehicle_name = $_POST['vehicle_name'] ?? '';
   $base_price = $_POST['price'] ?? 0;
@@ -163,7 +138,7 @@ function generateBookingReference()
 <head>
   <?php include 'includes/css-links.php'; ?>
   <link href="https://unpkg.com/boxicons/css/boxicons.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script PKRc="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
 <body class="bg-gray-50">
@@ -198,7 +173,7 @@ function generateBookingReference()
 
                 <div>
                   <p class="text-sm text-gray-600">Base Price:</p>
-                  <p class="font-medium text-teal-600"><?php echo $base_price; ?> SR</p>
+                  <p class="font-medium text-teal-600"><?php echo $base_price; ?> PKR</p>
                 </div>
 
                 <div>
@@ -219,14 +194,23 @@ function generateBookingReference()
               </div>
             <?php endif; ?>
 
+            <!-- Debug Information - Remove in production -->
+            <?php /*if (true): ?>
+            <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 mb-4 rounded">
+              <h3 class="font-bold">Debug Info:</h3>
+              <p>Route ID: <?php echo $route_id; ?></p>
+              <p>Route Name: <?php echo htmlspecialchars($route_name); ?></p>
+            </div>
+            <?php endif;*/ ?>
+
             <!-- Booking Form -->
             <form method="POST" action="">
-              <input type="hidden" name="service_type" value="<?php echo $service_type; ?>">
-              <input type="hidden" name="route_id" value="<?php echo $route_id; ?>">
+              <input type="hidden" name="service_type" value="<?php echo htmlspecialchars($service_type); ?>">
+              <input type="hidden" name="route_id" value="<?php echo htmlspecialchars($route_id); ?>">
               <input type="hidden" name="route_name" value="<?php echo htmlspecialchars($route_name); ?>">
-              <input type="hidden" name="vehicle_type" value="<?php echo $vehicle_type; ?>">
+              <input type="hidden" name="vehicle_type" value="<?php echo htmlspecialchars($vehicle_type); ?>">
               <input type="hidden" name="vehicle_name" value="<?php echo htmlspecialchars($vehicle_name); ?>">
-              <input type="hidden" name="base_price" value="<?php echo $base_price; ?>">
+              <input type="hidden" name="base_price" value="<?php echo htmlspecialchars($base_price); ?>">
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <!-- User Information (pre-filled, read-only) -->
@@ -246,7 +230,6 @@ function generateBookingReference()
                     class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50" readonly>
                 </div>
               </div>
-
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <!-- Date and Time Selection -->
                 <div>
@@ -294,44 +277,30 @@ function generateBookingReference()
                       minuteIncrement: 5, // Optional: step every 5 minutes
                       defaultHour: 9, // Optional: start at 09:00 by default
                       onChange: function(selectedDates, dateStr, instance) {
-                        // Manually validate the hours and minutes
                         const [hour, minute] = dateStr.split(':').map(Number);
+
+                        // Validate the hour and minute
                         if (hour > 23 || minute > 59) {
                           alert("Please enter a valid time: Hours (0-23) and Minutes (0-59)");
                           instance.clear(); // Clear the input if invalid
                         }
                       }
                     });
-
-                    // Ensure only valid characters are entered (restrict to numbers and colon)
-                    document.querySelector('#booking_time').addEventListener('input', function(e) {
-                      let value = e.target.value;
-
-                      // Allow only digits and the colon symbol
-                      value = value.replace(/[^0-9:]/g, '');
-
-                      // Ensure the length of hour and minute is limited to 2 digits each
-                      const parts = value.split(':');
-
-                      if (parts[0].length > 2) {
-                        value = parts[0].substring(0, 2) + (parts[1] ? ':' + parts[1] : ''); // restrict hours to 2 digits
-                      }
-
-                      if (parts[1] && parts[1].length > 2) {
-                        value = parts[0] + ':' + parts[1].substring(0, 2); // restrict minutes to 2 digits
-                      }
-
-                      // If more than 5 characters (HH:MM), trim to 5
-                      if (value.length > 5) {
-                        value = value.substring(0, 5);
-                      }
-
-                      // Update the value back to the input field
-                      e.target.value = value;
-                    });
                   </script>
 
                 </div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <!-- Date and Time Selection -->
+                <div>
+                  <label class="block text-gray-700 text-sm font-bold mb-2" for="booking_date">
+                    Booking Date *
+                  </label>
+                  <input type="date" id="booking_date" name="booking_date" min="<?php echo date('Y-m-d'); ?>"
+                    value="<?php echo isset($_POST['booking_date']) ? $_POST['booking_date'] : ''; ?>"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+                </div>
+
               </div>
 
               <div class="mb-6">
@@ -364,7 +333,7 @@ function generateBookingReference()
                     Total Price
                   </label>
                   <div class="px-3 py-2 border border-gray-300 rounded-md bg-gray-50">
-                    <span id="priceDisplay"><?php echo $base_price; ?></span> SR
+                    <span id="priceDisplay"><?php echo $base_price; ?></span> PKR
                   </div>
                 </div>
               </div>

@@ -1,0 +1,13 @@
+2025-04-16 06:54:04 - Starting booking process
+GET initialization: route_name=test, vehicle_name=Camry/Sonata
+2025-04-16 06:54:05 - Starting booking process
+GET initialization: route_name=test, vehicle_name=Camry/Sonata
+2025-04-16 06:54:10 - Starting booking process
+GET initialization: route_name=test, vehicle_name=Camry/Sonata
+2025-04-16 06:54:13 - Starting booking process
+GET initialization: route_name=test, vehicle_name=Camry/Sonata
+2025-04-16 06:54:29 - Starting booking process
+POST values: route_name=test, pickup_location=new
+Before SQL: route_name=test, pickup_location=new
+Safe values: route_name=test, pickup_location=new
+Success! New booking ID: 21

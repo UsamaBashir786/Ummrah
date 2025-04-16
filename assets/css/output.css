@@ -2244,6 +2244,9 @@
   .border-yellow-200 {
     border-color: var(--color-yellow-200);
   }
+  .border-yellow-300 {
+    border-color: var(--color-yellow-300);
+  }
   .border-yellow-500 {
     border-color: var(--color-yellow-500);
   }
