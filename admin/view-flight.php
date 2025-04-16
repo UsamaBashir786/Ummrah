@@ -437,7 +437,7 @@ function formatDate($date_string, $format = 'M d, Y')
         <?php endif; ?>
 
         <!-- Summary Cards Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-6">
           <!-- Total Flights Card -->
           <div class="summary-card p-6">
             <div class="flex items-center">
@@ -477,7 +477,7 @@ function formatDate($date_string, $format = 'M d, Y')
               </div>
               <div class="ml-4">
                 <h3 class="text-sm text-gray-500 uppercase">Total Seat Value</h3>
-                <p class="text-2xl font-bold text-gray-800">$<?php echo number_format($total_seat_value, 2); ?></p>
+                <p class="text-2xl font-bold text-gray-800">₨<?php echo number_format($total_seat_value, 2); ?></p>
               </div>
             </div>
           </div>
@@ -494,7 +494,7 @@ function formatDate($date_string, $format = 'M d, Y')
                 $total_seats = $total_economy_seats + $total_business_seats + $total_first_class_seats;
                 $avg_price = $total_seats > 0 ? $total_seat_value / $total_seats : 0;
                 ?>
-                <p class="text-2xl font-bold text-gray-800">$<?php echo number_format($avg_price, 2); ?></p>
+                <p class="text-2xl font-bold text-gray-800">₨<?php echo number_format($avg_price, 2); ?></p>
               </div>
             </div>
           </div>
@@ -505,7 +505,7 @@ function formatDate($date_string, $format = 'M d, Y')
           <div class="p-4 bg-gray-50 border-b">
             <h2 class="text-lg font-bold text-gray-800">Detailed Summary</h2>
           </div>
-          <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <!-- Economy Class Summary -->
             <div class="bg-blue-50 p-4 rounded-lg">
               <h3 class="text-blue-800 font-bold mb-2">Economy Class</h3>
@@ -516,11 +516,11 @@ function formatDate($date_string, $format = 'M d, Y')
                 </div>
                 <div class="flex justify-between">
                   <span class="text-gray-600">Total Value:</span>
-                  <span class="font-semibold">$<?php echo number_format($total_economy_price, 2); ?></span>
+                  <span class="font-semibold">₨<?php echo number_format($total_economy_price, 2); ?></span>
                 </div>
                 <div class="flex justify-between">
                   <span class="text-gray-600">Average Price:</span>
-                  <span class="font-semibold">$<?php echo $total_economy_seats > 0 ? number_format($total_economy_price / $total_economy_seats, 2) : '0.00'; ?></span>
+                  <span class="font-semibold">₨<?php echo $total_economy_seats > 0 ? number_format($total_economy_price / $total_economy_seats, 2) : '0.00'; ?></span>
                 </div>
               </div>
             </div>
@@ -535,11 +535,11 @@ function formatDate($date_string, $format = 'M d, Y')
                 </div>
                 <div class="flex justify-between">
                   <span class="text-gray-600">Total Value:</span>
-                  <span class="font-semibold">$<?php echo number_format($total_business_price, 2); ?></span>
+                  <span class="font-semibold">₨<?php echo number_format($total_business_price, 2); ?></span>
                 </div>
                 <div class="flex justify-between">
                   <span class="text-gray-600">Average Price:</span>
-                  <span class="font-semibold">$<?php echo $total_business_seats > 0 ? number_format($total_business_price / $total_business_seats, 2) : '0.00'; ?></span>
+                  <span class="font-semibold">₨<?php echo $total_business_seats > 0 ? number_format($total_business_price / $total_business_seats, 2) : '0.00'; ?></span>
                 </div>
               </div>
             </div>
@@ -554,11 +554,11 @@ function formatDate($date_string, $format = 'M d, Y')
                 </div>
                 <div class="flex justify-between">
                   <span class="text-gray-600">Total Value:</span>
-                  <span class="font-semibold">$<?php echo number_format($total_first_class_price, 2); ?></span>
+                  <span class="font-semibold">₨<?php echo number_format($total_first_class_price, 2); ?></span>
                 </div>
                 <div class="flex justify-between">
                   <span class="text-gray-600">Average Price:</span>
-                  <span class="font-semibold">$<?php echo $total_first_class_seats > 0 ? number_format($total_first_class_price / $total_first_class_seats, 2) : '0.00'; ?></span>
+                  <span class="font-semibold">₨<?php echo $total_first_class_seats > 0 ? number_format($total_first_class_price / $total_first_class_seats, 2) : '0.00'; ?></span>
                 </div>
               </div>
             </div>
@@ -570,7 +570,7 @@ function formatDate($date_string, $format = 'M d, Y')
           <div class="p-4 bg-gray-50 border-b">
             <h2 class="text-lg font-bold text-gray-800">Passenger Statistics</h2>
           </div>
-          <div class="p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
             <!-- Total Passengers -->
             <div class="bg-blue-50 p-4 rounded-lg">
               <h3 class="text-blue-800 font-bold mb-2">Active Passengers</h3>
@@ -732,7 +732,7 @@ function formatDate($date_string, $format = 'M d, Y')
                                 ?>">
                                   <?php echo ucfirst(htmlspecialchars($booking['booking_status'])); ?>
                                 </span>
-                                <span class="ml-1 text-gray-600">$<?php echo number_format($booking['booking_price'], 2); ?></span>
+                                <span class="ml-1 text-gray-600">₨<?php echo number_format($booking['booking_price'], 2); ?></span>
                               </div>
                             </div>
                           </div>
@@ -1000,8 +1000,7 @@ function formatDate($date_string, $format = 'M d, Y')
                               <div class="flex flex-col items-center">
                                 <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
                                 <div class="text-xs text-gray-500 mt-0.5 text-center w-16 truncate">
-                                  <?php echo isset($stop['city']) ? htmlspecialchars($stop['city']) : ''; ?>
-                                </div>
+                                <?php echo isset($stop['city']) ? htmlspecialchars($stop['city']) : ''; ?>                                </div>
                               </div>
                             <?php endforeach; ?>
                           <?php endif; ?>
@@ -1117,14 +1116,14 @@ function formatDate($date_string, $format = 'M d, Y')
                           // Check if using new format (with seat_ids) or old format
                           if (isset($seats['economy']) && is_array($seats['economy']) && isset($seats['economy']['count'])) {
                             // New format with seat_ids
-                            echo 'Economy - ' . $seats['economy']['count'] . ' seats $' . number_format($prices['economy'], 2) . '<br>';
-                            echo 'Business - ' . $seats['business']['count'] . ' seats $' . number_format($prices['business'], 2) . '<br>';
-                            echo 'First Class - ' . $seats['first_class']['count'] . ' seats $' . number_format($prices['first_class'], 2);
+                            echo 'Economy - ' . $seats['economy']['count'] . ' seats ₨' . number_format($prices['economy'], 2) . '<br>';
+                            echo 'Business - ' . $seats['business']['count'] . ' seats ₨' . number_format($prices['business'], 2) . '<br>';
+                            echo 'First Class - ' . $seats['first_class']['count'] . ' seats ₨' . number_format($prices['first_class'], 2);
                           } else {
                             // Old format (direct values)
-                            echo 'Economy - ' . $seats['economy'] . ' seats $' . number_format($prices['economy'], 2) . '<br>';
-                            echo 'Business - ' . $seats['business'] . ' seats $' . number_format($prices['business'], 2) . '<br>';
-                            echo 'First Class - ' . $seats['first_class'] . ' seats $' . number_format($prices['first_class'], 2);
+                            echo 'Economy - ' . $seats['economy'] . ' seats ₨' . number_format($prices['economy'], 2) . '<br>';
+                            echo 'Business - ' . $seats['business'] . ' seats ₨' . number_format($prices['business'], 2) . '<br>';
+                            echo 'First Class - ' . $seats['first_class'] . ' seats ₨' . number_format($prices['first_class'], 2);
                           }
                           ?>
                         </div>
