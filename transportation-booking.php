@@ -259,12 +259,78 @@ function generateBookingReference()
                 </div>
 
                 <div>
-                  <label class="block text-gray-700 text-sm font-bold mb-2" for="booking_time">
-                    Pickup Time (24-hour format) *
-                  </label>
-                  <input type="time" id="booking_time" name="booking_time"
-                    value="<?php echo isset($_POST['booking_time']) ? $_POST['booking_time'] : ''; ?>"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+                  <!-- Flatpickr CSS with Theme -->
+                  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+                  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
+
+                  <div class="mb-4">
+                    <label for="booking_time" class="block text-sm font-medium text-gray-700 mb-1">
+                      🚕 Pickup Time <span class="text-red-500">*</span>
+                    </label>
+                    <div class="relative">
+                      <input
+                        type="text"
+                        id="booking_time"
+                        name="booking_time"
+                        placeholder="Select time (24-hour)"
+                        class="w-full px-4 py-2 text-gray-700 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition duration-150 ease-in-out"
+                        required />
+                      <svg class="w-5 h-5 text-gray-400 absolute right-3 top-2.5 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Please choose pickup time (24-hour format)</p>
+                  </div>
+
+                  <!-- Flatpickr JS -->
+                  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+                  <script>
+                    flatpickr("#booking_time", {
+                      enableTime: true,
+                      noCalendar: true,
+                      dateFormat: "H:i", // 24-hour format
+                      time_24hr: true,
+                      minuteIncrement: 5, // Optional: step every 5 minutes
+                      defaultHour: 9, // Optional: start at 09:00 by default
+                      onChange: function(selectedDates, dateStr, instance) {
+                        // Manually validate the hours and minutes
+                        const [hour, minute] = dateStr.split(':').map(Number);
+                        if (hour > 23 || minute > 59) {
+                          alert("Please enter a valid time: Hours (0-23) and Minutes (0-59)");
+                          instance.clear(); // Clear the input if invalid
+                        }
+                      }
+                    });
+
+                    // Ensure only valid characters are entered (restrict to numbers and colon)
+                    document.querySelector('#booking_time').addEventListener('input', function(e) {
+                      let value = e.target.value;
+
+                      // Allow only digits and the colon symbol
+                      value = value.replace(/[^0-9:]/g, '');
+
+                      // Ensure the length of hour and minute is limited to 2 digits each
+                      const parts = value.split(':');
+
+                      if (parts[0].length > 2) {
+                        value = parts[0].substring(0, 2) + (parts[1] ? ':' + parts[1] : ''); // restrict hours to 2 digits
+                      }
+
+                      if (parts[1] && parts[1].length > 2) {
+                        value = parts[0] + ':' + parts[1].substring(0, 2); // restrict minutes to 2 digits
+                      }
+
+                      // If more than 5 characters (HH:MM), trim to 5
+                      if (value.length > 5) {
+                        value = value.substring(0, 5);
+                      }
+
+                      // Update the value back to the input field
+                      e.target.value = value;
+                    });
+                  </script>
+
                 </div>
               </div>
 

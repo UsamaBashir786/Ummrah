@@ -82,32 +82,35 @@ function getAvailableSeats($flight, $conn)
 
 $seat_info = getAvailableSeats($flight, $conn);
 
-// Format dates
+// Format dates and calculate derived data
 $departure_date = null;
 $formatted_departure_date = 'N/A';
 if (isset($flight['departure_date']) && !empty($flight['departure_date'])) {
-  $departure_date = new DateTime($flight['departure_date']);
+  $departure_date = new DateTime($flight['departure_date'] . ' ' . $flight['departure_time']);
   $formatted_departure_date = $departure_date->format('F d, Y h:i A');
 }
 
+// Calculate arrival date based on departure date and flight duration
 $arrival_date = null;
 $formatted_arrival_date = 'N/A';
-if (isset($flight['arrival_date']) && !empty($flight['arrival_date'])) {
-  $arrival_date = new DateTime($flight['arrival_date']);
+if ($departure_date instanceof DateTime && isset($flight['flight_duration']) && !empty($flight['flight_duration'])) {
+  $arrival_date = clone $departure_date;
+  // Add hours from flight duration
+  $duration_hours = intval($flight['flight_duration']);
+  $arrival_date->add(new DateInterval('PT' . $duration_hours . 'H'));
   $formatted_arrival_date = $arrival_date->format('F d, Y h:i A');
 }
 
 // Get flight duration
 $duration = 'N/A';
-if ($departure_date instanceof DateTime && $arrival_date instanceof DateTime) {
-  $interval = $departure_date->diff($arrival_date);
-  $duration = '';
-
-  if ($interval->days > 0) {
-    $duration .= $interval->days . 'd ';
-  }
-  $duration .= $interval->h . 'h ' . $interval->i . 'm';
+if (isset($flight['flight_duration']) && !empty($flight['flight_duration'])) {
+  $hours = intval($flight['flight_duration']);
+  $duration = $hours . 'h 0m';
 }
+
+// Generate airport codes if not available
+$departure_airport_code = strtoupper(substr($flight['departure_city'], 0, 3));
+$arrival_airport_code = strtoupper(substr($flight['arrival_city'], 0, 3));
 
 // Get flight status
 $flight_status = 'Scheduled';
@@ -224,6 +227,18 @@ if ($booking_result && $booking_result->num_rows > 0) {
   }
 }
 $stmt->close();
+
+// Define default values for missing fields
+$departure_terminal = isset($flight['departure_terminal']) ? $flight['departure_terminal'] : 'Main';
+$arrival_terminal = isset($flight['arrival_terminal']) ? $flight['arrival_terminal'] : 'Main';
+$aircraft_type = isset($flight['aircraft_type']) ? $flight['aircraft_type'] : 'Standard Aircraft';
+$flight_type = isset($flight['flight_type']) ? $flight['flight_type'] : 'Standard';
+
+// Extract pricing information
+$prices = [];
+if (isset($flight['prices']) && !empty($flight['prices'])) {
+  $prices = json_decode($flight['prices'], true);
+}
 ?>
 
 <!DOCTYPE html>
@@ -422,14 +437,14 @@ $stmt->close();
                 </span>
               </div>
             </div>
-            <?php if (!$is_past_flight && $flight_status !== 'Cancelled'): ?>
+            <!-- <?php if (!$is_past_flight && $flight_status !== 'Cancelled'): ?>
               <div class="mt-4 md:mt-0">
                 <a href="create-flight-booking.php?flight_id=<?php echo $flight_id; ?>"
                   class="bg-white/10 hover:bg-white/20 rounded-lg px-4 py-2 inline-flex items-center text-white">
                   <i class="fas fa-plus mr-2"></i> Create Booking
                 </a>
               </div>
-            <?php endif; ?>
+            <?php endif; ?> -->
           </div>
         </div>
 
@@ -450,7 +465,7 @@ $stmt->close();
                   <div class="grid grid-cols-2">
                     <div class="ticket-segment text-center">
                       <div class="text-2xl font-bold text-gray-800"><?php echo htmlspecialchars($flight['departure_city'] ?? 'N/A'); ?></div>
-                      <div class="text-sm text-gray-500"><?php echo isset($flight['departure_airport']) ? htmlspecialchars($flight['departure_airport']) : 'N/A'; ?></div>
+                      <div class="text-sm text-gray-500"><?php echo $departure_airport_code; ?></div>
                       <div class="text-base font-medium text-teal-600 mt-1">
                         <?php echo ($departure_date instanceof DateTime) ? $departure_date->format('h:i A') : 'N/A'; ?>
                       </div>
@@ -460,7 +475,7 @@ $stmt->close();
                     </div>
                     <div class="ticket-segment text-center">
                       <div class="text-2xl font-bold text-gray-800"><?php echo htmlspecialchars($flight['arrival_city'] ?? 'N/A'); ?></div>
-                      <div class="text-sm text-gray-500"><?php echo isset($flight['arrival_airport']) ? htmlspecialchars($flight['arrival_airport']) : 'N/A'; ?></div>
+                      <div class="text-sm text-gray-500"><?php echo $arrival_airport_code; ?></div>
                       <div class="text-base font-medium text-teal-600 mt-1">
                         <?php echo ($arrival_date instanceof DateTime) ? $arrival_date->format('h:i A') : 'N/A'; ?>
                       </div>
@@ -483,7 +498,7 @@ $stmt->close();
                       <p class="text-sm text-gray-500">Aircraft</p>
                       <p class="text-base font-medium text-gray-800">
                         <i class="fas fa-plane-departure text-teal-600 mr-1"></i>
-                        <?php echo htmlspecialchars($flight['aircraft_type'] ?? 'N/A'); ?>
+                        <?php echo htmlspecialchars($aircraft_type); ?>
                       </p>
                     </div>
                     <div class="bg-gray-50 p-3 rounded-lg">
@@ -515,19 +530,19 @@ $stmt->close();
                     <div>
                       <p class="text-sm text-gray-500">Departure Terminal</p>
                       <p class="text-base font-medium text-gray-800">
-                        <?php echo htmlspecialchars($flight['departure_terminal'] ?? 'N/A'); ?>
+                        <?php echo htmlspecialchars($departure_terminal); ?>
                       </p>
                     </div>
                     <div>
                       <p class="text-sm text-gray-500">Arrival Terminal</p>
                       <p class="text-base font-medium text-gray-800">
-                        <?php echo htmlspecialchars($flight['arrival_terminal'] ?? 'N/A'); ?>
+                        <?php echo htmlspecialchars($arrival_terminal); ?>
                       </p>
                     </div>
                     <div>
                       <p class="text-sm text-gray-500">Flight Type</p>
                       <p class="text-base font-medium text-gray-800">
-                        <?php echo htmlspecialchars($flight['flight_type'] ?? 'Standard'); ?>
+                        <?php echo htmlspecialchars($flight_type); ?>
                       </p>
                     </div>
                     <div>
@@ -866,21 +881,21 @@ $stmt->close();
         <div class="mt-6 bg-white rounded-xl shadow-md p-5 no-print">
           <h2 class="text-xl font-semibold text-gray-800 mb-4">Actions</h2>
           <div class="flex flex-wrap gap-3">
-            <a href="edit-flight.php?id=<?php echo $flight_id; ?>" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center">
+            <!-- <a href="edit-flight.php?id=<?php echo $flight_id; ?>" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center">
               <i class="fas fa-edit mr-2"></i> Edit Flight
-            </a>
-
+            </a> -->
+<!-- 
             <?php if (!$is_past_flight && $flight_status !== 'Cancelled'): ?>
               <a href="create-flight-booking.php?flight_id=<?php echo $flight_id; ?>" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center">
                 <i class="fas fa-plus mr-2"></i> Add Booking
               </a>
-            <?php endif; ?>
+            <?php endif; ?> -->
 
-            <?php if ($booking_count > 0): ?>
+            <!-- <?php if ($booking_count > 0): ?>
               <a href="flight-bookings.php?flight_id=<?php echo $flight_id; ?>" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
                 <i class="fas fa-list mr-2"></i> View All Bookings
               </a>
-            <?php endif; ?>
+            <?php endif; ?> -->
 
             <?php if ($flight_status !== 'Cancelled'): ?>
               <button onclick="cancelFlight(<?php echo $flight_id; ?>)" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center">

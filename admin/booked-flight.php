@@ -841,9 +841,9 @@ function formatSeatsDisplay($seats_array)
                         <a href="flight-booking-details.php?id=<?php echo $booking['id']; ?>" class="text-blue-600 hover:text-blue-900 mr-3">
                           <i class="fas fa-eye"></i> View
                         </a>
-                        <a href="edit-booking.php?id=<?php echo $booking['id']; ?>" class="text-blue-600 hover:text-blue-900 mr-3">
+                        <!-- <a href="edit-booking.php?id=<?php echo $booking['id']; ?>" class="text-blue-600 hover:text-blue-900 mr-3">
                           <i class="fas fa-edit"></i> Edit
-                        </a>
+                        </a> -->
                         <a href="booked-flight.php?delete_id=<?php echo $booking['id']; ?>" class="text-red-600 hover:text-red-900"
                           onclick="return confirm('Are you sure you want to delete this booking? This action cannot be undone.');">
                           <i class="fas fa-trash-alt"></i> Delete
