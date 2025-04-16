@@ -555,7 +555,7 @@ if (isset($_GET['success'])) {
               <p><span class="font-medium text-gray-600">Date:</span> <span id="trip-date"></span></p>
               <p><span class="font-medium text-gray-600">Time:</span> <span id="trip-time"></span></p>
               <p><span class="font-medium text-gray-600">Pickup Location:</span> <span id="pickup-location"></span></p>
-              <p><span class="font-medium text-gray-600">Dropoff Location:</span> <span id="dropoff-location"></span></p>
+              <p><span class="font-medium text-gray-600"></span> <span id="dropoff-location"></span></p>
             </div>
           </div>
         </div>
