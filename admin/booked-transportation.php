@@ -316,7 +316,7 @@ if (isset($_GET['success'])) {
                     <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ref #</th>
                     <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
                     <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
-                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
+                    <!-- <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th> -->
                     <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
                     <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
                     <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -339,12 +339,12 @@ if (isset($_GET['success'])) {
                           <div class="flex items-center">
                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                               <?php echo ($booking['service_type'] == 'taxi') ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'; ?>">
-                              <?php echo ucfirst($booking['service_type']); ?>
+                              <?php echo ucfirst($booking['service_type'] ?? ''); ?>
                             </span>
                           </div>
-                          <div class="text-xs text-gray-500 mt-1"><?php echo ucfirst($booking['duration']); ?></div>
+                          <div class="text-xs text-gray-500 mt-1"><?php echo ucfirst($booking['duration'] ?? 'one_way'); ?></div>
                         </td>
-                        <td class="py-3 px-4">
+                        <!-- <td class="py-3 px-4">
                           <div class="text-sm text-gray-900"><?php echo htmlspecialchars($booking['route_name']); ?></div>
                           <div class="text-xs text-gray-500 mt-1">
                             <span class="block truncate max-w-xs" title="<?php echo isset($booking['pickup_location']) ? htmlspecialchars($booking['pickup_location']) : ''; ?>">
@@ -354,7 +354,7 @@ if (isset($_GET['success'])) {
                               To: <?php echo isset($booking['dropoff_location']) ? htmlspecialchars($booking['dropoff_location']) : 'N/A'; ?>
                             </span>
                           </div>
-                        </td>
+                        </td> -->
                         <td class="py-3 px-4">
                           <div class="text-sm text-gray-900"><?php echo htmlspecialchars($booking['vehicle_name']); ?></div>
                           <div class="text-xs text-gray-500">Passengers: <?php echo intval($booking['passengers']); ?></div>
@@ -708,8 +708,9 @@ if (isset($_GET['success'])) {
           document.getElementById('route-name').textContent = bookingData.route_name;
           document.getElementById('vehicle-type').textContent = bookingData.vehicle_type.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
           document.getElementById('vehicle-name').textContent = bookingData.vehicle_name;
-          document.getElementById('duration-type').textContent = bookingData.duration.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-
+          document.getElementById('duration-type').textContent = bookingData.duration ?
+            bookingData.duration.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') :
+            'One Way'; // Default value if null
           const tripDate = new Date(bookingData.booking_date);
           document.getElementById('trip-date').textContent = tripDate.toLocaleDateString('en-US', {
             weekday: 'long',
