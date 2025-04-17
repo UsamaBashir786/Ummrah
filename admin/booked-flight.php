@@ -408,7 +408,7 @@ function formatSeatsDisplay($seats_array)
         <?php endif; ?>
 
         <!-- Summary Cards Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2` gap-4 mb-6">
           <!-- Total Bookings Card -->
           <div class="summary-card p-6">
             <div class="flex items-center">

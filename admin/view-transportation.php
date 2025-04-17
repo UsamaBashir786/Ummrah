@@ -922,7 +922,7 @@ $rentacar_service_info = getRentacarServiceInfo();
                     <?php endif; ?>
                   </tbody>
                   <script>
-                    
+
                   </script>
                 </table>
               </div>
@@ -943,24 +943,45 @@ $rentacar_service_info = getRentacarServiceInfo();
                     </tr>
                   </thead>
                   <tbody id="new-rentacar-routes-body">
-                    <tr>
+                    <tr class="price-validation-row">
                       <td class="py-2 px-4 border-b text-center">
-                        <input type="number" name="new_route_number[0]" value="<?php echo count($rentacar_routes) + 1; ?>" class="price-input rentacar-input w-16 text-center">
+                        <input type="number" name="new_route_number[0]" value="<?php echo count($rentacar_routes) + 1; ?>" class="price-input rentacar-input w-16 text-center" required>
                       </td>
                       <td class="py-2 px-4 border-b">
-                        <input type="text" name="new_route_name[0]" placeholder="Enter route name" class="price-input rentacar-input w-full">
+                        <input type="text" name="new_route_name[0]" placeholder="Enter route name"
+                          class="price-input rentacar-input w-full route-name"
+                          pattern="[A-Za-z\s]+"
+                          title="Only letters are allowed"
+                          maxlength="15"
+                          oninput="this.value = this.value.replace(/[^A-Za-z\s]/g, '')"
+                          required>
+                        <div class="text-red-500 text-xs error-msg-name hidden">Only letters allowed (max 15 chars)</div>
                       </td>
                       <td class="py-2 px-4 border-b">
-                        <input type="number" name="new_gmc_16_19_price[0]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+                        <input type="number" name="new_gmc_16_19_price[0]" placeholder="Price" min="0" step="0.01"
+                          class="price-input rentacar-input w-full text-center base-price"
+                          oninput="validateNewCarPrices(this)"
+                          required>
                         <span class="text-xs text-gray-500">PKR</span>
+                        <div class="text-red-500 text-xs error-msg-base hidden">Must be greater than 0</div>
                       </td>
                       <td class="py-2 px-4 border-b">
-                        <input type="number" name="new_gmc_22_23_price[0]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+                        <input type="number" name="new_gmc_22_23_price[0]" placeholder="Price" min="0" step="0.01"
+                          class="price-input rentacar-input w-full text-center mid-price"
+                          oninput="validateNewCarPrices(this)"
+                          disabled
+                          required>
                         <span class="text-xs text-gray-500">PKR</span>
+                        <div class="text-red-500 text-xs error-msg-mid hidden">Must be higher than base price</div>
                       </td>
                       <td class="py-2 px-4 border-b">
-                        <input type="number" name="new_coaster_price[0]" placeholder="Price" min="0" step="0.01" class="price-input rentacar-input w-full text-center">
+                        <input type="number" name="new_coaster_price[0]" placeholder="Price" min="0" step="0.01"
+                          class="price-input rentacar-input w-full text-center premium-price"
+                          oninput="validateNewCarPrices(this)"
+                          disabled
+                          required>
                         <span class="text-xs text-gray-500">PKR</span>
+                        <div class="text-red-500 text-xs error-msg-premium hidden">Must be higher than mid price</div>
                       </td>
                       <td class="py-2 px-4 border-b text-center">
                         <button type="button" class="text-red-500 hover:text-red-700 delete-new-row" disabled>
@@ -969,6 +990,108 @@ $rentacar_service_info = getRentacarServiceInfo();
                       </td>
                     </tr>
                   </tbody>
+
+                  <script>
+                    function validateNewCarPrices(input) {
+                      const row = input.closest('.price-validation-row');
+                      const basePriceInput = row.querySelector('.base-price');
+                      const midPriceInput = row.querySelector('.mid-price');
+                      const premiumPriceInput = row.querySelector('.premium-price');
+
+                      const basePrice = parseFloat(basePriceInput.value) || 0;
+                      const midPrice = parseFloat(midPriceInput.value) || 0;
+                      const premiumPrice = parseFloat(premiumPriceInput.value) || 0;
+
+                      // Reset all error messages
+                      row.querySelector('.error-msg-base').classList.add('hidden');
+                      row.querySelector('.error-msg-mid').classList.add('hidden');
+                      row.querySelector('.error-msg-premium').classList.add('hidden');
+
+                      // Validate base price
+                      if (input.classList.contains('base-price')) {
+                        if (basePrice <= 0) {
+                          row.querySelector('.error-msg-base').classList.remove('hidden');
+                          midPriceInput.disabled = true;
+                          premiumPriceInput.disabled = true;
+                          midPriceInput.value = '';
+                          premiumPriceInput.value = '';
+                        } else {
+                          midPriceInput.disabled = false;
+                        }
+                      }
+
+                      // Validate mid price
+                      if (input.classList.contains('mid-price')) {
+                        if (midPrice <= basePrice) {
+                          row.querySelector('.error-msg-mid').classList.remove('hidden');
+                          premiumPriceInput.disabled = true;
+                          premiumPriceInput.value = '';
+                        } else {
+                          premiumPriceInput.disabled = false;
+                        }
+                      }
+
+                      // Validate premium price
+                      if (input.classList.contains('premium-price')) {
+                        if (premiumPrice <= midPrice) {
+                          row.querySelector('.error-msg-premium').classList.remove('hidden');
+                        }
+                      }
+                    }
+
+                    // Route name validation
+                    document.addEventListener('DOMContentLoaded', function() {
+                      document.querySelectorAll('.route-name').forEach(input => {
+                        input.addEventListener('input', function() {
+                          const errorMsg = this.closest('td').querySelector('.error-msg-name');
+                          if (!/^[A-Za-z\s]{0,15}$/.test(this.value)) {
+                            errorMsg.classList.remove('hidden');
+                          } else {
+                            errorMsg.classList.add('hidden');
+                          }
+                        });
+                      });
+
+                      // Form submission validation
+                      document.querySelector('form').addEventListener('submit', function(e) {
+                        let isValid = true;
+
+                        document.querySelectorAll('.price-validation-row').forEach(row => {
+                          // Validate route name
+                          const routeName = row.querySelector('.route-name').value;
+                          if (!/^[A-Za-z\s]{1,15}$/.test(routeName)) {
+                            row.querySelector('.error-msg-name').classList.remove('hidden');
+                            isValid = false;
+                          }
+
+                          // Validate prices
+                          const basePrice = parseFloat(row.querySelector('.base-price').value) || 0;
+                          const midPrice = parseFloat(row.querySelector('.mid-price').value) || 0;
+                          const premiumPrice = parseFloat(row.querySelector('.premium-price').value) || 0;
+
+                          if (basePrice <= 0) {
+                            row.querySelector('.error-msg-base').classList.remove('hidden');
+                            isValid = false;
+                          }
+
+                          if (midPrice <= basePrice) {
+                            row.querySelector('.error-msg-mid').classList.remove('hidden');
+                            isValid = false;
+                          }
+
+                          if (premiumPrice <= midPrice) {
+                            row.querySelector('.error-msg-premium').classList.remove('hidden');
+                            isValid = false;
+                          }
+                        });
+
+                        if (!isValid) {
+                          e.preventDefault();
+                          alert('Please fix all validation errors before submitting.');
+                        }
+                      });
+                    });
+                  </script>
                 </table>
 
                 <!-- Add Row Button -->
