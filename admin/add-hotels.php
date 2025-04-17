@@ -159,12 +159,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <!-- Hotel Basic Information -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label class="block text-gray-700 font-semibold mb-2">Hotel Name</label>
-                <input type="text" name="hotel_name"
+              <div class="mb-4">
+                <label class="block text-gray-700 font-semibold mb-2">Hotel Name *</label>
+                <input type="text" name="hotel_name" id="hotel_name"
                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  placeholder="Enter hotel name" required>
+                  placeholder="Enter hotel name (letters only)"
+                  maxlength="25"
+                  oninput="validateHotelName(this)"
+                  onkeydown="preventHotelNameNumbers(event)"
+                  required>
+                <div id="hotel_name_error" class="text-red-500 text-xs mt-1 hidden">
+                  Hotel name must contain only letters (A-Z) and be 25 characters or less
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                  <span id="hotel_name_counter">0</span>/25 characters
+                </div>
               </div>
+
+              <script>
+                function validateHotelName(input) {
+                  const errorElement = document.getElementById('hotel_name_error');
+                  const counterElement = document.getElementById('hotel_name_counter');
+
+                  // Remove any numbers or special characters (keep only letters A-Z and spaces)
+                  input.value = input.value.replace(/[^A-Za-z\s]/g, '');
+
+                  // Update character counter
+                  const currentLength = input.value.length;
+                  counterElement.textContent = currentLength;
+
+                  // Enforce 25 character limit
+                  if (currentLength > 25) {
+                    input.value = input.value.substring(0, 25);
+                    counterElement.textContent = 25;
+                  }
+
+                  // Show error if invalid characters were attempted
+                  if (/[^A-Za-z\s]/.test(input.value)) {
+                    errorElement.classList.remove('hidden');
+                    input.setCustomValidity('Only letters allowed');
+                  } else {
+                    errorElement.classList.add('hidden');
+                    input.setCustomValidity('');
+                  }
+
+                  input.reportValidity();
+                }
+
+                function preventHotelNameNumbers(event) {
+                  // Allow: letters, backspace, delete, arrows, tab, space
+                  if (/[A-Za-z\s]|Backspace|Delete|ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Tab/.test(event.key)) {
+                    return true;
+                  }
+                  event.preventDefault();
+                  return false;
+                }
+
+                // Initialize counter on page load
+                document.addEventListener('DOMContentLoaded', function() {
+                  const hotelInput = document.getElementById('hotel_name');
+                  document.getElementById('hotel_name_counter').textContent = hotelInput.value.length;
+                });
+              </script>
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Location</label>
                 <select name="location"
