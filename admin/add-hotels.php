@@ -232,23 +232,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               </div>
               <!-- New Room Count Field -->
             </div>
-            <div>
-              <label class="block text-gray-700 font-semibold mb-2">Number of Rooms</label>
-              <input type="number" name="room_count" min="1"
+            <div class="mb-4">
+              <label class="block text-gray-700 font-semibold mb-2">Number of Rooms *</label>
+              <input type="number" name="room_count" id="room_count" min="1" max="10"
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                placeholder="Enter total number of rooms">
+                placeholder="Enter number of rooms (1-10)"
+                oninput="validateRoomCount(this)"
+                required>
+              <div id="room_count_error" class="text-red-500 text-xs mt-1 hidden">
+                Please enter a number between 1 and 10
+              </div>
               <p class="text-sm text-gray-500 mt-1">Room IDs (r1, r2, etc.) will be automatically generated based on this count</p>
             </div>
+
+            <script>
+              function validateRoomCount(input) {
+                const errorElement = document.getElementById('room_count_error');
+                const value = parseInt(input.value) || 0;
+
+                // Validate range
+                if (value < 1 || value > 10) {
+                  errorElement.classList.remove('hidden');
+                  input.setCustomValidity('Number must be between 1-10');
+
+                  // Auto-correct out-of-range values
+                  if (value < 1) input.value = 1;
+                  if (value > 10) input.value = 10;
+                } else {
+                  errorElement.classList.add('hidden');
+                  input.setCustomValidity('');
+                }
+
+                input.reportValidity();
+              }
+
+              // Initialize validation
+              document.addEventListener('DOMContentLoaded', function() {
+                const roomInput = document.getElementById('room_count');
+                roomInput.addEventListener('blur', function() {
+                  validateRoomCount(this);
+                });
+              });
+            </script>
 
 
             <!-- Price and Rating -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label class="block text-gray-700 font-semibold mb-2">Price per Night ($)</label>
-                <input type="number" name="price"
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  placeholder="Enter price per night">
-              </div>
+
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Hotel Rating</label>
                 <div class="flex items-center space-x-2">
