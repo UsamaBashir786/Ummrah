@@ -144,18 +144,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <form action="" method="POST" enctype="multipart/form-data" class="space-y-6">
             <!-- Hotel Image Upload -->
             <div class="mb-6">
-              <label class="block text-gray-700 font-semibold mb-2">Hotel Images</label>
+              <label class="block text-gray-700 font-semibold mb-2">Hotel Images *</label>
               <div class="flex items-center justify-center w-full">
-                <label class="flex flex-col w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <div class="flex flex-col items-center justify-center pt-7">
+                <label class="flex flex-col w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 relative">
+                  <div id="upload-area" class="flex flex-col items-center justify-center pt-7">
                     <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
                     <p class="text-sm text-gray-500">Click to upload or drag and drop</p>
                     <p class="text-xs text-gray-500">PNG, JPG up to 10MB</p>
                   </div>
-                  <input type="file" class="hidden" multiple accept="image/*" name="hotel_images[]">
+                  <input type="file" id="hotel_images" class="hidden" multiple accept="image/jpeg,image/png" name="hotel_images[]">
                 </label>
               </div>
+              <!-- File validation error -->
+              <div id="file-error" class="text-red-500 text-xs mt-1 hidden"></div>
+              <!-- Selected files list -->
+              <div id="file-list" class="mt-3 space-y-2 hidden">
+                <p class="text-sm font-medium text-gray-700">Selected Files:</p>
+                <ul id="selected-files" class="text-xs text-gray-500 space-y-1"></ul>
+                <p id="size-warning" class="text-xs text-red-500 hidden"></p>
+              </div>
             </div>
+
+            <script>
+              document.getElementById('hotel_images').addEventListener('change', function(e) {
+                const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+                const fileList = document.getElementById('selected-files');
+                const uploadArea = document.getElementById('upload-area');
+                const fileError = document.getElementById('file-error');
+                const sizeWarning = document.getElementById('size-warning');
+                const filesContainer = document.getElementById('file-list');
+
+                fileList.innerHTML = '';
+                fileError.classList.add('hidden');
+                sizeWarning.classList.add('hidden');
+
+                if (this.files.length > 0) {
+                  filesContainer.classList.remove('hidden');
+                  uploadArea.classList.add('hidden');
+
+                  let totalSize = 0;
+                  let hasInvalidFiles = false;
+
+                  Array.from(this.files).forEach((file, index) => {
+                    // Validate file type
+                    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+                      fileError.textContent = `Invalid file type: ${file.name}. Only JPG/PNG allowed.`;
+                      fileError.classList.remove('hidden');
+                      hasInvalidFiles = true;
+                      return;
+                    }
+
+                    // Validate file size
+                    if (file.size > MAX_SIZE) {
+                      fileError.textContent = `File too large: ${file.name} (${(file.size/1024/1024).toFixed(1)}MB). Max 10MB allowed.`;
+                      fileError.classList.remove('hidden');
+                      hasInvalidFiles = true;
+                      return;
+                    }
+
+                    totalSize += file.size;
+
+                    // Add to file list
+                    const listItem = document.createElement('li');
+                    listItem.className = 'flex items-center justify-between';
+                    listItem.innerHTML = `
+        <span class="truncate w-40">${index + 1}. ${file.name}</span>
+        <span class="text-gray-400">${(file.size/1024/1024).toFixed(1)}MB</span>
+        <button type="button" onclick="removeFile(${index})" class="text-red-400 hover:text-red-600">
+          <i class="fas fa-times"></i>
+        </button>
+      `;
+                    fileList.appendChild(listItem);
+                  });
+
+                  // Show total size warning if over 30MB combined
+                  if (totalSize > 30 * 1024 * 1024) {
+                    sizeWarning.textContent = `Total size: ${(totalSize/1024/1024).toFixed(1)}MB (recommended under 30MB)`;
+                    sizeWarning.classList.remove('hidden');
+                  }
+
+                  if (hasInvalidFiles) {
+                    this.value = ''; // Clear invalid files
+                  }
+                } else {
+                  filesContainer.classList.add('hidden');
+                  uploadArea.classList.remove('hidden');
+                }
+              });
+
+              function removeFile(index) {
+                const input = document.getElementById('hotel_images');
+                const files = Array.from(input.files);
+                files.splice(index, 1);
+
+                // Create new DataTransfer to update files
+                const dataTransfer = new DataTransfer();
+                files.forEach(file => dataTransfer.items.add(file));
+                input.files = dataTransfer.files;
+
+                // Trigger change event to update UI
+                const event = new Event('change');
+                input.dispatchEvent(event);
+              }
+
+              // Drag and drop functionality
+              const dropArea = document.querySelector('label[for="hotel_images"]');
+              ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+              });
+
+              function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+
+              ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+              });
+
+              ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+              });
+
+              function highlight() {
+                dropArea.classList.add('border-teal-500', 'bg-teal-50');
+              }
+
+              function unhighlight() {
+                dropArea.classList.remove('border-teal-500', 'bg-teal-50');
+              }
+
+              dropArea.addEventListener('drop', handleDrop, false);
+
+              function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const input = document.getElementById('hotel_images');
+                input.files = dt.files;
+                const event = new Event('change');
+                input.dispatchEvent(event);
+              }
+            </script>
 
             <!-- Hotel Basic Information -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
