@@ -667,7 +667,162 @@ $rentacar_service_info = getRentacarServiceInfo();
                     </tr>
                   </tbody>
                   <script>
-                    
+                    document.addEventListener('DOMContentLoaded', function() {
+                      const tableBody = document.getElementById('new-taxi-routes-body');
+
+                      // ======================
+                      // ROUTE NAME VALIDATION
+                      // ======================
+                      tableBody.addEventListener('input', function(e) {
+                        // Route name validation
+                        if (e.target.name && e.target.name.startsWith('new_route_name')) {
+                          const input = e.target;
+                          const originalValue = input.value;
+
+                          // Remove any numbers or special characters
+                          input.value = originalValue.replace(/[^a-zA-Z\s]/g, '');
+
+                          // Enforce 15 character limit
+                          if (input.value.length > 15) {
+                            input.value = input.value.substring(0, 15);
+                            showError(input, "Maximum 15 characters allowed", 'route-error');
+                          }
+
+                          // If we removed characters, show temporary warning
+                          if (originalValue !== input.value) {
+                            showError(input, "Only English letters allowed", 'route-error', 2000);
+                          }
+                        }
+
+                        // Price input validation
+                        const priceInputs = ['new_camry_price', 'new_starex_price', 'new_hiace_price'];
+                        if (priceInputs.some(prefix => e.target.name && e.target.name.startsWith(prefix))) {
+                          const input = e.target;
+
+                          // Clean price input (numbers and decimal only)
+                          input.value = input.value.replace(/[^0-9.]/g, '');
+
+                          // Validate price progression
+                          validatePriceProgression(input.closest('tr'));
+                        }
+                      });
+
+                      // ======================
+                      // PRICE VALIDATION LOGIC
+                      // ======================
+                      function validatePriceProgression(row) {
+                        const camryInput = row.querySelector('input[name^="new_camry_price"]');
+                        const starexInput = row.querySelector('input[name^="new_starex_price"]');
+                        const hiaceInput = row.querySelector('input[name^="new_hiace_price"]');
+
+                        clearError(row, 'price-error');
+
+                        // CAMRY PRICE VALIDATION
+                        if (camryInput.value) {
+                          starexInput.disabled = false;
+                          starexInput.placeholder = `Must be > ${camryInput.value}`;
+
+                          // STREX PRICE VALIDATION
+                          if (starexInput.value) {
+                            if (parseFloat(starexInput.value) <= parseFloat(camryInput.value)) {
+                              showError(starexInput, "Must be greater than Camry price", 'price-error');
+                              disableNextFields(starexInput, hiaceInput, "Fix Starex price first");
+                            } else {
+                              hiaceInput.disabled = false;
+                              hiaceInput.placeholder = `Must be > ${starexInput.value}`;
+                            }
+                          } else {
+                            disableNextFields(starexInput, hiaceInput, "Enter Starex price first");
+                          }
+                        } else {
+                          // If Camry price is empty, disable other fields
+                          disableNextFields(camryInput, [starexInput, hiaceInput], "Enter Camry price first");
+                        }
+                      }
+
+                      function disableNextFields(currentInput, nextInputs, placeholder) {
+                        const fields = Array.isArray(nextInputs) ? nextInputs : [nextInputs];
+                        fields.forEach(input => {
+                          input.disabled = true;
+                          input.value = '';
+                          input.placeholder = placeholder;
+                        });
+                      }
+
+                      // ======================
+                      // ERROR HANDLING UTILS
+                      // ======================
+                      function showError(input, message, errorClass, timeout = null) {
+                        input.classList.add('border-red-500');
+
+                        let errorElement = input.parentNode.querySelector(`.${errorClass}`);
+                        if (!errorElement) {
+                          errorElement = document.createElement('span');
+                          errorElement.className = `${errorClass} text-red-500 text-xs block mt-1`;
+                          input.parentNode.appendChild(errorElement);
+                        }
+
+                        errorElement.textContent = message;
+
+                        if (timeout) {
+                          setTimeout(() => {
+                            if (errorElement.textContent === message) {
+                              clearError(input, errorClass);
+                            }
+                          }, timeout);
+                        }
+                      }
+
+                      function clearError(element, errorClass) {
+                        if (element.classList) {
+                          element.classList.remove('border-red-500');
+                        }
+
+                        const container = element.classList ? element.parentNode : element;
+                        const errorElement = container.querySelector(`.${errorClass}`);
+                        if (errorElement) {
+                          errorElement.remove();
+                        }
+                      }
+
+                      // ======================
+                      // FORM SUBMISSION VALIDATION
+                      // ======================
+                      document.querySelector('form').addEventListener('submit', function(e) {
+                        let isValid = true;
+
+                        // Validate all route names
+                        document.querySelectorAll('input[name^="new_route_name"]').forEach(input => {
+                          if (!/^[a-zA-Z\s]{1,15}$/.test(input.value)) {
+                            showError(input, "Route name must contain only letters (max 15)", 'route-error');
+                            isValid = false;
+                          }
+                        });
+
+                        // Validate all price progressions
+                        document.querySelectorAll('tr').forEach(row => {
+                          const camry = row.querySelector('input[name^="new_camry_price"]');
+                          const starex = row.querySelector('input[name^="new_starex_price"]');
+                          const hiace = row.querySelector('input[name^="new_hiace_price"]');
+
+                          if (camry.value && starex.value && hiace.value) {
+                            if (!(parseFloat(hiace.value) > parseFloat(starex.value) &&
+                                parseFloat(starex.value) > parseFloat(camry.value))) {
+                              showError(hiace, "Prices must be in increasing order", 'price-error');
+                              isValid = false;
+                            }
+                          } else {
+                            showError(row, "All price fields are required", 'price-error');
+                            isValid = false;
+                          }
+                        });
+
+                        if (!isValid) {
+                          e.preventDefault();
+                          alert('Please fix all validation errors before submitting.');
+                        }
+                      });
+                    });
                   </script>
                 </table>
 
@@ -766,6 +921,9 @@ $rentacar_service_info = getRentacarServiceInfo();
                       </tr>
                     <?php endif; ?>
                   </tbody>
+                  <script>
+                    
+                  </script>
                 </table>
               </div>
 
