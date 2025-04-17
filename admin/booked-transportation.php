@@ -288,7 +288,7 @@ if (isset($_GET['success'])) {
             </div>
 
             <!-- Stats Section -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <!-- Total Bookings -->
               <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-4 text-white">
                 <div class="text-lg opacity-80 mb-1">Total Bookings</div>
