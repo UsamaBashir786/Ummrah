@@ -232,20 +232,16 @@ function generateBookingReference()
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <!-- Date and Time Selection -->
-                <div>
+                <!-- <div>
                   <label class="block text-gray-700 text-sm font-bold mb-2" for="booking_date">
                     Booking Date *
                   </label>
                   <input type="date" id="booking_date" name="booking_date" min="<?php echo date('Y-m-d'); ?>"
                     value="<?php echo isset($_POST['booking_date']) ? $_POST['booking_date'] : ''; ?>"
                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
-                </div>
+                </div> -->
 
                 <div>
-                  <!-- Flatpickr CSS with Theme -->
-                  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-                  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
-
                   <div class="mb-4">
                     <label for="booking_time" class="block text-sm font-medium text-gray-700 mb-1">
                       🚕 Pickup Time <span class="text-red-500">*</span>
@@ -255,39 +251,93 @@ function generateBookingReference()
                         type="text"
                         id="booking_time"
                         name="booking_time"
-                        placeholder="Select time (24-hour)"
+                        placeholder="HH:MM"
+                        maxlength="5"
                         class="w-full px-4 py-2 text-gray-700 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition duration-150 ease-in-out"
+                        oninput="formatTimeInput(this)"
+                        onkeydown="handleTimeNavigation(event)"
                         required />
                       <svg class="w-5 h-5 text-gray-400 absolute right-3 top-2.5 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
-                    <p class="text-xs text-gray-500 mt-1">Please choose pickup time (24-hour format)</p>
+                    <div id="time_error" class="text-red-500 text-xs mt-1 hidden">Please enter valid time (00:00 to 23:59)</div>
                   </div>
 
-                  <!-- Flatpickr JS -->
-                  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-
                   <script>
-                    flatpickr("#booking_time", {
-                      enableTime: true,
-                      noCalendar: true,
-                      dateFormat: "H:i", // 24-hour format
-                      time_24hr: true,
-                      minuteIncrement: 5, // Optional: step every 5 minutes
-                      defaultHour: 9, // Optional: start at 09:00 by default
-                      onChange: function(selectedDates, dateStr, instance) {
-                        const [hour, minute] = dateStr.split(':').map(Number);
+                    function formatTimeInput(input) {
+                      let value = input.value.replace(/\D/g, ''); // Remove non-digits
+                      const errorElement = document.getElementById('time_error');
 
-                        // Validate the hour and minute
-                        if (hour > 23 || minute > 59) {
-                          alert("Please enter a valid time: Hours (0-23) and Minutes (0-59)");
-                          instance.clear(); // Clear the input if invalid
+                      // Auto-insert colon after 2 digits
+                      if (value.length > 2) {
+                        value = value.substring(0, 2) + ':' + value.substring(2);
+                      }
+
+                      // Limit to 4 digits (HH:MM)
+                      if (value.length > 5) {
+                        value = value.substring(0, 5);
+                      }
+
+                      input.value = value;
+
+                      // Validate time
+                      const timeRegex = /^([01]?[0-9]|2[0-3]):?([0-5][0-9])?$/;
+                      if (value.length > 0 && !timeRegex.test(value)) {
+                        errorElement.classList.remove('hidden');
+                        input.setCustomValidity('Invalid time format');
+                      } else {
+                        errorElement.classList.add('hidden');
+                        input.setCustomValidity('');
+                      }
+
+                      input.reportValidity();
+                    }
+
+                    function handleTimeNavigation(event) {
+                      const input = event.target;
+                      const key = event.key;
+                      const cursorPos = input.selectionStart;
+
+                      // Allow navigation and deletion
+                      if ([
+                          'Backspace', 'Delete',
+                          'ArrowLeft', 'ArrowRight',
+                          'ArrowUp', 'ArrowDown',
+                          'Tab', 'Home', 'End'
+                        ].includes(key)) {
+                        // Special handling for Backspace at colon position
+                        if (key === 'Backspace' && cursorPos === 3 && input.value.includes(':')) {
+                          input.value = input.value.substring(0, 2) + input.value.substring(4);
+                          input.setSelectionRange(2, 2);
+                          event.preventDefault();
                         }
+                        return true;
+                      }
+
+                      // Allow only numbers
+                      if (!/\d/.test(key)) {
+                        event.preventDefault();
+                        return false;
+                      }
+
+                      // Handle typing at colon position
+                      if (cursorPos === 3 && input.value.includes(':')) {
+                        input.value = input.value.substring(0, 3) + key + input.value.substring(4);
+                        input.setSelectionRange(4, 4);
+                        event.preventDefault();
+                      }
+                    }
+
+                    // Make colon position editable
+                    document.getElementById('booking_time').addEventListener('click', function(e) {
+                      const cursorPos = this.selectionStart;
+                      if (cursorPos === 3 && this.value.length >= 3) {
+                        // Move cursor to after colon if clicking on it
+                        this.setSelectionRange(4, 4);
                       }
                     });
                   </script>
-
                 </div>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -298,8 +348,65 @@ function generateBookingReference()
                   </label>
                   <input type="date" id="booking_date" name="booking_date" min="<?php echo date('Y-m-d'); ?>"
                     value="<?php echo isset($_POST['booking_date']) ? $_POST['booking_date'] : ''; ?>"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    oninput="validateDateInput(this)"
+                    onchange="validateDateInput(this)"
+                    onblur="validateDateInput(this)"
+                    required>
+                  <div id="booking_date_error" class="text-red-500 text-xs mt-1 hidden">Please select a valid future date</div>
                 </div>
+
+                <script>
+                  function validateDateInput(input) {
+                    const errorElement = document.getElementById('booking_date_error');
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0); // Compare dates without time
+
+                    // Check if input is empty or invalid
+                    if (!input.value) {
+                      errorElement.classList.remove('hidden');
+                      input.setCustomValidity('Please select a booking date');
+                      return;
+                    }
+
+                    const selectedDate = new Date(input.value);
+                    selectedDate.setHours(0, 0, 0, 0); // Compare dates without time
+
+                    // Check if date is in the past
+                    if (selectedDate < today) {
+                      errorElement.textContent = 'Please select a date today or in the future';
+                      errorElement.classList.remove('hidden');
+                      input.setCustomValidity('Date must be today or in the future');
+                    }
+                    // Check if date is valid
+                    else if (isNaN(selectedDate.getTime())) {
+                      errorElement.textContent = 'Please enter a valid date';
+                      errorElement.classList.remove('hidden');
+                      input.setCustomValidity('Invalid date format');
+                    }
+                    // Valid date
+                    else {
+                      errorElement.classList.add('hidden');
+                      input.setCustomValidity('');
+                    }
+
+                    // Force revalidation
+                    input.reportValidity();
+                  }
+
+                  // Add click event to handle calendar popup
+                  document.getElementById('booking_date').addEventListener('click', function() {
+                    this.showPicker(); // Opens the native date picker
+                  });
+
+                  // Validate on page load if there's a value
+                  document.addEventListener('DOMContentLoaded', function() {
+                    const dateInput = document.getElementById('booking_date');
+                    if (dateInput.value) {
+                      validateDateInput(dateInput);
+                    }
+                  });
+                </script>
 
               </div>
 
@@ -312,8 +419,50 @@ function generateBookingReference()
                   <input type="text" id="pickup_location" name="pickup_location"
                     placeholder="Enter full pickup address"
                     value="<?php echo isset($_POST['pickup_location']) ? htmlspecialchars($_POST['pickup_location']) : ''; ?>"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    maxlength="30"
+                    oninput="validatePickupLocation(this)"
+                    required>
+                  <div id="pickup_location_error" class="text-red-500 text-xs mt-1 hidden">
+                    Pickup location must be 30 characters or less
+                  </div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    <span id="location_char_count">0</span>/30 characters
+                  </div>
                 </div>
+
+                <script>
+                  function validatePickupLocation(input) {
+                    const errorElement = document.getElementById('pickup_location_error');
+                    const charCountElement = document.getElementById('location_char_count');
+                    const currentLength = input.value.length;
+
+                    // Update character count
+                    charCountElement.textContent = currentLength;
+
+                    // Validate length
+                    if (currentLength > 30) {
+                      errorElement.classList.remove('hidden');
+                      input.setCustomValidity('Location must be 30 characters or less');
+                      // Trim to 30 characters
+                      input.value = input.value.substring(0, 30);
+                      charCountElement.textContent = 30;
+                    } else {
+                      errorElement.classList.add('hidden');
+                      input.setCustomValidity('');
+                    }
+
+                    // Force validation update
+                    input.reportValidity();
+                  }
+
+                  // Initialize character count
+                  document.addEventListener('DOMContentLoaded', function() {
+                    const locationInput = document.getElementById('pickup_location');
+                    document.getElementById('location_char_count').textContent = locationInput.value.length;
+                    validatePickupLocation(locationInput);
+                  });
+                </script>
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -322,10 +471,43 @@ function generateBookingReference()
                   <label class="block text-gray-700 text-sm font-bold mb-2" for="passengers">
                     Number of Passengers *
                   </label>
-                  <input type="number" id="passengers" name="passengers" min="1"
-                    value="<?php echo isset($_POST['passengers']) ? $_POST['passengers'] : '1'; ?>"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+                  <input type="number" id="passengers" name="passengers" min="1" max="5"
+                    value="<?php echo isset($_POST['passengers']) ? max(1, min(5, (int)$_POST['passengers'])) : '1'; ?>"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    oninput="validatePassengers(this)"
+                    required>
+                  <div id="passengers_error" class="text-red-500 text-xs mt-1 hidden">
+                    Please enter a number between 1-5
+                  </div>
                 </div>
+
+                <script>
+                  function validatePassengers(input) {
+                    const errorElement = document.getElementById('passengers_error');
+                    const value = parseInt(input.value);
+
+                    if (isNaN(value) || value < 1 || value > 5) {
+                      errorElement.classList.remove('hidden');
+                      input.setCustomValidity('Number of passengers must be between 1-5');
+                    } else {
+                      errorElement.classList.add('hidden');
+                      input.setCustomValidity('');
+                    }
+
+                    // Force immediate validation feedback
+                    input.reportValidity();
+
+                    // Ensure value stays within bounds
+                    if (value < 1) input.value = 1;
+                    if (value > 5) input.value = 5;
+                  }
+
+                  // Initialize validation
+                  document.addEventListener('DOMContentLoaded', function() {
+                    const passengersInput = document.getElementById('passengers');
+                    validatePassengers(passengersInput);
+                  });
+                </script>
 
                 <!-- Price Calculation Display -->
                 <div>
@@ -360,8 +542,57 @@ function generateBookingReference()
                 </label>
                 <textarea id="special_requests" name="special_requests" rows="3"
                   placeholder="Enter any special requirements or requests..."
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"><?php echo isset($_POST['special_requests']) ? htmlspecialchars($_POST['special_requests']) : ''; ?></textarea>
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  oninput="validateSpecialRequests(this)"
+                  onkeypress="return allowOnlyEnglish(event)"
+                  maxlength="500"><?php echo isset($_POST['special_requests']) ? htmlspecialchars($_POST['special_requests']) : ''; ?></textarea>
+                <div id="special_requests_error" class="text-red-500 text-xs mt-1 hidden">
+                  Only English letters, numbers, and basic punctuation (.,!?) are allowed
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                  <span id="char_count">0</span>/500 characters
+                </div>
               </div>
+
+              <script>
+                function validateSpecialRequests(textarea) {
+                  const errorElement = document.getElementById('special_requests_error');
+                  const charCountElement = document.getElementById('char_count');
+
+                  // Remove any special characters (keeps English letters, numbers, spaces, and basic punctuation)
+                  textarea.value = textarea.value.replace(/[^a-zA-Z0-9 .,!?]/g, '');
+
+                  // Update character count
+                  charCountElement.textContent = textarea.value.length;
+
+                  // Show error if any special characters were removed
+                  if (/[^a-zA-Z0-9 .,!?]/.test(textarea.value)) {
+                    errorElement.classList.remove('hidden');
+                  } else {
+                    errorElement.classList.add('hidden');
+                  }
+                }
+
+                function allowOnlyEnglish(event) {
+                  const key = event.key;
+                  // Allow: letters A-Z (both cases), numbers, space, and basic punctuation
+                  if (/[a-zA-Z0-9 .,!?]/.test(key) ||
+                    key === 'Backspace' ||
+                    key === 'Delete' ||
+                    key === 'ArrowLeft' ||
+                    key === 'ArrowRight') {
+                    return true;
+                  }
+                  event.preventDefault();
+                  return false;
+                }
+
+                // Initialize character count
+                document.addEventListener('DOMContentLoaded', function() {
+                  const textarea = document.getElementById('special_requests');
+                  document.getElementById('char_count').textContent = textarea.value.length;
+                });
+              </script>
 
               <!-- Terms and Conditions -->
               <div class="mb-6">
