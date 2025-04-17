@@ -9,6 +9,41 @@ if (!isset($_SESSION['admin_id'])) {
   exit();
 }
 
+// Create a table for transportation settings if it doesn't exist
+$create_settings_table_sql = "
+CREATE TABLE IF NOT EXISTS transportation_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    service_type VARCHAR(20) NOT NULL,
+    service_title VARCHAR(255) NOT NULL,
+    year INT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)";
+
+if ($conn->query($create_settings_table_sql)) {
+  // Check if we need to insert default values
+  $check_settings_sql = "SELECT COUNT(*) as count FROM transportation_settings WHERE service_type='taxi'";
+  $result = $conn->query($check_settings_sql);
+  $row = $result->fetch_assoc();
+
+  if ($row['count'] == 0) {
+    // Insert default taxi settings
+    $insert_taxi_sql = "INSERT INTO transportation_settings (service_type, service_title, year) 
+                           VALUES ('taxi', 'Best Taxi Service for Umrah and Hajj in Makkah, Madinah and Jeddah', 2024)";
+    $conn->query($insert_taxi_sql);
+  }
+
+  $check_settings_sql = "SELECT COUNT(*) as count FROM transportation_settings WHERE service_type='rentacar'";
+  $result = $conn->query($check_settings_sql);
+  $row = $result->fetch_assoc();
+
+  if ($row['count'] == 0) {
+    // Insert default rentacar settings
+    $insert_rentacar_sql = "INSERT INTO transportation_settings (service_type, service_title, year) 
+                               VALUES ('rentacar', 'Best Umrah and Hajj Rent A Car in Makkah, Madinah and Jeddah', 2024)";
+    $conn->query($insert_rentacar_sql);
+  }
+}
+
 // Function to get taxi routes
 function getTaxiRoutes()
 {
@@ -43,23 +78,74 @@ function getRentacarRoutes()
   return $routes;
 }
 
+// Function to get the service title and year for taxi routes
+function getTaxiServiceInfo()
+{
+  global $conn;
+  $result = array(
+    'service_title' => 'Best Taxi Service for Umrah and Hajj in Makkah, Madinah and Jeddah', // Default
+    'year' => 2024 // Default
+  );
+
+  $sql = "SELECT service_title, year FROM transportation_settings WHERE service_type='taxi' LIMIT 1";
+  $query = $conn->query($sql);
+
+  if ($query && $query->num_rows > 0) {
+    $data = $query->fetch_assoc();
+    $result['service_title'] = $data['service_title'];
+    $result['year'] = $data['year'];
+  }
+
+  return $result;
+}
+
+// Function to get the service title and year for rentacar routes
+function getRentacarServiceInfo()
+{
+  global $conn;
+  $result = array(
+    'service_title' => 'Best Umrah and Hajj Rent A Car in Makkah, Madinah and Jeddah', // Default
+    'year' => 2024 // Default
+  );
+
+  $sql = "SELECT service_title, year FROM transportation_settings WHERE service_type='rentacar' LIMIT 1";
+  $query = $conn->query($sql);
+
+  if ($query && $query->num_rows > 0) {
+    $data = $query->fetch_assoc();
+    $result['service_title'] = $data['service_title'];
+    $result['year'] = $data['year'];
+  }
+
+  return $result;
+}
+
 // Handling CRUD operations
 $success_message = '';
 $error_message = '';
 
 // UPDATE TAXI ROUTES
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_taxi_routes'])) {
+  // Get service title and year
+  $service_title = $conn->real_escape_string($_POST['serviceTitle']);
+  $year = (int)$_POST['year'];
+
+  // Update the settings table first
+  $update_settings_sql = "UPDATE transportation_settings SET 
+                         service_title = '$service_title', 
+                         year = $year 
+                         WHERE service_type = 'taxi'";
+  if (!$conn->query($update_settings_sql)) {
+    $error_message = "Error updating service settings: " . $conn->error;
+  }
+
   // Clear existing routes for the year if requested
   if (isset($_POST['replace_existing']) && $_POST['replace_existing'] == 'yes') {
-    $year = $_POST['year'];
     $delete_sql = "DELETE FROM taxi_routes WHERE year = $year";
     if (!$conn->query($delete_sql)) {
       $error_message = "Error clearing existing routes: " . $conn->error;
     }
   }
-
-  $service_title = $_POST['serviceTitle'];
-  $year = $_POST['year'];
 
   // Handle updates for existing routes
   if (isset($_POST['route_id']) && is_array($_POST['route_id'])) {
@@ -73,6 +159,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_taxi_routes']))
       $hiace_price = $_POST['hiace_price'][$key];
 
       $update_sql = "UPDATE taxi_routes SET 
+                     service_title = '$service_title',
+                     year = $year,
                      route_name = '$route_name',
                      route_number = $route_number,
                      camry_sonata_price = $camry_price,
@@ -121,17 +209,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_taxi_routes']))
 
 // UPDATE RENTACAR ROUTES
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_rentacar_routes'])) {
+  // Get service title and year
+  $service_title = $conn->real_escape_string($_POST['serviceTitle']);
+  $year = (int)$_POST['year'];
+
+  // Update the settings table first
+  $update_settings_sql = "UPDATE transportation_settings SET 
+                         service_title = '$service_title', 
+                         year = $year 
+                         WHERE service_type = 'rentacar'";
+  if (!$conn->query($update_settings_sql)) {
+    $error_message = "Error updating service settings: " . $conn->error;
+  }
+
   // Clear existing routes for the year if requested
   if (isset($_POST['replace_existing']) && $_POST['replace_existing'] == 'yes') {
-    $year = $_POST['year'];
     $delete_sql = "DELETE FROM rentacar_routes WHERE year = $year";
     if (!$conn->query($delete_sql)) {
       $error_message = "Error clearing existing routes: " . $conn->error;
     }
   }
-
-  $service_title = $_POST['serviceTitle'];
-  $year = $_POST['year'];
 
   // Handle updates for existing routes
   if (isset($_POST['route_id']) && is_array($_POST['route_id'])) {
@@ -145,6 +242,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_rentacar_routes
       $coaster_price = $_POST['coaster_price'][$key];
 
       $update_sql = "UPDATE rentacar_routes SET 
+                     service_title = '$service_title',
+                     year = $year,
                      route_name = '$route_name',
                      route_number = $route_number,
                      gmc_16_19_price = $gmc_16_19_price,
@@ -224,6 +323,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_rentacar_route'
 // Get data
 $taxi_routes = getTaxiRoutes();
 $rentacar_routes = getRentacarRoutes();
+
+// Get service info
+$taxi_service_info = getTaxiServiceInfo();
+$rentacar_service_info = getRentacarServiceInfo();
 ?>
 
 <!DOCTYPE html>
@@ -436,7 +539,7 @@ $rentacar_routes = getRentacarRoutes();
 
         <div class="bg-white p-6 rounded-lg shadow-lg">
           <div class="tab-buttons flex justify-center">
-            <button class="tab-btn zactive" onclick="switchTab('taxi')">Taxi Routes</button>
+            <button class="tab-btn active" onclick="switchTab('taxi')">Taxi Routes</button>
             <button class="tab-btn" onclick="switchTab('rentacar')">Rent A Car Routes</button>
           </div>
 
@@ -452,22 +555,15 @@ $rentacar_routes = getRentacarRoutes();
 
               <!-- Service Title and Year -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi-service-title">
-                    Service Title
-                  </label>
-                  <input type="text" id="taxi-service-title" name="serviceTitle"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    value="Best Taxi Service for Umrah and Hajj in Makkah, Madinah and Jeddah" required>
-                </div>
-                <div>
-                  <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi-year">
-                    Year
-                  </label>
-                  <input type="number" id="taxi-year" name="year" min="2024" max="2030"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    value="2024" required>
-                </div>
+                <!-- For taxi form -->
+                <input type="text" id="taxi-service-title" name="serviceTitle"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  value="<?php echo htmlspecialchars($taxi_service_info['service_title']); ?>" required>
+
+                <input type="number" id="taxi-year" name="year" min="2024" max="2030"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  value="<?php echo $taxi_service_info['year']; ?>" required>
+
               </div>
 
               <!-- Existing Routes Table -->
@@ -570,6 +666,9 @@ $rentacar_routes = getRentacarRoutes();
                       </td>
                     </tr>
                   </tbody>
+                  <script>
+                    
+                  </script>
                 </table>
 
                 <!-- Add Row Button -->
@@ -602,22 +701,14 @@ $rentacar_routes = getRentacarRoutes();
 
               <!-- Service Title and Year -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar-service-title">
-                    Service Title
-                  </label>
-                  <input type="text" id="rentacar-service-title" name="serviceTitle"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value="Best Umrah and Hajj Rent A Car in Makkah, Madinah and Jeddah" required>
-                </div>
-                <div>
-                  <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar-year">
-                    Year
-                  </label>
-                  <input type="number" id="rentacar-year" name="year" min="2024" max="2030"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value="2024" required>
-                </div>
+                <!-- For rentacar routes -->
+                <input type="text" id="rentacar-service-title" name="serviceTitle"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value="<?php echo htmlspecialchars($rentacar_service_info['service_title']); ?>" required>
+
+                <input type="number" id="rentacar-year" name="year" min="2024" max="2030"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value="<?php echo $rentacar_service_info['year']; ?>" required>
               </div>
 
               <!-- Existing Routes Table -->
