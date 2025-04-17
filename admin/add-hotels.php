@@ -278,7 +278,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <!-- Price and Rating -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="mb-4">
+                <label class="block text-gray-700 font-semibold mb-2">Price per Night ($) *</label>
+                <input type="number" name="price" id="price"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  placeholder="Enter price ($1-$50,000)"
+                  oninput="enforcePriceLimit(this)"
+                  onkeydown="preventOverTyping(this, event)"
+                  required>
+                <div id="price_error" class="text-red-500 text-xs mt-1 hidden">
+                  Maximum price is $50,000
+                </div>
+              </div>
 
+              <script>
+                function enforcePriceLimit(input) {
+                  const errorElement = document.getElementById('price_error');
+                  let value = input.value.replace(/[^0-9]/g, ''); // Remove non-digits
+
+                  // Enforce maximum limit
+                  if (value > 50000) {
+                    value = 50000;
+                    errorElement.classList.remove('hidden');
+                  } else {
+                    errorElement.classList.add('hidden');
+                  }
+
+                  // Enforce minimum $1
+                  if (value < 1 && value !== '') {
+                    value = '';
+                    errorElement.textContent = "Price cannot be zero";
+                    errorElement.classList.remove('hidden');
+                  }
+
+                  input.value = value === '' ? '' : parseInt(value);
+                }
+
+                function preventOverTyping(input, event) {
+                  const currentValue = input.value.replace(/[^0-9]/g, '');
+
+                  // Block typing if current value is already at max
+                  if (currentValue >= 50000 &&
+                    !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(event.key)) {
+                    event.preventDefault();
+                    document.getElementById('price_error').classList.remove('hidden');
+                    return;
+                  }
+
+                  // Allow only numbers and control keys
+                  if (!/[0-9]|Backspace|Delete|ArrowLeft|ArrowRight|Tab/.test(event.key)) {
+                    event.preventDefault();
+                  }
+                }
+
+                // Initialize
+                document.addEventListener('DOMContentLoaded', function() {
+                  document.getElementById('price').addEventListener('blur', function() {
+                    if (this.value > 50000) {
+                      this.value = 50000;
+                      document.getElementById('price_error').classList.remove('hidden');
+                    }
+                  });
+                });
+              </script>
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Hotel Rating</label>
                 <div class="flex items-center space-x-2">
@@ -295,12 +357,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <!-- Hotel Description -->
-            <div>
-              <label class="block text-gray-700 font-semibold mb-2">Hotel Description</label>
-              <textarea name="description" rows="4"
+            <div class="mb-4">
+              <label class="block text-gray-700 font-semibold mb-2">Hotel Description *</label>
+              <textarea name="description" id="description" rows="6"
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                placeholder="Enter detailed hotel description..."></textarea>
+                placeholder="Enter hotel description (200 words maximum)"
+                oninput="enforceWordLimit(this)"
+                onkeydown="preventExtraWords(this, event)"
+                required></textarea>
+              <div id="desc_error" class="text-red-500 text-xs mt-1 hidden">
+                Maximum 200 words reached (backspace to edit)
+              </div>
+              <div class="text-xs text-gray-500 mt-1">
+                <span id="word_count">0</span>/200 words
+                <span id="limit_reached" class="text-red-500 font-semibold hidden"> (Limit reached)</span>
+              </div>
             </div>
+
+            <script>
+              function enforceWordLimit(textarea) {
+                const errorElement = document.getElementById('desc_error');
+                const wordCountElement = document.getElementById('word_count');
+                const limitReachedElement = document.getElementById('limit_reached');
+
+                // Count words (including hyphenated words and contractions)
+                const words = textarea.value.match(/\b[\w'-]+\b/g) || [];
+                const wordCount = words.length;
+                wordCountElement.textContent = wordCount;
+
+                // Check word limit
+                if (wordCount >= 200) {
+                  // Trim to exactly 200 words
+                  if (wordCount > 200) {
+                    const trimmedText = words.slice(0, 200).join(' ');
+                    textarea.value = trimmedText;
+                    wordCountElement.textContent = 200;
+                  }
+                  errorElement.classList.remove('hidden');
+                  limitReachedElement.classList.remove('hidden');
+                  textarea.classList.add('border-red-300');
+                } else {
+                  errorElement.classList.add('hidden');
+                  limitReachedElement.classList.add('hidden');
+                  textarea.classList.remove('border-red-300');
+                }
+              }
+
+              function preventExtraWords(textarea, event) {
+                const words = textarea.value.match(/\b[\w'-]+\b/g) || [];
+
+                // Block typing if at 200 words (allow deletions and navigation)
+                if (words.length >= 200 &&
+                  !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab'].includes(event.key)) {
+                  event.preventDefault();
+                  return;
+                }
+
+                // Allow normal typing if under limit
+                return true;
+              }
+
+              // Initialize
+              document.addEventListener('DOMContentLoaded', function() {
+                document.getElementById('description').addEventListener('paste', function(e) {
+                  const words = this.value.match(/\b[\w'-]+\b/g) || [];
+                  if (words.length >= 200) {
+                    e.preventDefault();
+                  }
+                });
+              });
+            </script>
 
             <!-- Amenities -->
             <div>
