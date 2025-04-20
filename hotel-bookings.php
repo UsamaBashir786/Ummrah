@@ -88,15 +88,15 @@ try {
   AND status != 'cancelled'
 ");
 
-$stmt->execute([
-  $hotel_id,
-  $check_out,
-  $check_in,
-  $check_in,
-  $check_out
-]);
+  $stmt->execute([
+    $hotel_id,
+    $check_out,
+    $check_in,
+    $check_in,
+    $check_out
+  ]);
 
-$booked_rooms = $stmt->fetchAll(PDO::FETCH_COLUMN);
+  $booked_rooms = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
   // Calculate available rooms by subtracting booked rooms from all rooms
   $available_rooms = array_diff($hotel['room_ids'], $booked_rooms);

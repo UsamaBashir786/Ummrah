@@ -11,7 +11,7 @@ if (!isset($_SESSION['admin_id'])) {
 
 // Initialize filter variables
 $filter_status = isset($_GET['status']) ? $_GET['status'] : '';
-$filter_service = isset($_GET['service']) ? $_GET['service'] : '';
+$filter_hotel = isset($_GET['hotel']) ? $_GET['hotel'] : '';
 $filter_date_from = isset($_GET['date_from']) ? $_GET['date_from'] : '';
 $filter_date_to = isset($_GET['date_to']) ? $_GET['date_to'] : '';
 $filter_search = isset($_GET['search']) ? $_GET['search'] : '';
@@ -19,106 +19,112 @@ $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
 $items_per_page = 10;
 $offset = ($page - 1) * $items_per_page;
 
-// Base SQL query
-$sql = "SELECT tb.*, u.full_name, u.email, u.phone_number 
-        FROM transportation_bookings tb
-        LEFT JOIN users u ON tb.user_id = u.id
+// Base SQL query with better booking statistics
+$sql = "SELECT hb.*, u.full_name, u.email, u.phone_number, h.hotel_name, h.location as hotel_location, 
+        h.price_per_night, h.room_count, h.rating, h.amenities,
+        (SELECT COUNT(*) FROM hotel_bookings WHERE hotel_id = h.id AND 
+         status IN ('pending', 'confirmed', 'completed') AND
+         ((check_in_date <= CURDATE() AND check_out_date >= CURDATE()) OR 
+          (check_in_date >= CURDATE() AND check_in_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)))
+        ) as current_bookings,
+        (SELECT SUM(DATEDIFF(check_out_date, check_in_date) * h.price_per_night) 
+         FROM hotel_bookings 
+         WHERE hotel_id = h.id AND status IN ('confirmed', 'completed')
+        ) as hotel_revenue
+        FROM hotel_bookings hb
+        LEFT JOIN users u ON hb.user_id = u.id
+        LEFT JOIN hotels h ON hb.hotel_id = h.id
         WHERE 1=1";
 
 // Apply filters
 if (!empty($filter_status)) {
-  $sql .= " AND tb.booking_status = '" . mysqli_real_escape_string($conn, $filter_status) . "'";
+  $sql .= " AND hb.status = '" . mysqli_real_escape_string($conn, $filter_status) . "'";
 }
 
-if (!empty($filter_service)) {
-  $sql .= " AND tb.service_type = '" . mysqli_real_escape_string($conn, $filter_service) . "'";
+if (!empty($filter_hotel)) {
+  $sql .= " AND hb.hotel_id = '" . mysqli_real_escape_string($conn, $filter_hotel) . "'";
 }
 
 if (!empty($filter_date_from)) {
-  $sql .= " AND tb.booking_date >= '" . mysqli_real_escape_string($conn, $filter_date_from) . "'";
+  $sql .= " AND hb.check_in_date >= '" . mysqli_real_escape_string($conn, $filter_date_from) . "'";
 }
 
 if (!empty($filter_date_to)) {
-  $sql .= " AND tb.booking_date <= '" . mysqli_real_escape_string($conn, $filter_date_to) . "'";
+  $sql .= " AND hb.check_out_date <= '" . mysqli_real_escape_string($conn, $filter_date_to) . "'";
 }
 
 if (!empty($filter_search)) {
   $search_term = mysqli_real_escape_string($conn, $filter_search);
-  $sql .= " AND (tb.booking_reference LIKE '%$search_term%'
-           OR tb.route_name LIKE '%$search_term%'
-           OR u.full_name LIKE '%$search_term%'
-           OR u.email LIKE '%$search_term%'
-           OR u.phone_number LIKE '%$search_term%')";
+  $sql .= " AND (hb.guest_name LIKE '%$search_term%'
+           OR hb.guest_email LIKE '%$search_term%'
+           OR hb.guest_phone LIKE '%$search_term%'
+           OR h.hotel_name LIKE '%$search_term%')";
 }
 
-// Combine queries for total items, total revenue, and completed bookings
+// Count total items and get stats
 $count_sql = "SELECT 
                 COUNT(*) as total, 
-                SUM(CASE WHEN tb.booking_status != 'cancelled' THEN tb.price ELSE 0 END) as total_revenue, 
-                SUM(CASE WHEN tb.booking_status = 'completed' THEN 1 ELSE 0 END) as completed 
-              FROM transportation_bookings tb
-              LEFT JOIN users u ON tb.user_id = u.id
+                COUNT(CASE WHEN hb.status = 'completed' THEN 1 END) as completed,
+                SUM(DATEDIFF(hb.check_out_date, hb.check_in_date) * h.price_per_night) as total_revenue
+              FROM hotel_bookings hb
+              LEFT JOIN hotels h ON hb.hotel_id = h.id
               WHERE 1=1";
 
-// Apply filters
+// Apply filters to count query
 if (!empty($filter_status)) {
-  $count_sql .= " AND tb.booking_status = '" . mysqli_real_escape_string($conn, $filter_status) . "'";
+  $count_sql .= " AND hb.status = '" . mysqli_real_escape_string($conn, $filter_status) . "'";
 }
 
-if (!empty($filter_service)) {
-  $count_sql .= " AND tb.service_type = '" . mysqli_real_escape_string($conn, $filter_service) . "'";
+if (!empty($filter_hotel)) {
+  $count_sql .= " AND hb.hotel_id = '" . mysqli_real_escape_string($conn, $filter_hotel) . "'";
 }
 
 if (!empty($filter_date_from)) {
-  $count_sql .= " AND tb.booking_date >= '" . mysqli_real_escape_string($conn, $filter_date_from) . "'";
+  $count_sql .= " AND hb.check_in_date >= '" . mysqli_real_escape_string($conn, $filter_date_from) . "'";
 }
 
 if (!empty($filter_date_to)) {
-  $count_sql .= " AND tb.booking_date <= '" . mysqli_real_escape_string($conn, $filter_date_to) . "'";
+  $count_sql .= " AND hb.check_out_date <= '" . mysqli_real_escape_string($conn, $filter_date_to) . "'";
 }
 
 if (!empty($filter_search)) {
   $search_term = mysqli_real_escape_string($conn, $filter_search);
-  $count_sql .= " AND (tb.booking_reference LIKE '%$search_term%'
-                   OR tb.route_name LIKE '%$search_term%'
-                   OR u.full_name LIKE '%$search_term%'
-                   OR u.email LIKE '%$search_term%'
-                   OR u.phone_number LIKE '%$search_term%')";
+  $count_sql .= " AND (hb.guest_name LIKE '%$search_term%'
+                 OR hb.guest_email LIKE '%$search_term%'
+                 OR hb.guest_phone LIKE '%$search_term%'
+                 OR h.hotel_name LIKE '%$search_term%')";
 }
 
 $count_result = $conn->query($count_sql);
 $count_row = $count_result->fetch_assoc();
 $total_items = $count_row['total'];
-$total_revenue = $count_row['total_revenue'] ?? 0; // Default to 0 if no bookings
-$completed_bookings = $count_row['completed'] ?? 0; // Default to 0 if no completed bookings
+$total_revenue = $count_row['total_revenue'] ?? 0;
+$completed_bookings = $count_row['completed'] ?? 0;
 $total_pages = ceil($total_items / $items_per_page);
+
 // Finalize query with pagination and ordering
-$sql .= " ORDER BY tb.booking_date DESC, tb.booking_time DESC LIMIT $offset, $items_per_page";
+$sql .= " ORDER BY hb.check_in_date DESC, hb.created_at DESC LIMIT $offset, $items_per_page";
 $result = $conn->query($sql);
+
+// Get hotels for filter dropdown
+$hotels_sql = "SELECT id, hotel_name FROM hotels ORDER BY hotel_name ASC";
+$hotels_result = $conn->query($hotels_sql);
 
 // Handle booking status update
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_status'])) {
   $booking_id = $_POST['booking_id'];
   $new_status = $_POST['new_status'];
 
-  $update_sql = "UPDATE transportation_bookings SET 
-                 booking_status = '" . mysqli_real_escape_string($conn, $new_status) . "',
+  $update_sql = "UPDATE hotel_bookings SET 
+                 status = '" . mysqli_real_escape_string($conn, $new_status) . "',
                  updated_at = NOW()
                  WHERE id = " . intval($booking_id);
 
   if ($conn->query($update_sql)) {
     $success_message = "Booking status updated successfully!";
 
-    // If status is set to completed, also update payment status to paid
-    if ($new_status == 'completed') {
-      $update_payment_sql = "UPDATE transportation_bookings SET 
-                           payment_status = 'paid'
-                           WHERE id = " . intval($booking_id);
-      $conn->query($update_payment_sql);
-    }
-
     // Redirect to avoid form resubmission
-    header("Location: booked-transportation.php?status=$filter_status&service=$filter_service&date_from=$filter_date_from&date_to=$filter_date_to&search=$filter_search&page=$page&success=1");
+    header("Location: booked-hotels.php?status=$filter_status&hotel=$filter_hotel&date_from=$filter_date_from&date_to=$filter_date_to&search=$filter_search&page=$page&success=1");
     exit();
   } else {
     $error_message = "Error updating status: " . $conn->error;
@@ -129,24 +135,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_status'])) {
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_booking'])) {
   $booking_id = $_POST['booking_id'];
 
-  // Check for any related transportation assignments
-  $check_sql = "SELECT id FROM transportation_assign WHERE booking_id = " . intval($booking_id);
-  $check_result = $conn->query($check_sql);
-
-  if ($check_result->num_rows > 0) {
-    // Delete related assignments first
-    $delete_assignments_sql = "DELETE FROM transportation_assign WHERE booking_id = " . intval($booking_id);
-    $conn->query($delete_assignments_sql);
-  }
-
-  // Now delete the booking
-  $delete_sql = "DELETE FROM transportation_bookings WHERE id = " . intval($booking_id);
+  $delete_sql = "DELETE FROM hotel_bookings WHERE id = " . intval($booking_id);
 
   if ($conn->query($delete_sql)) {
     $success_message = "Booking deleted successfully!";
 
     // Redirect to avoid form resubmission
-    header("Location: booked-transportation.php?status=$filter_status&service=$filter_service&date_from=$filter_date_from&date_to=$filter_date_to&search=$filter_search&page=$page&success=2");
+    header("Location: booked-hotels.php?status=$filter_status&hotel=$filter_hotel&date_from=$filter_date_from&date_to=$filter_date_to&search=$filter_search&page=$page&success=2");
     exit();
   } else {
     $error_message = "Error deleting booking: " . $conn->error;
@@ -188,7 +183,7 @@ if (isset($_GET['success'])) {
           <i class="fas fa-bars"></i>
         </button>
         <h1 class="text-xl font-semibold">
-          <i class="text-teal-600 fas fa-car-side mx-2"></i> Booked Transportation
+          <i class="text-teal-600 fas fa-hotel mx-2"></i> Hotel Bookings
         </h1>
       </div>
 
@@ -204,6 +199,24 @@ if (isset($_GET['success'])) {
                 document.getElementById('success-alert').style.display = 'none';
               }, 5000);
             </script>
+
+            <!-- Add payment status to the table -->
+            <style>
+              .payment-status-paid {
+                color: #047857;
+                font-weight: 600;
+              }
+
+              .payment-status-unpaid {
+                color: #b45309;
+                font-weight: 600;
+              }
+
+              .payment-status-refunded {
+                color: #4b5563;
+                font-weight: 600;
+              }
+            </style>
           <?php endif; ?>
 
           <?php if (isset($error_message)): ?>
@@ -220,7 +233,7 @@ if (isset($_GET['success'])) {
           <!-- Filter Section -->
           <div class="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 class="text-lg font-semibold mb-4 text-gray-700">
-              <i class="fas fa-filter text-teal-600 mr-2"></i> Filter Transportation Bookings
+              <i class="fas fa-filter text-teal-600 mr-2"></i> Filter Hotel Bookings
             </h2>
             <form action="" method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <!-- Status Filter -->
@@ -235,31 +248,36 @@ if (isset($_GET['success'])) {
                 </select>
               </div>
 
-              <!-- Service Type Filter -->
+              <!-- Hotel Filter -->
               <div>
-                <label for="service" class="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
-                <select id="service" name="service" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500">
-                  <option value="">All Services</option>
-                  <option value="taxi" <?php echo ($filter_service == 'taxi') ? 'selected' : ''; ?>>Taxi</option>
-                  <option value="rentacar" <?php echo ($filter_service == 'rentacar') ? 'selected' : ''; ?>>Rent A Car</option>
+                <label for="hotel" class="block text-sm font-medium text-gray-700 mb-1">Hotel</label>
+                <select id="hotel" name="hotel" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500">
+                  <option value="">All Hotels</option>
+                  <?php if ($hotels_result && $hotels_result->num_rows > 0): ?>
+                    <?php while ($hotel = $hotels_result->fetch_assoc()): ?>
+                      <option value="<?php echo $hotel['id']; ?>" <?php echo ($filter_hotel == $hotel['id']) ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($hotel['hotel_name']); ?>
+                      </option>
+                    <?php endwhile; ?>
+                  <?php endif; ?>
                 </select>
               </div>
 
               <!-- Date Range Filter -->
               <div>
-                <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">Check-in Date (From)</label>
                 <input type="date" id="date_from" name="date_from" value="<?php echo $filter_date_from; ?>" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500">
               </div>
 
               <div>
-                <label for="date_to" class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                <label for="date_to" class="block text-sm font-medium text-gray-700 mb-1">Check-out Date (To)</label>
                 <input type="date" id="date_to" name="date_to" value="<?php echo $filter_date_to; ?>" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500">
               </div>
 
               <!-- Search Box -->
               <div class="md:col-span-2">
-                <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Search (Ref#, Route, Customer)</label>
-                <input type="text" id="search" name="search" value="<?php echo htmlspecialchars($filter_search); ?>" placeholder="Search by reference, route or customer details" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500">
+                <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Search (Guest, Email, Phone, Hotel)</label>
+                <input type="text" id="search" name="search" value="<?php echo htmlspecialchars($filter_search); ?>" placeholder="Search by guest name, email, phone or hotel name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500">
               </div>
 
               <!-- Filter Buttons -->
@@ -267,7 +285,7 @@ if (isset($_GET['success'])) {
                 <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-md flex items-center">
                   <i class="fas fa-search mr-2"></i> Apply Filters
                 </button>
-                <a href="booked-transportation.php" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md flex items-center">
+                <a href="booked-hotels.php" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md flex items-center">
                   <i class="fas fa-undo mr-2"></i> Reset
                 </a>
               </div>
@@ -278,10 +296,10 @@ if (isset($_GET['success'])) {
           <div class="bg-white rounded-lg shadow-md p-6">
             <div class="flex justify-between items-center mb-6">
               <h2 class="text-lg font-semibold text-gray-700">
-                <i class="fas fa-list text-teal-600 mr-2"></i> Transportation Bookings
+                <i class="fas fa-list text-teal-600 mr-2"></i> Hotel Bookings
               </h2>
               <p class="text-sm text-gray-600">
-                Showing <?php echo ($result->num_rows > 0) ? ($offset + 1) : 0; ?> -
+                Showing <?php echo ($result && $result->num_rows > 0) ? ($offset + 1) : 0; ?> -
                 <?php echo min($offset + $items_per_page, $total_items); ?> of <?php echo $total_items; ?> bookings
               </p>
             </div>
@@ -294,10 +312,10 @@ if (isset($_GET['success'])) {
                 <div class="text-3xl font-bold"><?php echo $total_items; ?></div>
               </div>
 
-              <!-- Total Revenue (Lump Sum, excluding cancelled bookings) -->
+              <!-- Total Revenue -->
               <div class="bg-gradient-to-r from-green-400 to-green-500 rounded-lg p-4 text-white">
                 <div class="text-lg opacity-80 mb-1">Total Revenue</div>
-                <div class="text-3xl font-bold">$<?php echo number_format($total_revenue, 2); ?></div>
+                <div class="text-3xl font-bold">PKR <?php echo number_format($total_revenue, 2); ?></div>
               </div>
 
               <!-- Completed Bookings -->
@@ -312,13 +330,14 @@ if (isset($_GET['success'])) {
               <table class="min-w-full bg-white border border-gray-200">
                 <thead class="bg-gray-50">
                   <tr>
-                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ref #</th>
-                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
-                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
-                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
-                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest</th>
+                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hotel</th>
+                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
+                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-in</th>
+                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-out</th>
                     <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
                     <th class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
@@ -327,45 +346,41 @@ if (isset($_GET['success'])) {
                     <?php while ($booking = $result->fetch_assoc()): ?>
                       <tr class="hover:bg-gray-50">
                         <td class="py-3 px-4 whitespace-nowrap">
-                          <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($booking['booking_reference']); ?></div>
+                          <div class="text-sm font-medium text-gray-900"><?php echo $booking['id']; ?></div>
                         </td>
                         <td class="py-3 px-4">
-                          <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($booking['full_name']); ?></div>
-                          <div class="text-sm text-gray-500"><?php echo htmlspecialchars($booking['phone_number']); ?></div>
-                          <div class="text-xs text-gray-500"><?php echo htmlspecialchars($booking['email']); ?></div>
+                          <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($booking['guest_name']); ?></div>
+                          <div class="text-sm text-gray-500"><?php echo htmlspecialchars($booking['guest_phone']); ?></div>
+                          <div class="text-xs text-gray-500"><?php echo htmlspecialchars($booking['guest_email']); ?></div>
                         </td>
                         <td class="py-3 px-4">
-                          <div class="flex items-center">
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                              <?php echo ($booking['service_type'] == 'taxi') ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'; ?>">
-                              <?php echo ucfirst($booking['service_type']); ?>
-                            </span>
+                          <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($booking['hotel_name'] ?? 'N/A'); ?></div>
+                          <div class="text-xs text-gray-500"><?php echo htmlspecialchars(ucfirst($booking['hotel_location'] ?? '')); ?></div>
+                        </td>
+                        <td class="py-3 px-4">
+                          <div class="text-sm text-gray-900">Room <?php echo htmlspecialchars($booking['room_id']); ?></div>
+                          <div class="text-xs text-gray-500">
+                            <?php if (isset($booking['price_per_night'])): ?>
+                              PKR <?php echo number_format($booking['price_per_night'], 2); ?>/night
+                            <?php endif; ?>
                           </div>
-                          <div class="text-xs text-gray-500 mt-1"><?php echo ucfirst($booking['duration']); ?></div>
-                        </td>
-                        <td class="py-3 px-4">
-                          <div class="text-sm text-gray-900"><?php echo htmlspecialchars($booking['route_name']); ?></div>
-                          <div class="text-xs text-gray-500 mt-1">
-                            <span class="block truncate max-w-xs" title="<?php echo htmlspecialchars($booking['pickup_location']); ?>">
-                              From: <?php echo htmlspecialchars($booking['pickup_location']); ?>
-                            </span>
-                            <span class="block truncate max-w-xs" title="<?php echo htmlspecialchars($booking['dropoff_location']); ?>">
-                              To: <?php echo htmlspecialchars($booking['dropoff_location']); ?>
-                            </span>
-                          </div>
-                        </td>
-                        <td class="py-3 px-4">
-                          <div class="text-sm text-gray-900"><?php echo htmlspecialchars($booking['vehicle_name']); ?></div>
-                          <div class="text-xs text-gray-500">Passengers: <?php echo intval($booking['passengers']); ?></div>
                         </td>
                         <td class="py-3 px-4 whitespace-nowrap">
-                          <div class="text-sm text-gray-900"><?php echo date('M d, Y', strtotime($booking['booking_date'])); ?></div>
-                          <div class="text-sm text-gray-500"><?php echo date('h:i A', strtotime($booking['booking_time'])); ?></div>
+                          <div class="text-sm text-gray-900"><?php echo date('M d, Y', strtotime($booking['check_in_date'])); ?></div>
+                        </td>
+                        <td class="py-3 px-4 whitespace-nowrap">
+                          <div class="text-sm text-gray-900"><?php echo date('M d, Y', strtotime($booking['check_out_date'])); ?></div>
+                          <div class="text-xs text-gray-500">
+                            <?php
+                            $nights = (strtotime($booking['check_out_date']) - strtotime($booking['check_in_date'])) / (60 * 60 * 24);
+                            echo $nights . ' ' . ($nights == 1 ? 'night' : 'nights');
+                            ?>
+                          </div>
                         </td>
                         <td class="py-3 px-4 whitespace-nowrap">
                           <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                             <?php
-                            switch ($booking['booking_status']) {
+                            switch ($booking['status']) {
                               case 'pending':
                                 echo 'bg-yellow-100 text-yellow-800';
                                 break;
@@ -382,16 +397,18 @@ if (isset($_GET['success'])) {
                                 echo 'bg-gray-100 text-gray-800';
                             }
                             ?>">
-                            <?php echo ucfirst($booking['booking_status']); ?>
+                            <?php echo ucfirst($booking['status']); ?>
                           </span>
-                          <div class="text-xs text-gray-500 mt-1">
-                            Payment: <span class="<?php echo ($booking['payment_status'] == 'paid') ? 'text-green-600' : 'text-orange-600'; ?>">
-                              <?php echo ucfirst($booking['payment_status']); ?>
-                            </span>
-                          </div>
-                          <div class="text-xs text-gray-500 mt-1">
-                            Price: $<?php echo number_format($booking['price'], 2); ?>
-                          </div>
+                        </td>
+                        <td class="py-3 px-4 whitespace-nowrap">
+                          <?php
+                          // We'll add a mock payment status field since the hotel_bookings table doesn't have one
+                          $paymentStatus = ($booking['status'] == 'completed') ? 'paid' : 'unpaid';
+                          $paymentStatusClass = 'payment-status-' . $paymentStatus;
+                          ?>
+                          <span class="<?php echo $paymentStatusClass; ?>">
+                            <?php echo ucfirst($paymentStatus); ?>
+                          </span>
                         </td>
                         <td class="py-3 px-4 text-center">
                           <div class="flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-2">
@@ -404,22 +421,15 @@ if (isset($_GET['success'])) {
                             <!-- Update Status Button -->
                             <button type="button" class="text-teal-600 hover:text-teal-900 update-status"
                               data-id="<?php echo $booking['id']; ?>"
-                              data-reference="<?php echo htmlspecialchars($booking['booking_reference']); ?>"
-                              data-status="<?php echo $booking['booking_status']; ?>">
+                              data-guest="<?php echo htmlspecialchars($booking['guest_name']); ?>"
+                              data-status="<?php echo $booking['status']; ?>">
                               <i class="fas fa-edit"></i>
                             </button>
-
-                            <!-- Assign Button - for pending or confirmed bookings -->
-                            <?php if ($booking['booking_status'] == 'pending' || $booking['booking_status'] == 'confirmed'): ?>
-                              <a href="assign-transportation.php?booking_id=<?php echo $booking['id']; ?>" class="text-purple-600 hover:text-purple-900">
-                                <i class="fas fa-user-check"></i>
-                              </a>
-                            <?php endif; ?>
 
                             <!-- Delete Button -->
                             <button type="button" class="text-red-600 hover:text-red-900 delete-booking"
                               data-id="<?php echo $booking['id']; ?>"
-                              data-reference="<?php echo htmlspecialchars($booking['booking_reference']); ?>">
+                              data-guest="<?php echo htmlspecialchars($booking['guest_name']); ?>">
                               <i class="fas fa-trash"></i>
                             </button>
                           </div>
@@ -428,7 +438,7 @@ if (isset($_GET['success'])) {
                     <?php endwhile; ?>
                   <?php else: ?>
                     <tr>
-                      <td colspan="8" class="py-6 text-center text-gray-500 italic">No transportation bookings found matching your criteria.</td>
+                      <td colspan="9" class="py-6 text-center text-gray-500 italic">No hotel bookings found matching your criteria.</td>
                     </tr>
                   <?php endif; ?>
                 </tbody>
@@ -442,7 +452,7 @@ if (isset($_GET['success'])) {
                   <!-- Previous Page Link -->
                   <li>
                     <?php if ($page > 1): ?>
-                      <a href="?status=<?php echo $filter_status; ?>&service=<?php echo $filter_service; ?>&date_from=<?php echo $filter_date_from; ?>&date_to=<?php echo $filter_date_to; ?>&search=<?php echo $filter_search; ?>&page=<?php echo $page - 1; ?>"
+                      <a href="?status=<?php echo $filter_status; ?>&hotel=<?php echo $filter_hotel; ?>&date_from=<?php echo $filter_date_from; ?>&date_to=<?php echo $filter_date_to; ?>&search=<?php echo $filter_search; ?>&page=<?php echo $page - 1; ?>"
                         class="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">
                         <i class="fas fa-chevron-left"></i>
                       </a>
@@ -468,7 +478,7 @@ if (isset($_GET['success'])) {
                       <?php if ($i == $page): ?>
                         <span class="px-3 py-2 bg-teal-600 text-white rounded-md"><?php echo $i; ?></span>
                       <?php else: ?>
-                        <a href="?status=<?php echo $filter_status; ?>&service=<?php echo $filter_service; ?>&date_from=<?php echo $filter_date_from; ?>&date_to=<?php echo $filter_date_to; ?>&search=<?php echo $filter_search; ?>&page=<?php echo $i; ?>"
+                        <a href="?status=<?php echo $filter_status; ?>&hotel=<?php echo $filter_hotel; ?>&date_from=<?php echo $filter_date_from; ?>&date_to=<?php echo $filter_date_to; ?>&search=<?php echo $filter_search; ?>&page=<?php echo $i; ?>"
                           class="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">
                           <?php echo $i; ?>
                         </a>
@@ -479,7 +489,7 @@ if (isset($_GET['success'])) {
                   <!-- Next Page Link -->
                   <li>
                     <?php if ($page < $total_pages): ?>
-                      <a href="?status=<?php echo $filter_status; ?>&service=<?php echo $filter_service; ?>&date_from=<?php echo $filter_date_from; ?>&date_to=<?php echo $filter_date_to; ?>&search=<?php echo $filter_search; ?>&page=<?php echo $page + 1; ?>"
+                      <a href="?status=<?php echo $filter_status; ?>&hotel=<?php echo $filter_hotel; ?>&date_from=<?php echo $filter_date_from; ?>&date_to=<?php echo $filter_date_to; ?>&search=<?php echo $filter_search; ?>&page=<?php echo $page + 1; ?>"
                         class="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">
                         <i class="fas fa-chevron-right"></i>
                       </a>
@@ -502,21 +512,20 @@ if (isset($_GET['success'])) {
   <div id="viewDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
     <div class="bg-white rounded-lg shadow-lg w-full max-w-4xl max-h-screen overflow-y-auto">
       <div class="border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-        <h3 class="text-xl font-semibold text-gray-800">Booking Details</h3>
+        <h3 class="text-xl font-semibold text-gray-800">Hotel Booking Details</h3>
         <button type="button" class="text-gray-400 hover:text-gray-500" id="closeDetailsModal">
           <i class="fas fa-times"></i>
         </button>
       </div>
       <div class="p-6">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- Customer Information -->
+          <!-- Guest Information -->
           <div class="bg-gray-50 p-4 rounded-lg">
-            <h4 class="text-lg font-semibold text-gray-700 mb-4">Customer Information</h4>
+            <h4 class="text-lg font-semibold text-gray-700 mb-4">Guest Information</h4>
             <div class="space-y-2">
-              <p><span class="font-medium text-gray-600">Name:</span> <span id="customer-name"></span></p>
-              <p><span class="font-medium text-gray-600">Email:</span> <span id="customer-email"></span></p>
-              <p><span class="font-medium text-gray-600">Phone:</span> <span id="customer-phone"></span></p>
-              <p><span class="font-medium text-gray-600">Passengers:</span> <span id="passenger-count"></span></p>
+              <p><span class="font-medium text-gray-600">Name:</span> <span id="guest-name"></span></p>
+              <p><span class="font-medium text-gray-600">Email:</span> <span id="guest-email"></span></p>
+              <p><span class="font-medium text-gray-600">Phone:</span> <span id="guest-phone"></span></p>
             </div>
           </div>
 
@@ -524,42 +533,50 @@ if (isset($_GET['success'])) {
           <div class="bg-gray-50 p-4 rounded-lg">
             <h4 class="text-lg font-semibold text-gray-700 mb-4">Booking Information</h4>
             <div class="space-y-2">
-              <p><span class="font-medium text-gray-600">Reference:</span> <span id="booking-reference"></span></p>
+              <p><span class="font-medium text-gray-600">Booking ID:</span> <span id="booking-id"></span></p>
               <p><span class="font-medium text-gray-600">Status:</span> <span id="booking-status"></span></p>
-              <p><span class="font-medium text-gray-600">Payment Status:</span> <span id="payment-status"></span></p>
-              <p><span class="font-medium text-gray-600">Price:</span> $<span id="booking-price"></span></p>
               <p><span class="font-medium text-gray-600">Booking Date:</span> <span id="created-at"></span></p>
+              <p><span class="font-medium text-gray-600">Last Updated:</span> <span id="updated-at"></span></p>
             </div>
           </div>
 
-          <!-- Transportation Details -->
+          <!-- Hotel Details -->
           <div class="bg-gray-50 p-4 rounded-lg">
-            <h4 class="text-lg font-semibold text-gray-700 mb-4">Transportation Details</h4>
+            <h4 class="text-lg font-semibold text-gray-700 mb-4">Hotel Details</h4>
             <div class="space-y-2">
-              <p><span class="font-medium text-gray-600">Service Type:</span> <span id="service-type"></span></p>
-              <p><span class="font-medium text-gray-600">Route:</span> <span id="route-name"></span></p>
-              <p><span class="font-medium text-gray-600">Vehicle Type:</span> <span id="vehicle-type"></span></p>
-              <p><span class="font-medium text-gray-600">Vehicle Name:</span> <span id="vehicle-name"></span></p>
-              <p><span class="font-medium text-gray-600">Duration:</span> <span id="duration-type"></span></p>
+              <p><span class="font-medium text-gray-600">Hotel:</span> <span id="hotel-name"></span></p>
+              <p><span class="font-medium text-gray-600">Location:</span> <span id="hotel-location"></span></p>
+              <p><span class="font-medium text-gray-600">Room ID:</span> <span id="room-id"></span></p>
+              <p><span class="font-medium text-gray-600">Price Per Night:</span> PKR <span id="price-per-night"></span></p>
+              <p><span class="font-medium text-gray-600">Hotel Rating:</span> <span id="hotel-rating"></span></p>
+              <p><span class="font-medium text-gray-600">Amenities:</span> <span id="hotel-amenities"></span></p>
             </div>
           </div>
 
-          <!-- Trip Information -->
+          <!-- Booking Statistics -->
           <div class="bg-gray-50 p-4 rounded-lg">
-            <h4 class="text-lg font-semibold text-gray-700 mb-4">Trip Information</h4>
+            <h4 class="text-lg font-semibold text-gray-700 mb-4">Booking Statistics</h4>
             <div class="space-y-2">
-              <p><span class="font-medium text-gray-600">Date:</span> <span id="trip-date"></span></p>
-              <p><span class="font-medium text-gray-600">Time:</span> <span id="trip-time"></span></p>
-              <p><span class="font-medium text-gray-600">Pickup Location:</span> <span id="pickup-location"></span></p>
-              <p><span class="font-medium text-gray-600">Dropoff Location:</span> <span id="dropoff-location"></span></p>
+              <p><span class="font-medium text-gray-600">Total Hotel Rooms:</span> <span id="total-rooms"></span></p>
+              <p><span class="font-medium text-gray-600">Currently Booked Rooms:</span> <span id="current-bookings"></span></p>
+              <p><span class="font-medium text-gray-600">Available Rooms:</span> <span id="available-rooms"></span></p>
+              <p><span class="font-medium text-gray-600">Occupancy Rate:</span> <span id="occupancy-rate"></span></p>
+              <p><span class="font-medium text-gray-600">Room Revenue:</span> PKR <span id="room-revenue"></span></p>
+              <p><span class="font-medium text-gray-600">Hotel Total Revenue:</span> PKR <span id="hotel-total-revenue"></span></p>
             </div>
           </div>
-        </div>
 
-        <!-- Special Requests -->
-        <div class="mt-6 bg-gray-50 p-4 rounded-lg">
-          <h4 class="text-lg font-semibold text-gray-700 mb-2">Special Requests</h4>
-          <p id="special-requests" class="text-gray-600 italic"></p>
+          <!-- Stay Information -->
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h4 class="text-lg font-semibold text-gray-700 mb-4">Stay Information</h4>
+            <div class="space-y-2">
+              <p><span class="font-medium text-gray-600">Check-in Date:</span> <span id="check-in-date"></span></p>
+              <p><span class="font-medium text-gray-600">Check-out Date:</span> <span id="check-out-date"></span></p>
+              <p><span class="font-medium text-gray-600">Duration:</span> <span id="stay-duration"></span></p>
+              <p><span class="font-medium text-gray-600">Total Price:</span> PKR <span id="total-price"></span></p>
+              <p><span class="font-medium text-gray-600">Payment Status:</span> <span id="payment-status"></span></p>
+            </div>
+          </div>
         </div>
 
         <!-- Actions -->
@@ -570,9 +587,6 @@ if (isset($_GET['success'])) {
           <button type="button" id="printDetailsBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
             <i class="fas fa-print mr-2"></i> Print Details
           </button>
-          <span id="modal-assign-button-container">
-            <!-- Assign button will be added here dynamically if booking is pending -->
-          </span>
         </div>
       </div>
     </div>
@@ -592,7 +606,7 @@ if (isset($_GET['success'])) {
         <input type="hidden" name="booking_id" id="status-booking-id">
         <div class="p-6">
           <div class="mb-4">
-            <p class="text-sm text-gray-600 mb-2">Booking Reference: <span id="status-booking-ref" class="font-medium"></span></p>
+            <p class="text-sm text-gray-600 mb-2">Guest: <span id="status-guest-name" class="font-medium"></span></p>
             <label for="new_status" class="block text-sm font-medium text-gray-700 mb-2">New Status</label>
             <select id="new_status" name="new_status" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500">
               <option value="pending">Pending</option>
@@ -634,6 +648,19 @@ if (isset($_GET['success'])) {
         allowInput: true
       });
 
+      // Function to display star ratings
+      function displayStarRating(rating) {
+        let stars = '';
+        for (let i = 0; i < 5; i++) {
+          if (i < rating) {
+            stars += '<i class="fas fa-star text-yellow-400"></i>';
+          } else {
+            stars += '<i class="far fa-star text-gray-300"></i>';
+          }
+        }
+        return stars;
+      }
+
       // View Details Modal
       const viewDetailsModal = document.getElementById('viewDetailsModal');
       const closeDetailsModal = document.getElementById('closeDetailsModal');
@@ -652,16 +679,15 @@ if (isset($_GET['success'])) {
           const bookingData = JSON.parse(this.getAttribute('data-booking'));
 
           // Fill modal with booking data
-          document.getElementById('customer-name').textContent = bookingData.full_name;
-          document.getElementById('customer-email').textContent = bookingData.email;
-          document.getElementById('customer-phone').textContent = bookingData.phone_number;
-          document.getElementById('passenger-count').textContent = bookingData.passengers;
+          document.getElementById('guest-name').textContent = bookingData.guest_name;
+          document.getElementById('guest-email').textContent = bookingData.guest_email;
+          document.getElementById('guest-phone').textContent = bookingData.guest_phone;
 
-          document.getElementById('booking-reference').textContent = bookingData.booking_reference;
+          document.getElementById('booking-id').textContent = bookingData.id;
 
           // Format the status with badge
           let statusHTML = '';
-          switch (bookingData.booking_status) {
+          switch (bookingData.status) {
             case 'pending':
               statusHTML = '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending</span>';
               break;
@@ -675,20 +701,9 @@ if (isset($_GET['success'])) {
               statusHTML = '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Cancelled</span>';
               break;
             default:
-              statusHTML = bookingData.booking_status;
+              statusHTML = bookingData.status;
           }
           document.getElementById('booking-status').innerHTML = statusHTML;
-
-          // Format payment status with color
-          let paymentHTML = '';
-          if (bookingData.payment_status === 'paid') {
-            paymentHTML = '<span class="text-green-600 font-medium">Paid</span>';
-          } else {
-            paymentHTML = '<span class="text-orange-600 font-medium">Unpaid</span>';
-          }
-          document.getElementById('payment-status').innerHTML = paymentHTML;
-
-          document.getElementById('booking-price').textContent = parseFloat(bookingData.price).toFixed(2);
 
           // Format dates
           const createdDate = new Date(bookingData.created_at);
@@ -700,42 +715,119 @@ if (isset($_GET['success'])) {
             minute: '2-digit'
           });
 
-          document.getElementById('service-type').textContent = bookingData.service_type.charAt(0).toUpperCase() + bookingData.service_type.slice(1);
-          document.getElementById('route-name').textContent = bookingData.route_name;
-          document.getElementById('vehicle-type').textContent = bookingData.vehicle_type.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-          document.getElementById('vehicle-name').textContent = bookingData.vehicle_name;
-          document.getElementById('duration-type').textContent = bookingData.duration.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+          const updatedDate = new Date(bookingData.updated_at);
+          document.getElementById('updated-at').textContent = updatedDate.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
 
-          const tripDate = new Date(bookingData.booking_date);
-          document.getElementById('trip-date').textContent = tripDate.toLocaleDateString('en-US', {
+          document.getElementById('hotel-name').textContent = bookingData.hotel_name || 'N/A';
+          document.getElementById('hotel-location').textContent = (bookingData.hotel_location ? bookingData.hotel_location.charAt(0).toUpperCase() + bookingData.hotel_location.slice(1) : 'N/A');
+          document.getElementById('room-id').textContent = bookingData.room_id || 'N/A';
+          document.getElementById('total-rooms').textContent = bookingData.room_count || 'N/A';
+          document.getElementById('price-per-night').textContent = bookingData.price_per_night ? parseFloat(bookingData.price_per_night).toFixed(2) : 'N/A';
+
+          // Display rating as stars
+          const ratingElement = document.getElementById('hotel-rating');
+          if (bookingData.rating) {
+            ratingElement.innerHTML = displayStarRating(bookingData.rating);
+          } else {
+            ratingElement.textContent = 'N/A';
+          }
+
+          // Show amenities if available
+          if (bookingData.amenities) {
+            try {
+              const amenities = JSON.parse(bookingData.amenities);
+              if (amenities && amenities.length > 0) {
+                const amenitiesList = amenities.map(a => a.charAt(0).toUpperCase() + a.slice(1)).join(', ');
+                document.getElementById('hotel-amenities').textContent = amenitiesList;
+              } else {
+                document.getElementById('hotel-amenities').textContent = 'No amenities listed';
+              }
+            } catch (e) {
+              document.getElementById('hotel-amenities').textContent = 'No amenities listed';
+            }
+          } else {
+            document.getElementById('hotel-amenities').textContent = 'No amenities listed';
+          }
+
+          const checkInDate = new Date(bookingData.check_in_date);
+          document.getElementById('check-in-date').textContent = checkInDate.toLocaleDateString('en-US', {
             weekday: 'long',
             year: "numeric",
             month: 'long',
             day: 'numeric'
           });
 
-          const tripTime = new Date(`2000-01-01T${bookingData.booking_time}`);
-          document.getElementById('trip-time').textContent = tripTime.toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit'
+          const checkOutDate = new Date(bookingData.check_out_date);
+          document.getElementById('check-out-date').textContent = checkOutDate.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: "numeric",
+            month: 'long',
+            day: 'numeric'
           });
 
-          document.getElementById('pickup-location').textContent = bookingData.pickup_location;
-          document.getElementById('dropoff-location').textContent = bookingData.dropoff_location;
+          // Calculate duration and total price
+          const nights = (checkOutDate - checkInDate) / (1000 * 60 * 60 * 24);
+          document.getElementById('stay-duration').textContent = nights + ' ' + (nights == 1 ? 'night' : 'nights');
 
-          // Special requests
-          document.getElementById('special-requests').textContent = bookingData.special_requests || 'No special requests provided';
-
-          // Show/hide assign button based on status
-          const assignContainer = document.getElementById('modal-assign-button-container');
-          if (bookingData.booking_status === 'pending' || bookingData.booking_status === 'confirmed') {
-            assignContainer.innerHTML = `
-              <a href="assign-transportation.php?booking_id=${bookingData.id}" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg">
-                <i class="fas fa-user-check mr-2"></i> Assign Vehicle
-              </a>
-            `;
+          if (bookingData.price_per_night) {
+            const roomRevenue = nights * parseFloat(bookingData.price_per_night);
+            document.getElementById('total-price').textContent = roomRevenue.toFixed(2);
+            document.getElementById('room-revenue').textContent = roomRevenue.toFixed(2);
           } else {
-            assignContainer.innerHTML = '';
+            document.getElementById('total-price').textContent = 'N/A';
+            document.getElementById('room-revenue').textContent = 'N/A';
+          }
+
+          // Display payment status
+          const paymentStatusElement = document.getElementById('payment-status');
+          const paymentStatus = (bookingData.status === 'completed') ? 'paid' : 'unpaid';
+          paymentStatusElement.textContent = paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
+          paymentStatusElement.className = 'payment-status-' + paymentStatus;
+
+          // Display booking statistics
+          if (bookingData.current_bookings) {
+            document.getElementById('current-bookings').textContent = bookingData.current_bookings;
+            const availableRooms = bookingData.room_count ? (bookingData.room_count - bookingData.current_bookings) : 0;
+            document.getElementById('available-rooms').textContent = availableRooms || 'N/A';
+
+            // Calculate occupancy rate
+            if (bookingData.room_count) {
+              const occupancyRate = (bookingData.current_bookings / bookingData.room_count * 100).toFixed(1);
+              document.getElementById('occupancy-rate').textContent = occupancyRate + '%';
+            } else {
+              document.getElementById('occupancy-rate').textContent = 'N/A';
+            }
+
+            // Show hotel total revenue if available
+            if (bookingData.hotel_revenue) {
+              document.getElementById('hotel-total-revenue').textContent = parseFloat(bookingData.hotel_revenue).toFixed(2);
+            } else if (bookingData.price_per_night) {
+              // Estimate total revenue based on current bookings and average stay length
+              const estimatedTotalRevenue = bookingData.current_bookings * parseFloat(bookingData.price_per_night) * nights;
+              document.getElementById('hotel-total-revenue').textContent = estimatedTotalRevenue.toFixed(2);
+            } else {
+              document.getElementById('hotel-total-revenue').textContent = 'N/A';
+            }
+          } else {
+            document.getElementById('current-bookings').textContent = '1';
+            document.getElementById('available-rooms').textContent =
+              bookingData.room_count ? (bookingData.room_count - 1) : 'N/A';
+            document.getElementById('occupancy-rate').textContent =
+              bookingData.room_count ? ((1 / bookingData.room_count * 100).toFixed(1) + '%') : 'N/A';
+
+            // For revenue calculations with only this booking
+            if (bookingData.price_per_night) {
+              const roomRevenue = nights * parseFloat(bookingData.price_per_night);
+              document.getElementById('hotel-total-revenue').textContent = roomRevenue.toFixed(2);
+            } else {
+              document.getElementById('hotel-total-revenue').textContent = 'N/A';
+            }
           }
 
           // Show the modal
@@ -760,11 +852,11 @@ if (isset($_GET['success'])) {
       updateStatusButtons.forEach(button => {
         button.addEventListener('click', function() {
           const bookingId = this.getAttribute('data-id');
-          const bookingRef = this.getAttribute('data-reference');
+          const guestName = this.getAttribute('data-guest');
           const currentStatus = this.getAttribute('data-status');
 
           document.getElementById('status-booking-id').value = bookingId;
-          document.getElementById('status-booking-ref').textContent = bookingRef;
+          document.getElementById('status-guest-name').textContent = guestName;
 
           // Set current status as selected
           const statusSelect = document.getElementById('new_status');
@@ -792,11 +884,11 @@ if (isset($_GET['success'])) {
       deleteButtons.forEach(button => {
         button.addEventListener('click', function() {
           const bookingId = this.getAttribute('data-id');
-          const bookingRef = this.getAttribute('data-reference');
+          const guestName = this.getAttribute('data-guest');
 
           Swal.fire({
             title: 'Delete Booking?',
-            html: `Are you sure you want to delete booking <strong>${bookingRef}</strong>?<br><br>This action cannot be undone.`,
+            html: `Are you sure you want to delete booking for <strong>${guestName}</strong>?<br><br>This action cannot be undone.`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#EF4444',
@@ -845,8 +937,7 @@ if (isset($_GET['success'])) {
       }
 
       #closeDetailsBtn,
-      #printDetailsBtn,
-      #modal-assign-button-container {
+      #printDetailsBtn {
         display: none;
       }
     }
@@ -879,6 +970,22 @@ if (isset($_GET['success'])) {
     .badge-cancelled {
       background-color: #FEE2E2;
       color: #B91C1C;
+    }
+
+    /* Payment status styling */
+    .payment-status-paid {
+      color: #047857;
+      font-weight: 600;
+    }
+
+    .payment-status-unpaid {
+      color: #b45309;
+      font-weight: 600;
+    }
+
+    .payment-status-refunded {
+      color: #4b5563;
+      font-weight: 600;
     }
   </style>
 </body>

@@ -61,7 +61,7 @@ $priceStats = getPriceDistribution($pdo);
   </h2>
 
   <!-- Summary Cards -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
     <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
       <div class="flex items-center justify-between">
         <div>
@@ -86,7 +86,7 @@ $priceStats = getPriceDistribution($pdo);
       <div class="flex items-center justify-between">
         <div>
           <p class="text-sm text-purple-600">Total Inventory Value</p>
-          <h3 class="text-2xl font-bold text-purple-800">$<?= number_format($totalStats['total_value'] ?? 0, 2) ?></h3>
+          <h3 class="text-2xl font-bold text-purple-800">PKR <?= number_format($totalStats['total_value'] ?? 0, 2) ?></h3>
         </div>
         <i class="fas fa-dollar-sign text-purple-400 text-3xl"></i>
       </div>
@@ -113,7 +113,7 @@ $priceStats = getPriceDistribution($pdo);
                 style="width: <?= ($location['count'] / $totalStats['total_hotels']) * 100 ?>%"></div>
             </div>
             <div class="text-right text-xs text-gray-500 mt-1">
-              Value: $<?= number_format($location['value'], 2) ?>
+              Value: PKR <?= number_format($location['value'], 2) ?>
             </div>
           </div>
         <?php endforeach; ?>
@@ -130,7 +130,7 @@ $priceStats = getPriceDistribution($pdo);
         <?php foreach ($priceStats as $price): ?>
           <div>
             <div class="flex justify-between text-sm mb-1">
-              <span class="font-medium">$<?= $price['price_range'] ?></span>
+              <span class="font-medium">PKR <?= $price['price_range'] ?></span>
               <span><?= $price['count'] ?> hotels (<?= $price['rooms'] ?> rooms)</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-2">

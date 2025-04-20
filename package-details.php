@@ -3,7 +3,7 @@ include "connection/connection.php";
 session_start();
 require_once('vendor/autoload.php');
 
-\Stripe\Stripe::setApiKey('sk_test_4eC39HqLyjWDarjtT1zdp7dc');
+// \Stripe\Stripe::setApiKey('sk_test_4eC39HqLyjWDarjtT1zdp7dc');
 
 // Ensure user is logged in
 if (!isset($_SESSION['user_id'])) {

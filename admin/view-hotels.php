@@ -139,11 +139,11 @@ $hotels = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <i class="text-teal-600 fas fa-hotel mx-2"></i> View Hotels
         </h1>
       </div>
-      
+
       <!-- Content Container -->
       <div class="overflow-auto container mx-auto px-2 sm:px-4 py-4 sm:py-8">
         <div class="mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-lg">
-        <?php include 'includes/hotel-statistics.php'; ?>
+          <?php include 'includes/hotel-statistics.php'; ?>
 
           <!-- Search and Filter Section -->
           <div class="mb-4 sm:mb-6">
@@ -177,9 +177,9 @@ $hotels = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             <select name="price_range" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
               <option value="">Price Range</option>
-              <option value="0-100">$0 - $100</option>
-              <option value="101-200">$101 - $200</option>
-              <option value="201-99999">$201+</option>
+              <option value="0-100">PKR 0 - PKR 100</option>
+              <option value="101-200">PKR 101 - PKR 200</option>
+              <option value="201-99999">PKR 201+</option>
             </select>
 
             <select name="rating" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
@@ -223,8 +223,7 @@ $hotels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     </p>
 
                     <p class="text-teal-600 font-bold text-sm flex items-center">
-                      <i class="fas fa-dollar-sign mr-2"></i>
-                      <?php echo number_format($hotel['price_per_night'], 2); ?>/night
+                      PKR <?php echo number_format($hotel['price_per_night'], 2); ?>/night
                     </p>
                   </div>
 
