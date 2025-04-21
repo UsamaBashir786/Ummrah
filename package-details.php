@@ -1,33 +1,11 @@
 <?php
 include "connection/connection.php";
 session_start();
-require_once('vendor/autoload.php');
-
-// \Stripe\Stripe::setApiKey('sk_test_4eC39HqLyjWDarjtT1zdp7dc');
 
 // Ensure user is logged in
 if (!isset($_SESSION['user_id'])) {
-  die("<div style='
-        color: #721c24; 
-        background-color: #f8d7da; 
-        border: 1px solid #f5c6cb; 
-        padding: 15px; 
-        border-radius: 5px; 
-        font-family: Arial, sans-serif;
-        width: 50%;
-        margin: 20px auto;
-        text-align: center;
-      '>
-        <strong>Error:</strong> You must be logged in.<br><br>
-        <button onclick='window.history.back()' style='
-          background-color: #dc3545; 
-          color: white; 
-          border: none; 
-          padding: 10px 15px; 
-          border-radius: 5px; 
-          cursor: pointer;
-        '>Go Back</button>
-      </div>");
+  header("Location: login.php?redirect=" . urlencode($_SERVER['REQUEST_URI']));
+  exit();
 }
 
 $package = [];
@@ -41,74 +19,52 @@ if (isset($_GET['id'])) {
   $stmt->execute();
   $result = $stmt->get_result();
   $package = $result->fetch_assoc() ?? [];
+
+  if (empty($package)) {
+    die("Package not found");
+  }
 }
 
 // Handle Booking Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (!isset($_POST['package_id']) || empty($_POST['package_id']) || !isset($_POST['total_price'])) {
-    die("Error: Invalid package data.");
+    $_SESSION['error'] = "Invalid package data";
+    header("Location: " . $_SERVER['HTTP_REFERER']);
+    exit();
   }
 
   $user_id = $_SESSION['user_id'];
   $package_id = intval($_POST['package_id']);
   $total_price = floatval($_POST['total_price']);
 
-  // ✅ Step 1: Check if the user has already booked this package
-  $check_query = "SELECT id FROM package_booking WHERE user_id = ? AND package_id = ? AND payment_status IN ('pending', 'paid')";
+  // Check for existing booking
+  $check_query = "SELECT id FROM package_booking WHERE user_id = ? AND package_id = ? AND payment_status IN ('pending', 'paid', 'confirmed')";
   $stmt = $conn->prepare($check_query);
   $stmt->bind_param("ii", $user_id, $package_id);
   $stmt->execute();
   $stmt->store_result();
 
   if ($stmt->num_rows > 0) {
-    // 🚫 User already booked this package
-    echo "<script>
-      alert('You have already booked this package.');
-      window.location.href = 'index.php';
-    </script>";
+    $_SESSION['error'] = "You have already booked this package.";
+    header("Location: my_bookings.php");
     exit();
   }
 
-  // ✅ Step 2: Insert new booking with 'pending' payment status
-  $query = "INSERT INTO package_booking (user_id, package_id, total_price, payment_status) VALUES (?, ?, ?, 'pending')";
+  // Insert new booking
+  $query = "INSERT INTO package_booking (user_id, package_id, total_price, payment_status, booking_date) 
+              VALUES (?, ?, ?, 'confirmed', NOW())";
   $stmt = $conn->prepare($query);
   $stmt->bind_param("iid", $user_id, $package_id, $total_price);
 
   if ($stmt->execute()) {
-    $booking_id = $stmt->insert_id; // Get the inserted booking ID
-
-    try {
-      // ✅ Step 3: Redirect to Stripe Checkout
-      $session = \Stripe\Checkout\Session::create([
-        'payment_method_types' => ['card'],
-        'line_items' => [[
-          'price_data' => [
-            'currency' => 'usd',
-            'product_data' => [
-              'name' => 'Umrah Flight Booking',
-            ],
-            'unit_amount' => intval($total_price * 100),
-          ],
-          'quantity' => 1,
-        ]],
-        'mode' => 'payment',
-        'success_url' => "http://localhost:8000/success.php?booking_id={$booking_id}",
-        'cancel_url' => "http://localhost:8000/fail.php",
-        'metadata' => [
-          'booking_id' => $booking_id,
-          'user_id' => $user_id,
-          'package_id' => $package_id,
-        ],
-      ]);
-
-      header("Location: " . $session->url);
-      exit();
-    } catch (\Stripe\Exception\ApiErrorException $e) {
-      echo 'Error: ' . $e->getMessage();
-      exit();
-    }
+    $booking_id = $conn->insert_id;
+    $_SESSION['success'] = "Booking confirmed successfully!";
+    header("Location: booking_confirmation.php?id=" . $booking_id);
+    exit();
   } else {
-    $booking_success = false;
+    $_SESSION['error'] = "Booking failed. Please try again.";
+    header("Location: " . $_SERVER['HTTP_REFERER']);
+    exit();
   }
 }
 ?>
@@ -217,6 +173,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
   <?php include 'includes/navbar.php'; ?>
 
+  <!-- Display SweetAlert notifications -->
+  <?php if (isset($_SESSION['error'])): ?>
+    <script>
+      Swal.fire({
+        title: 'Error',
+        text: '<?= $_SESSION['error'] ?>',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    </script>
+    <?php unset($_SESSION['error']); ?>
+  <?php endif; ?>
+
   <!-- Hero Section with Parallax Effect -->
   <div class="relative h-[500px] overflow-hidden -mt-2">
     <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('admin/<?= htmlspecialchars($package['package_image'] ?? 'default.jpg') ?>'); transform: translateZ(-1px) scale(1.2);"></div>
@@ -241,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="flex items-center mb-2">
               <i class="fas fa-tag text-teal-500 mr-2"></i>
-              <span class="text-2xl font-bold text-teal-600">$<?= isset($package['price']) ? number_format($package['price'], 2) : '0.00' ?></span>
+              <span class="text-2xl font-bold text-teal-600">Rs<?= isset($package['price']) ? number_format($package['price'], 2) : '0.00' ?></span>
             </div>
           </div>
         </div>
@@ -254,22 +223,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
       <!-- Main Package Information Column -->
       <div class="md:col-span-2">
-        <!-- Tabs Navigation -->
-        <div class="bg-white rounded-t-xl p-2 md:p-4 mb-1 flex space-x-2 md:space-x-6 overflow-x-auto">
-          <button class="tab-btn active px-4 py-2 text-gray-800 font-medium focus:outline-none whitespace-nowrap">
-            Overview
-          </button>
-          <button class="tab-btn px-4 py-2 text-gray-500 font-medium focus:outline-none whitespace-nowrap">
-            Itinerary
-          </button>
-          <button class="tab-btn px-4 py-2 text-gray-500 font-medium focus:outline-none whitespace-nowrap">
-            Hotels
-          </button>
-          <button class="tab-btn px-4 py-2 text-gray-500 font-medium focus:outline-none whitespace-nowrap">
-            Reviews
-          </button>
-        </div>
-
         <!-- Package Details Content -->
         <div class="bg-white rounded-b-xl p-6 md:p-8 shadow-md mb-8">
           <!-- Overview Section -->
@@ -410,7 +363,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <div class="mb-6">
             <p class="text-gray-500 text-sm mb-1">Price per person</p>
             <div class="text-3xl font-bold text-teal-600">
-              $<?= isset($package['price']) ? number_format($package['price'], 2) : '0.00' ?>
+              Rs<?= isset($package['price']) ? number_format($package['price'], 2) : '0.00' ?>
             </div>
           </div>
 
@@ -438,17 +391,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </form>
 
           <div class="mt-6 text-center">
-            <p class="text-sm text-gray-500">Secure payment with Stripe</p>
-            <div class="flex justify-center mt-2 space-x-2">
-              <i class="fab fa-cc-visa text-gray-400 text-2xl"></i>
-              <i class="fab fa-cc-mastercard text-gray-400 text-2xl"></i>
-              <i class="fab fa-cc-amex text-gray-400 text-2xl"></i>
-            </div>
+            <p class="text-sm text-gray-500">Instant booking confirmation</p>
           </div>
         </div>
 
         <!-- Need Help Card -->
-        <div class="bg-white rounded-xl shadow-md p-6">
+        <!-- <div class="bg-white rounded-xl shadow-md p-6">
           <h3 class="text-xl font-bold text-gray-800 mb-4">Need Help?</h3>
           <div class="flex items-start mb-4">
             <div class="flex-shrink-0 w-10 h-10 bg-gradient-to-r from-teal-500 to-blue-500 rounded-full flex items-center justify-center mr-3">
@@ -468,7 +416,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <p class="font-medium">support@agrsoft.com</p>
             </div>
           </div>
-        </div>
+        </div> -->
       </div>
     </div>
   </div>
@@ -482,59 +430,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       tabButtons.forEach(button => {
         button.addEventListener('click', () => {
-          // Remove active class from all buttons
           tabButtons.forEach(btn => {
             btn.classList.remove('active');
             btn.classList.add('text-gray-500');
             btn.classList.remove('text-gray-800');
           });
 
-          // Add active class to clicked button
           button.classList.add('active');
           button.classList.remove('text-gray-500');
           button.classList.add('text-gray-800');
         });
       });
-
-      <?php if ($booking_success === false) : ?>
-        Swal.fire({
-          title: "Booking Failed",
-          text: "Something went wrong. Please try again.",
-          icon: "error",
-          confirmButtonText: "OK"
-        });
-      <?php endif; ?>
     });
-  </script>
-  <script>
-    // View Package Details Function
-    function viewPackageDetails(packageId) {
-      const modal = document.getElementById('flightDetailsModal');
-      const contentDiv = document.getElementById('flightDetailsContent');
-
-      // Change the modal title
-      const modalTitle = modal.querySelector('h2');
-      if (modalTitle) {
-        modalTitle.textContent = 'Package Details';
-      }
-
-      modal.style.display = 'flex';
-
-      // Fetch package details via AJAX
-      fetch(`get_package_details.php?package_id=${packageId}`)
-        .then(response => response.text())
-        .then(data => {
-          contentDiv.innerHTML = data;
-        })
-        .catch(error => {
-          contentDiv.innerHTML = `
-        <div class="bg-red-100 p-4 rounded-lg text-red-700">
-          <p>Error loading package details. Please try again later.</p>
-        </div>
-      `;
-          console.error('Error fetching package details:', error);
-        });
-    }
   </script>
 </body>
 

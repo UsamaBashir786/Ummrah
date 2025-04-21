@@ -58,12 +58,12 @@ if (isset($_SESSION['user_id'])) {
         <h2 class="packages-heading-media-query text-4xl text-teal-600 mb-4 lg:mb-0" style="font-family: 'Times New Roman', Times, serif;" data-aos="fade-up" id="title">
           Choose Your Umrah Package
         </h2>
-        <a href="#packages" class="flex items-center text-teal-500 text-2xl py-2 px-4 rounded-lg transition duration-300 hover:underline" data-aos="zoom-in-up">
+        <!-- <a href="#packages" class="flex items-center text-teal-500 text-2xl py-2 px-4 rounded-lg transition duration-300 hover:underline" data-aos="zoom-in-up">
           View Packages <i class="bx bx-chevron-right ml-2 text-2xl"></i>
-        </a>
+        </a> -->
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 px-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 px-4">
         <?php
         // Fetch packages from database
         $query = "SELECT * FROM packages";
@@ -78,7 +78,7 @@ if (isset($_SESSION['user_id'])) {
                 <div data-aos="zoom-in-right" class="absolute top-4 right-4 bg-teal-600 text-white text-sm font-semibold px-4 py-1 rounded-full shadow-md">
                   Limited Offer
                 </div>
-                <p data-aos="zoom-in-right" class="text-4xl font-extrabold text-teal-600 mb-2">$<?php echo number_format($row['price'], 2); ?></p>
+                <p data-aos="zoom-in-right" class="text-4xl font-extrabold text-teal-600 mb-2">Rs<?php echo number_format($row['price'], 2); ?></p>
                 <h3 data-aos="zoom-in-right" class="text-xl font-semibold text-gray-800 mb-2"><?php echo htmlspecialchars($row['title']); ?></h3>
                 <p data-aos="zoom-in-right" class="text-gray-500 text-sm mb-4"><?php echo htmlspecialchars($row['departure_city']); ?> - <?php echo htmlspecialchars($row['arrival_city']); ?></p>
               </div>

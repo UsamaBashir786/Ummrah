@@ -213,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_package_id']))
               <i class="fas fa-calculator text-teal-600 mr-2"></i>Total Price
             </div>
             <div class="text-right">
-              <p class="text-lg font-semibold text-gray-900">Total: <span class="text-teal-600">$<?= number_format($totalPrice, 2) ?></span></p>
+              <p class="text-lg font-semibold text-gray-900">Total: <span class="text-teal-600">₨<?= number_format($totalPrice, 2) ?></span></p>
             </div>
           </div>
 
@@ -278,7 +278,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_package_id']))
                     </td>
                     <td class="px-4 py-4">
                       <div class="text-sm font-medium text-gray-900">
-                        $<?= number_format($package['price'], 2) ?>
+                        ₨<?= number_format($package['price'], 2) ?>
                       </div>
                     </td>
                     <td class="px-4 py-3">

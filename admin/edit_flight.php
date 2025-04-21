@@ -9,6 +9,27 @@ if (!isset($_SESSION['admin_email'])) {
   exit();
 }
 
+// Fetch all unique cities and airlines from the database
+function getUniqueValues($conn, $table, $column)
+{
+  $values = [];
+  $sql = "SELECT DISTINCT $column FROM $table WHERE $column IS NOT NULL AND $column != '' ORDER BY $column";
+  $result = $conn->query($sql);
+
+  if ($result && $result->num_rows > 0) {
+    while ($row = $result->fetch_assoc()) {
+      $values[] = $row[$column];
+    }
+  }
+
+  return $values;
+}
+
+// Get unique cities and airlines
+$departure_cities = getUniqueValues($conn, 'flights', 'departure_city');
+$arrival_cities = getUniqueValues($conn, 'flights', 'arrival_city');
+$airlines = getUniqueValues($conn, 'flights', 'airline_name');
+
 // Handle AJAX validation requests
 if (isset($_POST['validation_check']) && $_POST['validation_check'] === 'true') {
   $response = array('status' => 'success', 'errors' => array());
@@ -71,8 +92,8 @@ if (isset($_POST['validation_check']) && $_POST['validation_check'] === 'true') 
       if (empty($field_value)) {
         $response['errors'][] = 'Flight duration is required';
         $response['status'] = 'error';
-      } else if (floatval($field_value) <= 0 || floatval($field_value) > 5) {
-        $response['errors'][] = 'Flight duration must be between 0 and 5 hours';
+      } else if (floatval($field_value) < 1 || floatval($field_value) > 5) {
+        $response['errors'][] = 'Flight duration must be between 1 and 5 hours';
         $response['status'] = 'error';
       }
       break;
@@ -129,8 +150,8 @@ if (isset($_POST['validation_check']) && $_POST['validation_check'] === 'true') 
         $response['errors'][] = 'Return flight duration is required for round trips';
         $response['status'] = 'error';
       }
-      if (!empty($field_value) && (floatval($field_value) <= 0 || floatval($field_value) > 5)) {
-        $response['errors'][] = 'Return flight duration must be between 0 and 5 hours';
+      if (!empty($field_value) && (floatval($field_value) <= 0 || floatval($field_value) > 20)) {
+        $response['errors'][] = 'Return flight duration must be between 0 and 20 hours';
         $response['status'] = 'error';
       }
       break;
@@ -582,11 +603,11 @@ $has_stops = ($stops === "direct") ? 0 : 1;
                 <label class="block text-gray-700 font-semibold mb-2">Airline Name <span class="text-red-500">*</span></label>
                 <select name="airline_name" id="airline_name" class="w-full px-4 py-2 border rounded-lg validate-field" required data-validate="true">
                   <option value="">Select Airline</option>
-                  <option value="PIA" <?php echo $flight['airline_name'] == 'PIA' ? 'selected' : ''; ?>>PIA Airlines</option>
-                  <option value="Emirates" <?php echo $flight['airline_name'] == 'Emirates' ? 'selected' : ''; ?>>Emirates</option>
-                  <option value="Qatar" <?php echo $flight['airline_name'] == 'Qatar' ? 'selected' : ''; ?>>Qatar Airways</option>
-                  <option value="Saudi" <?php echo $flight['airline_name'] == 'Saudi' ? 'selected' : ''; ?>>Saudi Airlines</option>
-                  <option value="Flynas" <?php echo $flight['airline_name'] == 'Flynas' ? 'selected' : ''; ?>>Flynas Airlines</option>
+                  <?php foreach ($airlines as $airline): ?>
+                    <option value="<?php echo htmlspecialchars($airline); ?>" <?php echo $flight['airline_name'] == $airline ? 'selected' : ''; ?>>
+                      <?php echo htmlspecialchars($airline); ?>
+                    </option>
+                  <?php endforeach; ?>
                 </select>
                 <div class="error-feedback" id="airline_name-error"></div>
               </div>
@@ -601,9 +622,11 @@ $has_stops = ($stops === "direct") ? 0 : 1;
                 <label class="block text-gray-700 font-semibold mb-2">Departure City <span class="text-red-500">*</span></label>
                 <select name="departure_city" id="departure_city" class="w-full px-4 py-2 border rounded-lg validate-field" required data-validate="true">
                   <option value="">Select City</option>
-                  <option value="Karachi" <?php echo $flight['departure_city'] == 'Karachi' ? 'selected' : ''; ?>>Karachi</option>
-                  <option value="Lahore" <?php echo $flight['departure_city'] == 'Lahore' ? 'selected' : ''; ?>>Lahore</option>
-                  <option value="Islamabad" <?php echo $flight['departure_city'] == 'Islamabad' ? 'selected' : ''; ?>>Islamabad</option>
+                  <?php foreach ($departure_cities as $city): ?>
+                    <option value="<?php echo htmlspecialchars($city); ?>" <?php echo $flight['departure_city'] == $city ? 'selected' : ''; ?>>
+                      <?php echo htmlspecialchars($city); ?>
+                    </option>
+                  <?php endforeach; ?>
                 </select>
                 <div class="error-feedback" id="departure_city-error"></div>
               </div>
@@ -611,8 +634,11 @@ $has_stops = ($stops === "direct") ? 0 : 1;
                 <label class="block text-gray-700 font-semibold mb-2">Arrival City <span class="text-red-500">*</span></label>
                 <select name="arrival_city" id="arrival_city" class="w-full px-4 py-2 border rounded-lg validate-field" required data-validate="true">
                   <option value="">Select City</option>
-                  <option value="Jeddah" <?php echo $flight['arrival_city'] == 'Jeddah' ? 'selected' : ''; ?>>Jeddah</option>
-                  <option value="Medina" <?php echo $flight['arrival_city'] == 'Medina' ? 'selected' : ''; ?>>Medina</option>
+                  <?php foreach ($arrival_cities as $city): ?>
+                    <option value="<?php echo htmlspecialchars($city); ?>" <?php echo $flight['arrival_city'] == $city ? 'selected' : ''; ?>>
+                      <?php echo htmlspecialchars($city); ?>
+                    </option>
+                  <?php endforeach; ?>
                 </select>
                 <div class="error-feedback" id="arrival_city-error"></div>
               </div>
@@ -721,7 +747,8 @@ $has_stops = ($stops === "direct") ? 0 : 1;
 
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Flight Duration (hours) <span class="text-red-500">*</span></label>
-                <input type="number" name="flight_duration" id="flight_duration" class="w-full px-4 py-2 border rounded-lg validate-field" placeholder="e.g., 5.5" step="0.1" min="0" max="5" value="<?php echo $flight['flight_duration']; ?>" required data-validate="true">
+                <input type="number" name="flight_duration" id="flight_duration" class="w-full px-4 py-2 border rounded-lg validate-field" placeholder="e.g., 4.5" step="0.1" min="1" max="5" value="<?php echo $flight['flight_duration']; ?>" required data-validate="true">
+                <small class="text-gray-500">Duration must be between 1 and 5 hours</small>
                 <div class="error-feedback" id="flight_duration-error"></div>
               </div>
             </div>
@@ -755,11 +782,11 @@ $has_stops = ($stops === "direct") ? 0 : 1;
                     <label class="block text-gray-700 font-semibold mb-2">Return Airline <span class="text-red-500">*</span></label>
                     <select name="return_airline" id="return_airline" class="w-full px-4 py-2 border rounded-lg return-required validate-field" data-validate="true">
                       <option value="">Select Airline</option>
-                      <option value="PIA" <?php echo $return_airline == 'PIA' ? 'selected' : ''; ?>>PIA Airlines</option>
-                      <option value="Emirates" <?php echo $return_airline == 'Emirates' ? 'selected' : ''; ?>>Emirates</option>
-                      <option value="Qatar" <?php echo $return_airline == 'Qatar' ? 'selected' : ''; ?>>Qatar Airways</option>
-                      <option value="Saudi" <?php echo $return_airline == 'Saudi' ? 'selected' : ''; ?>>Saudi Airlines</option>
-                      <option value="Flynas" <?php echo $return_airline == 'Flynas' ? 'selected' : ''; ?>>Flynas Airlines</option>
+                      <?php foreach ($airlines as $airline): ?>
+                        <option value="<?php echo htmlspecialchars($airline); ?>" <?php echo $return_airline == $airline ? 'selected' : ''; ?>>
+                          <?php echo htmlspecialchars($airline); ?>
+                        </option>
+                      <?php endforeach; ?>
                       <option value="same" <?php echo ($return_airline == 'same' || $return_airline == $flight['airline_name']) ? 'selected' : ''; ?>>Same as Outbound</option>
                     </select>
                     <div class="error-feedback" id="return_airline-error"></div>
@@ -778,7 +805,7 @@ $has_stops = ($stops === "direct") ? 0 : 1;
                   </div>
                   <div>
                     <label class="block text-gray-700 font-semibold mb-2">Return Time <span class="text-red-500">*</span></label>
-                    <input type="text" name="return_time" id="return_time" class="w-full px-4 py-2 border rounded-lg return-required validate-field" placeholder="HH:MM (24-hour format)" value="<?php echo $return_time; ?>" data-validate="true">
+                    <input type="text" name="return_time" id="return_time" class="w-full px-4 py-2 border rounded-lg return-required validate-field departure-time-input" placeholder="HH:MM (24-hour format)" value="<?php echo $return_time; ?>" data-validate="true">
                     <small class="text-gray-500">Enter time in 24-hour format (e.g., 14:30)</small>
                     <div class="error-feedback" id="return_time-error"></div>
                   </div>
@@ -1064,12 +1091,23 @@ $has_stops = ($stops === "direct") ? 0 : 1;
       // Flight Duration Validation
       document.getElementById('flight_duration').addEventListener('input', function() {
         let inputValue = parseFloat(this.value);
-        if (inputValue > 5) {
+
+        // Only allow values between 1 and 5
+        if (inputValue < 1) {
+          this.value = 1;
+          document.getElementById('flight_duration-error').textContent = "Flight duration must be at least 1 hour.";
+        } else if (inputValue > 5) {
           this.value = 5;
           document.getElementById('flight_duration-error').textContent = "Flight duration cannot exceed 5 hours.";
         } else {
           document.getElementById('flight_duration-error').textContent = "";
         }
+
+        // Restrict to one decimal place
+        if (this.value.includes('.') && this.value.split('.')[1].length > 1) {
+          this.value = parseFloat(this.value).toFixed(1);
+        }
+
         validateField(this);
       });
 
@@ -1078,12 +1116,29 @@ $has_stops = ($stops === "direct") ? 0 : 1;
       if (returnFlightDuration) {
         returnFlightDuration.addEventListener('input', function() {
           let value = this.value;
+          let numValue = parseFloat(value);
+
+          // Ensure only valid number format
           if (!/^\d*\.?\d{0,1}$/.test(value)) {
             this.value = value.slice(0, -1);
           }
-          if (parseFloat(value) > 5) {
+
+          // Only allow values between 1 and 5
+          if (numValue < 1) {
+            this.value = "1";
+            document.getElementById('return_flight_duration-error').textContent = "Return flight duration must be at least 1 hour.";
+          } else if (numValue > 5) {
             this.value = "5";
+            document.getElementById('return_flight_duration-error').textContent = "Return flight duration cannot exceed 5 hours.";
+          } else {
+            document.getElementById('return_flight_duration-error').textContent = "";
           }
+
+          // Ensure at most 1 decimal place
+          if (value.includes('.') && value.split('.')[1].length > 1) {
+            this.value = numValue.toFixed(1);
+          }
+
           validateField(this);
         });
       }

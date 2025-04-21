@@ -537,16 +537,16 @@ Total Revenue
                 <div class="flex items-center justify-between mb-3">
                   <h3 class="text-sm font-medium text-gray-500">Total Revenue</h3>
                   <div class="bg-purple-50 p-2 rounded-lg text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                    <i class="fas fa-dollar-sign"></i>
+                    <i class="fas fa-money-bill"></i> <!-- Changed from fa-dollar-sign to fa-money-bill -->
                   </div>
                 </div>
                 <div class="flex items-end gap-2">
-                  <p class="text-3xl font-bold text-gray-800">$<?php echo number_format($totalRevenue); ?></p>
+                  <p class="text-3xl font-bold text-gray-800">Rs <?php echo number_format($totalRevenue); ?></p> <!-- Changed $ to Rs -->
                   <p class="text-xs text-green-600 font-medium mb-1 flex items-center">
                     <!-- <i class="fas fa-arrow-up mr-1"></i>15% -->
                   </p>
                 </div>
-                <p class="text-xs text-white mt-1">Total earnings to date</p>
+                <p class="text-xs text-gray-500 mt-1">Total earnings to date</p> <!-- Fixed text color from text-white to text-gray-500 for visibility -->
               </div>
               <div class="h-1 w-full bg-purple-500"></div>
             </div>

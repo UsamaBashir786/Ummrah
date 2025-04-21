@@ -367,11 +367,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                   <div class="mb-3">
                     <label class="inline-flex items-center">
-                      <input type="radio" name="city_selection" value="existing" class="text-teal-600" checked onchange="toggleCityFields()">
+                      <input type="radio" name="city_selection" value="existing" class="text-teal-600" checked>
                       <span class="ml-2 text-sm text-gray-600 dark:text-gray-200">Select from existing cities</span>
                     </label>
                     <label class="inline-flex items-center ml-6">
-                      <input type="radio" name="city_selection" value="new" class="text-teal-600" onchange="toggleCityFields()">
+                      <input type="radio" name="city_selection" value="new" class="text-teal-600">
                       <span class="ml-2 text-sm text-gray-600 dark:text-gray-200">Add a new city</span>
                     </label>
                   </div>
@@ -459,11 +459,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
       // Toggle city fields
       function toggleCityFields() {
-        const selection = document.querySelector('input[name="city_selection"]:checked').value;
+        const selection = document.querySelector('input[name="city_selection"]:checked');
         const existingCityField = document.getElementById("existing-city-field");
         const newCityField = document.getElementById("new-city-field");
+        const citySelect = document.getElementById("city");
+        const newCityInput = document.getElementById("new_city");
 
-        if (selection === "existing") {
+        if (!existingCityField || !newCityField || !citySelect || !newCityInput) {
+          console.error("One or more city fields not found!");
+          return;
+        }
+
+        if (selection && selection.value === "existing") {
           existingCityField.style.display = "block";
           newCityField.style.display = "none";
           citySelect.setAttribute("required", "required");
@@ -476,22 +483,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
       }
 
+      // Add event listeners for city selection radio buttons
+      const cityRadios = document.querySelectorAll('input[name="city_selection"]');
+      cityRadios.forEach(radio => {
+        radio.addEventListener("change", toggleCityFields);
+      });
+
+      // Initialize city fields
+      toggleCityFields();
+
       // Toggle password visibility
       function togglePassword() {
         const password = document.getElementById("password");
-        const eyeIcon = document.getElementById("eyeIcon");
+        const eyeIcon = document.querySelector(".eye-icon");
+        const eyeSlashIcon = document.querySelector(".eye-slash-icon");
 
         if (password.type === "password") {
           password.type = "text";
-          eyeIcon.innerHTML = `
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-          `;
+          eyeIcon.classList.add("hidden");
+          eyeSlashIcon.classList.remove("hidden");
         } else {
           password.type = "password";
-          eyeIcon.innerHTML = `
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          `;
+          eyeIcon.classList.remove("hidden");
+          eyeSlashIcon.classList.add("hidden");
         }
       }
 
@@ -702,27 +716,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
           });
         }
       });
-
-      // Initialize city field toggle
-      toggleCityFields();
     });
-  </script>
-  <script>
-    function togglePassword() {
-      const password = document.getElementById("password");
-      const eyeIcon = document.querySelector(".eye-icon");
-      const eyeSlashIcon = document.querySelector(".eye-slash-icon");
-
-      if (password.type === "password") {
-        password.type = "text";
-        eyeIcon.classList.add("hidden");
-        eyeSlashIcon.classList.remove("hidden");
-      } else {
-        password.type = "password";
-        eyeIcon.classList.remove("hidden");
-        eyeSlashIcon.classList.add("hidden");
-      }
-    }
   </script>
 </body>
 

@@ -561,11 +561,54 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && !isset($_POST['validation_check'])) 
                 <label class="block text-gray-700 font-semibold mb-2">Airline Name <span class="text-red-500">*</span></label>
                 <select name="airline_name" id="airline_name" class="w-full px-4 py-2 border rounded-lg validate-field" required data-validate="true">
                   <option value="">Select Airline</option>
-                  <option value="PIA">PIA Airlines</option>
-                  <option value="Emirates">Emirates</option>
-                  <option value="Qatar">Qatar Airways</option>
-                  <option value="Saudi">Saudi Airlines</option>
-                  <option value="Flynas">Flynas Airlines</option>
+
+                  <!-- Pakistani Airlines -->
+                  <optgroup label="Pakistani Airlines">
+                    <option value="PIA">Pakistan International Airlines (PIA)</option>
+                    <option value="AirBlue">AirBlue</option>
+                    <option value="SereneAir">Serene Air</option>
+                    <option value="AirSial">AirSial</option>
+                    <option value="FlyJinnah">Fly Jinnah</option>
+                  </optgroup>
+
+                  <!-- Middle Eastern Airlines -->
+                  <optgroup label="Middle Eastern Airlines">
+                    <option value="Emirates">Emirates</option>
+                    <option value="Qatar">Qatar Airways</option>
+                    <option value="Etihad">Etihad Airways</option>
+                    <option value="Saudi">Saudia (Saudi Airlines)</option>
+                    <option value="Flynas">Flynas</option>
+                    <option value="Flydubai">Flydubai</option>
+                    <option value="OmanAir">Oman Air</option>
+                    <option value="GulfAir">Gulf Air</option>
+                    <option value="KuwaitAirways">Kuwait Airways</option>
+                  </optgroup>
+
+                  <!-- Asian Airlines -->
+                  <optgroup label="Asian Airlines">
+                    <option value="Thai">Thai Airways</option>
+                    <option value="Malaysia">Malaysia Airlines</option>
+                    <option value="Singapore">Singapore Airlines</option>
+                    <option value="Cathay">Cathay Pacific</option>
+                    <option value="ChinaSouthern">China Southern</option>
+                    <option value="Turkish">Turkish Airlines</option>
+                  </optgroup>
+
+                  <!-- European & American Airlines -->
+                  <optgroup label="European & American Airlines">
+                    <option value="British">British Airways</option>
+                    <option value="Lufthansa">Lufthansa</option>
+                    <option value="AirFrance">Air France</option>
+                    <option value="KLM">KLM Royal Dutch Airlines</option>
+                    <option value="Virgin">Virgin Atlantic</option>
+                  </optgroup>
+
+                  <!-- Budget Airlines -->
+                  <optgroup label="Budget Airlines">
+                    <option value="AirArabia">Air Arabia</option>
+                    <option value="Indigo">IndiGo</option>
+                    <option value="SpiceJet">SpiceJet</option>
+                  </optgroup>
                 </select>
                 <div class="error-feedback" id="airline_name-error"></div>
               </div>
@@ -617,16 +660,75 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && !isset($_POST['validation_check'])) 
 
             <!-- Route Information -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- cities -->
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Departure City <span class="text-red-500">*</span></label>
                 <select name="departure_city" id="departure_city" class="w-full px-4 py-2 border rounded-lg validate-field" required data-validate="true">
                   <option value="">Select City</option>
+                  <!-- Major Cities -->
                   <option value="Karachi">Karachi</option>
                   <option value="Lahore">Lahore</option>
                   <option value="Islamabad">Islamabad</option>
+                  <option value="Rawalpindi">Rawalpindi</option>
+                  <option value="Faisalabad">Faisalabad</option>
+                  <option value="Multan">Multan</option>
+                  <option value="Hyderabad">Hyderabad</option>
+                  <option value="Peshawar">Peshawar</option>
+                  <option value="Quetta">Quetta</option>
+
+                  <!-- Punjab Cities -->
+                  <optgroup label="Punjab">
+                    <option value="Gujranwala">Gujranwala</option>
+                    <option value="Sialkot">Sialkot</option>
+                    <option value="Bahawalpur">Bahawalpur</option>
+                    <option value="Sargodha">Sargodha</option>
+                    <option value="Jhang">Jhang</option>
+                    <option value="Gujrat">Gujrat</option>
+                    <option value="Kasur">Kasur</option>
+                    <option value="Okara">Okara</option>
+                    <option value="Sahiwal">Sahiwal</option>
+                    <option value="Sheikhupura">Sheikhupura</option>
+                  </optgroup>
+
+                  <!-- Sindh Cities -->
+                  <optgroup label="Sindh">
+                    <option value="Sukkur">Sukkur</option>
+                    <option value="Larkana">Larkana</option>
+                    <option value="Nawabshah">Nawabshah</option>
+                    <option value="Mirpur Khas">Mirpur Khas</option>
+                    <option value="Thatta">Thatta</option>
+                    <option value="Jacobabad">Jacobabad</option>
+                  </optgroup>
+
+                  <!-- KPK Cities -->
+                  <optgroup label="Khyber Pakhtunkhwa">
+                    <option value="Mardan">Mardan</option>
+                    <option value="Abbottabad">Abbottabad</option>
+                    <option value="Swat">Swat</option>
+                    <option value="Nowshera">Nowshera</option>
+                    <option value="Charsadda">Charsadda</option>
+                    <option value="Mansehra">Mansehra</option>
+                  </optgroup>
+
+                  <!-- Balochistan Cities -->
+                  <optgroup label="Balochistan">
+                    <option value="Gwadar">Gwadar</option>
+                    <option value="Khuzdar">Khuzdar</option>
+                    <option value="Chaman">Chaman</option>
+                    <option value="Zhob">Zhob</option>
+                  </optgroup>
+
+                  <!-- AJK & Gilgit-Baltistan -->
+                  <optgroup label="Azad Kashmir & Gilgit-Baltistan">
+                    <option value="Muzaffarabad">Muzaffarabad</option>
+                    <option value="Mirpur">Mirpur</option>
+                    <option value="Gilgit">Gilgit</option>
+                    <option value="Skardu">Skardu</option>
+                  </optgroup>
                 </select>
                 <div class="error-feedback" id="departure_city-error"></div>
               </div>
+              <!-- Arrival City -->
               <div>
                 <label class="block text-gray-700 font-semibold mb-2">Arrival City <span class="text-red-500">*</span></label>
                 <select name="arrival_city" id="arrival_city" class="w-full px-4 py-2 border rounded-lg validate-field" required data-validate="true">
@@ -809,12 +911,50 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && !isset($_POST['validation_check'])) 
                     <label class="block text-gray-700 font-semibold mb-2">Return Airline <span class="text-red-500">*</span></label>
                     <select name="return_airline" id="return_airline" class="w-full px-4 py-2 border rounded-lg return-required validate-field" data-validate="true">
                       <option value="">Select Airline</option>
-                      <option value="PIA">PIA Airlines</option>
-                      <option value="Emirates">Emirates</option>
-                      <option value="Qatar">Qatar Airways</option>
-                      <option value="Saudi">Saudi Airlines</option>
-                      <option value="Flynas">Flynas Airlines</option>
+
+                      <!-- Special Option -->
                       <option value="same">Same as Outbound</option>
+
+                      <!-- Pakistani Airlines -->
+                      <optgroup label="Pakistani Airlines">
+                        <option value="PIA">Pakistan International Airlines (PIA)</option>
+                        <option value="AirBlue">AirBlue</option>
+                        <option value="SereneAir">Serene Air</option>
+                        <option value="AirSial">AirSial</option>
+                        <option value="FlyJinnah">Fly Jinnah</option>
+                      </optgroup>
+
+                      <!-- Middle Eastern Airlines -->
+                      <optgroup label="Middle Eastern Airlines">
+                        <option value="Emirates">Emirates</option>
+                        <option value="Qatar">Qatar Airways</option>
+                        <option value="Etihad">Etihad Airways</option>
+                        <option value="Saudi">Saudia (Saudi Airlines)</option>
+                        <option value="Flynas">Flynas</option>
+                        <option value="Flydubai">Flydubai</option>
+                        <option value="OmanAir">Oman Air</option>
+                      </optgroup>
+
+                      <!-- Asian Airlines -->
+                      <optgroup label="Asian Airlines">
+                        <option value="Thai">Thai Airways</option>
+                        <option value="Singapore">Singapore Airlines</option>
+                        <option value="Turkish">Turkish Airlines</option>
+                        <option value="Malaysia">Malaysia Airlines</option>
+                      </optgroup>
+
+                      <!-- European & American Airlines -->
+                      <optgroup label="European & American Airlines">
+                        <option value="British">British Airways</option>
+                        <option value="Lufthansa">Lufthansa</option>
+                        <option value="AirFrance">Air France</option>
+                      </optgroup>
+
+                      <!-- Budget Airlines -->
+                      <optgroup label="Budget Airlines">
+                        <option value="AirArabia">Air Arabia</option>
+                        <option value="Indigo">IndiGo</option>
+                      </optgroup>
                     </select>
                     <div class="error-feedback" id="return_airline-error"></div>
                   </div>

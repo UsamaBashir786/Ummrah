@@ -802,14 +802,51 @@ function formatDate($date_string, $format = 'M d, Y')
             <!-- Date Range Filters -->
             <div class="form-group">
               <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">Date From</label>
-              <input type="date" name="date_from" id="date_from" value="<?php echo $filter_date_from; ?>" class="w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring focus:ring-teal-200 focus:ring-opacity-50">
+              <div class="relative">
+                <input
+                  type="date"
+                  name="date_from"
+                  id="date_from"
+                  value="<?php echo $filter_date_from; ?>"
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring focus:ring-teal-200 focus:ring-opacity-50 cursor-pointer"
+                  onkeydown="return false"
+                  onclick="this.showPicker()">
+              </div>
             </div>
 
             <div class="form-group">
               <label for="date_to" class="block text-sm font-medium text-gray-700 mb-1">Date To</label>
-              <input type="date" name="date_to" id="date_to" value="<?php echo $filter_date_to; ?>" class="w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring focus:ring-teal-200 focus:ring-opacity-50">
+              <div class="relative">
+                <input
+                  type="date"
+                  name="date_to"
+                  id="date_to"
+                  value="<?php echo $filter_date_to; ?>"
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring focus:ring-teal-200 focus:ring-opacity-50 cursor-pointer"
+                  onkeydown="return false"
+                  onclick="this.showPicker()">
+              </div>
             </div>
 
+            <script>
+              // Prevent manual typing in date inputs
+              document.getElementById('date_from').addEventListener('keypress', function(e) {
+                e.preventDefault();
+              });
+
+              document.getElementById('date_to').addEventListener('keypress', function(e) {
+                e.preventDefault();
+              });
+
+              // Open date picker when clicking anywhere in the input field
+              document.getElementById('date_from').addEventListener('focus', function() {
+                this.showPicker();
+              });
+
+              document.getElementById('date_to').addEventListener('focus', function() {
+                this.showPicker();
+              });
+            </script>
             <!-- Submit Button - Place at the end of the form -->
             <div class="form-group lg:col-span-5 mt-2 flex justify-end">
               <button type="submit" class="inline-flex items-center px-4 py-2 bg-teal-600 border border-transparent rounded-md font-semibold text-white hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
@@ -1000,7 +1037,7 @@ function formatDate($date_string, $format = 'M d, Y')
                               <div class="flex flex-col items-center">
                                 <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
                                 <div class="text-xs text-gray-500 mt-0.5 text-center w-16 truncate">
-                                <?php echo isset($stop['city']) ? htmlspecialchars($stop['city']) : ''; ?>                                </div>
+                                  <?php echo isset($stop['city']) ? htmlspecialchars($stop['city']) : ''; ?> </div>
                               </div>
                             <?php endforeach; ?>
                           <?php endif; ?>

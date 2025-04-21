@@ -139,6 +139,7 @@
       <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="packages-dropdown">
         <a href="view-package.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">View Packages</a>
         <a href="add-packages.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Package</a>
+        <a href="booked-packages.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Booked Packaes</a>
       </div>
     </div>
 
