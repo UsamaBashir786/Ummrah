@@ -14,13 +14,13 @@ function getPackageBookings()
 {
   global $conn;
   $sql = "SELECT pb.id, pb.user_id, pb.package_id, pb.booking_date, pb.status, pb.total_price, 
-                 p.title as package_title, u.full_name as user_name, u.email as user_email, 
-                 u.phone_number as user_phone
-          FROM package_booking pb
-          LEFT JOIN packages p ON pb.package_id = p.id
-          LEFT JOIN users u ON pb.user_id = u.id
-          WHERE pb.status = 'pending' OR pb.status = 'confirmed'
-          ORDER BY pb.booking_date DESC";
+                   p.title as package_title, u.full_name as user_name, u.email as user_email, 
+                   u.phone_number as user_phone
+            FROM package_booking pb
+            LEFT JOIN packages p ON pb.package_id = p.id
+            LEFT JOIN users u ON pb.user_id = u.id
+            WHERE pb.status = 'pending' OR pb.status = 'confirmed'
+            ORDER BY pb.booking_date DESC";
 
   $result = $conn->query($sql);
   return $result->fetch_all(MYSQLI_ASSOC);
@@ -43,29 +43,22 @@ function getHotels($location = null)
   return $result->fetch_all(MYSQLI_ASSOC);
 }
 
-// Get existing hotel assignments
-function getHotelAssignments($booking_id, $user_id = null)
+// Get existing hotel bookings
+function getHotelBookings($booking_id, $user_id = null)
 {
   global $conn;
+  $sql = "SELECT hb.*, h.hotel_name, h.location 
+            FROM hotel_bookings hb
+            LEFT JOIN hotels h ON hb.hotel_id = h.id
+            WHERE hb.user_id = ? AND h.id IS NOT NULL";
 
-  // First, check if the user_id column exists in the table
-  $check_column = $conn->query("SHOW COLUMNS FROM package_assign LIKE 'user_id'");
-  $column_exists = $check_column->num_rows > 0;
-
-  if ($column_exists && $user_id) {
-    // If user_id is provided and the column exists, filter by both booking_id and user_id
-    $sql = "SELECT pa.*, h.hotel_name, h.location FROM package_assign pa
-            LEFT JOIN hotels h ON pa.hotel_id = h.id
-            WHERE pa.booking_id = ? AND pa.user_id = ? AND pa.hotel_id IS NOT NULL";
+  if ($booking_id) {
+    $sql .= " AND hb.id IN (SELECT id FROM package_booking WHERE id = ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ii", $booking_id, $user_id);
+    $stmt->bind_param("ii", $user_id, $booking_id);
   } else {
-    // Otherwise, just filter by booking_id
-    $sql = "SELECT pa.*, h.hotel_name, h.location FROM package_assign pa
-            LEFT JOIN hotels h ON pa.hotel_id = h.id
-            WHERE pa.booking_id = ? AND pa.hotel_id IS NOT NULL";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $booking_id);
+    $stmt->bind_param("i", $user_id);
   }
 
   $stmt->execute();
@@ -77,14 +70,14 @@ function getHotelAssignments($booking_id, $user_id = null)
 function getBookedRooms($hotel_id)
 {
   global $conn;
-  $sql = "SELECT seat_number FROM package_assign WHERE hotel_id = ?";
+  $sql = "SELECT room_id FROM hotel_bookings WHERE hotel_id = ? AND status IN ('pending', 'confirmed')";
   $stmt = $conn->prepare($sql);
   $stmt->bind_param("i", $hotel_id);
   $stmt->execute();
   $result = $stmt->get_result();
   $booked_rooms = [];
   while ($row = $result->fetch_assoc()) {
-    $booked_rooms[] = $row['seat_number'];
+    $booked_rooms[] = $row['room_id'];
   }
   return $booked_rooms;
 }
@@ -132,48 +125,69 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['assign_hotel'])) {
   $booking_id = $_POST['booking_id'];
   $user_id = $_POST['user_id'];
   $hotel_id = $_POST['hotel_id'];
-  $room_number = $_POST['room_number'];
+  $room_id = $_POST['room_id'];
+  $guest_name = $_POST['guest_name'];
+  $guest_email = $_POST['guest_email'];
+  $guest_phone = $_POST['guest_phone'];
+  $check_in_date = $_POST['check_in_date'];
+  $check_out_date = $_POST['check_out_date'];
+  $status = 'pending';
 
-  // Check if this user already has a hotel assignment for this booking
-  $existing_assignments = getHotelAssignments($booking_id, $user_id);
-
-  if (count($existing_assignments) > 0) {
-    $error_message = "Hotel has already been assigned to this user for booking #$booking_id";
+  // Validate inputs
+  if (
+    empty($booking_id) || empty($user_id) || empty($hotel_id) || empty($room_id) ||
+    empty($guest_name) || empty($guest_email) || empty($guest_phone) ||
+    empty($check_in_date) || empty($check_out_date)
+  ) {
+    $error_message = "All fields are required.";
   } else {
-    // No existing assignment, proceed with insert
-    // Validate inputs
-    if (empty($booking_id) || empty($user_id) || empty($hotel_id) || empty($room_number)) {
-      $error_message = "All fields are required.";
+    // Check if this user already has a hotel booking for this hotel
+    $existing_bookings = getHotelBookings($booking_id, $user_id);
+
+    if (count($existing_bookings) > 0) {
+      $error_message = "Hotel booking already exists for this user for booking #$booking_id";
     } else {
-      // Insert assignment with user_id included
-      $sql = "INSERT INTO package_assign 
-              (booking_id, user_id, hotel_id, transport_id, flight_id, seat_type, seat_number, transport_seat_number) 
-              VALUES (?, ?, ?, NULL, NULL, NULL, ?, NULL)";
+      // Insert into hotel_bookings
+      $sql = "INSERT INTO hotel_bookings 
+                    (hotel_id, room_id, user_id, guest_name, guest_email, guest_phone, 
+                     check_in_date, check_out_date, status) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
       $stmt = $conn->prepare($sql);
-      $stmt->bind_param("iiis", $booking_id, $user_id, $hotel_id, $room_number);
+      $stmt->bind_param(
+        "isissssss",
+        $hotel_id,
+        $room_id,
+        $user_id,
+        $guest_name,
+        $guest_email,
+        $guest_phone,
+        $check_in_date,
+        $check_out_date,
+        $status
+      );
 
       if ($stmt->execute()) {
-        $success_message = "Hotel successfully assigned to booking #$booking_id";
+        $success_message = "Hotel booking successfully created for booking #$booking_id";
       } else {
-        $error_message = "Error assigning hotel: " . $conn->error;
+        $error_message = "Error creating hotel booking: " . $conn->error;
       }
     }
   }
 }
 
-// Delete assignment
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_assignment'])) {
-  $assignment_id = $_POST['assignment_id'];
+// Delete hotel booking
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_booking'])) {
+  $booking_id = $_POST['booking_id'];
 
-  $sql = "DELETE FROM package_assign WHERE id = ?";
+  $sql = "DELETE FROM hotel_bookings WHERE id = ?";
   $stmt = $conn->prepare($sql);
-  $stmt->bind_param("i", $assignment_id);
+  $stmt->bind_param("i", $booking_id);
 
   if ($stmt->execute()) {
-    $success_message = "Hotel assignment successfully deleted";
+    $success_message = "Hotel booking successfully deleted";
   } else {
-    $error_message = "Error deleting assignment: " . $conn->error;
+    $error_message = "Error deleting booking: " . $conn->error;
   }
 }
 
@@ -185,7 +199,7 @@ $all_hotels = getHotels();
 
 // Handle special case for viewing a specific booking
 $current_booking = null;
-$current_assignments = [];
+$current_bookings = [];
 if (isset($_GET['booking_id'])) {
   $booking_id = $_GET['booking_id'];
   foreach ($bookings as $booking) {
@@ -196,7 +210,7 @@ if (isset($_GET['booking_id'])) {
   }
 
   if ($current_booking) {
-    $current_assignments = getHotelAssignments($booking_id);
+    $current_bookings = getHotelBookings($booking_id, $current_booking['user_id']);
   }
 }
 ?>
@@ -207,13 +221,14 @@ if (isset($_GET['booking_id'])) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hotel Assignment | Admin Panel</title>
+  <title>Hotel Booking | Admin Panel</title>
   <link rel="stylesheet" href="../assets/css/output.css">
   <link rel="stylesheet" href="assets/css/output.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
+    /* Same styles as original */
     .assignment-card {
       border: 1px solid #e2e8f0;
       border-radius: 0.5rem;
@@ -296,7 +311,7 @@ if (isset($_GET['booking_id'])) {
     <div class="overflow-y-auto flex-1 flex flex-col">
       <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center">
         <h1 class="text-xl font-semibold">
-          <i class="text-purple-600 fas fa-hotel mx-2"></i> Hotel Assignment
+          <i class="text-purple-600 fas fa-hotel mx-2"></i> Hotel Booking
         </h1>
         <div class="flex items-center space-x-4">
           <button class="md:hidden text-gray-800" id="menu-btn">
@@ -356,51 +371,49 @@ if (isset($_GET['booking_id'])) {
                 </div>
               </div>
 
-              <!-- Current Assignments -->
+              <!-- Current Hotel Bookings -->
               <div class="mt-6">
-                <h3 class="font-semibold text-lg mb-2">Current Hotel Assignments</h3>
+                <h3 class="font-semibold text-lg mb-2">Current Hotel Bookings</h3>
 
-                <?php if (count($current_assignments) > 0): ?>
+                <?php if (count($current_bookings) > 0): ?>
                   <div class="space-y-4">
-                    <?php foreach ($current_assignments as $assignment): ?>
-                      <div class="assignment-card <?php echo isset($assignment['location']) && $assignment['location'] == 'makkah' ? 'makkah-card' : 'madinah-card'; ?>">
+                    <?php foreach ($current_bookings as $booking): ?>
+                      <div class="assignment-card <?php echo isset($booking['location']) && $booking['location'] == 'makkah' ? 'makkah-card' : 'madinah-card'; ?>">
                         <div class="flex justify-between">
-                          <h4 class="font-medium text-md"><?php echo isset($assignment['hotel_name']) ? htmlspecialchars($assignment['hotel_name']) : 'Unknown Hotel'; ?> - <?php echo isset($assignment['location']) ? ucfirst($assignment['location']) : 'Unknown Location'; ?></h4>
-                          <form method="POST" action="" onsubmit="return confirm('Are you sure you want to delete this assignment?');">
-                            <input type="hidden" name="assignment_id" value="<?php echo $assignment['id']; ?>">
-                            <input type="hidden" name="delete_assignment" value="1">
+                          <h4 class="font-medium text-md"><?php echo isset($booking['hotel_name']) ? htmlspecialchars($booking['hotel_name']) : 'Unknown Hotel'; ?> - <?php echo isset($booking['location']) ? ucfirst($booking['location']) : 'Unknown Location'; ?></h4>
+                          <form method="POST" action="" onsubmit="return confirm('Are you sure you want to delete this booking?');">
+                            <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                            <input type="hidden" name="delete_booking" value="1">
                             <button type="submit" class="text-red-500 hover:text-red-700">
                               <i class="fas fa-trash"></i>
                             </button>
                           </form>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                          <p><span class="text-gray-600">Room Number:</span> <?php echo htmlspecialchars($assignment['seat_number']); ?></p>
+                          <p><span class="text-gray-600">Room ID:</span> <?php echo htmlspecialchars($booking['room_id']); ?></p>
+                          <p><span class="text-gray-600">Guest Name:</span> <?php echo htmlspecialchars($booking['guest_name']); ?></p>
+                          <p><span class="text-gray-600">Check-in:</span> <?php echo date('d M Y', strtotime($booking['check_in_date'])); ?></p>
+                          <p><span class="text-gray-600">Check-out:</span> <?php echo date('d M Y', strtotime($booking['check_out_date'])); ?></p>
+                          <p><span class="text-gray-600">Status:</span> <?php echo ucfirst($booking['status']); ?></p>
                         </div>
-                        <p class="text-xs text-gray-500 mt-1">Assigned: <?php echo date('d M Y H:i', strtotime($assignment['created_at'])); ?></p>
+                        <p class="text-xs text-gray-500 mt-1">Created: <?php echo date('d M Y H:i', strtotime($booking['created_at'])); ?></p>
                       </div>
                     <?php endforeach; ?>
                   </div>
                 <?php else: ?>
-                  <p class="text-gray-500 italic">No hotel assignments yet.</p>
+                  <p class="text-gray-500 italic">No hotel bookings yet.</p>
                 <?php endif; ?>
               </div>
 
-              <!-- Check if user already has hotel assigned -->
+              <!-- Check if user already has hotel booking -->
               <?php
-              $user_has_assignment = false;
-              foreach ($current_assignments as $assignment) {
-                if (isset($assignment['user_id']) && $assignment['user_id'] == $current_booking['user_id']) {
-                  $user_has_assignment = true;
-                  break;
-                }
-              }
+              $user_has_booking = count($current_bookings) > 0;
               ?>
 
-              <!-- Add New Assignment only if user doesn't have one already -->
-              <?php if (!$user_has_assignment): ?>
+              <!-- Add New Hotel Booking only if user doesn't have one already -->
+              <?php if (!$user_has_booking): ?>
                 <div class="mt-6">
-                  <h3 class="font-semibold text-lg mb-2">Add New Hotel Assignment</h3>
+                  <h3 class="font-semibold text-lg mb-2">Add New Hotel Booking</h3>
 
                   <div class="tab-buttons flex">
                     <button class="tab-btn active" onclick="switchTab('makkah')">Makkah Hotels</button>
@@ -431,17 +444,52 @@ if (isset($_GET['booking_id'])) {
 
                         <div>
                           <label class="block text-gray-700 text-sm font-bold mb-2" for="makkah_room">
-                            Room Number
+                            Room ID
                           </label>
-                          <select id="makkah_room" name="room_number" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" required>
+                          <select id="makkah_room" name="room_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" required>
                             <option value="">Select Room</option>
                             <!-- Rooms will be populated by JavaScript -->
                           </select>
                         </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="guest_name">
+                            Guest Name
+                          </label>
+                          <input type="text" id="guest_name" name="guest_name" value="<?php echo htmlspecialchars($current_booking['user_name']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" required>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="guest_email">
+                            Guest Email
+                          </label>
+                          <input type="email" id="guest_email" name="guest_email" value="<?php echo htmlspecialchars($current_booking['user_email']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" required>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="guest_phone">
+                            Guest Phone
+                          </label>
+                          <input type="tel" id="guest_phone" name="guest_phone" value="<?php echo htmlspecialchars($current_booking['user_phone']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" required>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="check_in_date">
+                            Check-in Date
+                          </label>
+                          <input type="date" id="check_in_date" name="check_in_date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" required>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="check_out_date">
+                            Check-out Date
+                          </label>
+                          <input type="date" id="check_out_date" name="check_out_date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" required>
+                        </div>
                       </div>
 
                       <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700">
-                        <i class="fas fa-plus-circle mr-2"></i>Assign Makkah Hotel
+                        <i class="fas fa-plus-circle mr-2"></i>Book Makkah Hotel
                       </button>
                     </form>
                   </div>
@@ -470,17 +518,52 @@ if (isset($_GET['booking_id'])) {
 
                         <div>
                           <label class="block text-gray-700 text-sm font-bold mb-2" for="madinah_room">
-                            Room Number
+                            Room ID
                           </label>
-                          <select id="madinah_room" name="room_number" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                          <select id="madinah_room" name="room_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                             <option value="">Select Room</option>
                             <!-- Rooms will be populated by JavaScript -->
                           </select>
                         </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="guest_name">
+                            Guest Name
+                          </label>
+                          <input type="text" id="guest_name" name="guest_name" value="<?php echo htmlspecialchars($current_booking['user_name']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="guest_email">
+                            Guest Email
+                          </label>
+                          <input type="email" id="guest_email" name="guest_email" value="<?php echo htmlspecialchars($current_booking['user_email']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="guest_phone">
+                            Guest Phone
+                          </label>
+                          <input type="tel" id="guest_phone" name="guest_phone" value="<?php echo htmlspecialchars($current_booking['user_phone']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="check_in_date">
+                            Check-in Date
+                          </label>
+                          <input type="date" id="check_in_date" name="check_in_date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="check_out_date">
+                            Check-out Date
+                          </label>
+                          <input type="date" id="check_out_date" name="check_out_date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </div>
                       </div>
 
                       <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
-                        <i class="fas fa-plus-circle mr-2"></i>Assign Madinah Hotel
+                        <i class="fas fa-plus-circle mr-2"></i>Book Madinah Hotel
                       </button>
                     </form>
                   </div>
@@ -489,7 +572,7 @@ if (isset($_GET['booking_id'])) {
                 <div class="mt-6 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                   <p class="text-yellow-700">
                     <i class="fas fa-info-circle mr-2"></i>
-                    Hotel has already been assigned to this user. You can delete the existing assignment above if you want to assign a different hotel.
+                    Hotel booking already exists for this user. You can delete the existing booking above if you want to create a new one.
                   </p>
                 </div>
               <?php endif; ?>
@@ -498,7 +581,7 @@ if (isset($_GET['booking_id'])) {
             <!-- Bookings List View -->
             <div class="mb-6">
               <h2 class="text-2xl font-bold">Package Bookings</h2>
-              <p class="text-gray-600 mt-2">Assign hotels to package bookings</p>
+              <p class="text-gray-600 mt-2">Create hotel bookings for package bookings</p>
             </div>
 
             <?php if (count($bookings) > 0): ?>
@@ -512,16 +595,16 @@ if (isset($_GET['booking_id'])) {
                       <th class="py-2 px-4 border-b">Price</th>
                       <th class="py-2 px-4 border-b">Date</th>
                       <th class="py-2 px-4 border-b">Status</th>
-                      <th class="py-2 px-4 border-b">Hotel Status</th>
+                      <th class="py-2 px-4 border-b">Hotel Booking</th>
                       <th class="py-2 px-4 border-b">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     <?php foreach ($bookings as $booking): ?>
                       <?php
-                      // Check if this booking already has hotel assigned
-                      $user_assignments = getHotelAssignments($booking['id'], $booking['user_id']);
-                      $has_hotel = count($user_assignments) > 0;
+                      // Check if this booking has a hotel booking
+                      $user_bookings = getHotelBookings($booking['id'], $booking['user_id']);
+                      $has_booking = count($user_bookings) > 0;
                       ?>
                       <tr>
                         <td class="py-2 px-4 border-b">#<?php echo $booking['id']; ?></td>
@@ -535,19 +618,19 @@ if (isset($_GET['booking_id'])) {
                           </span>
                         </td>
                         <td class="py-2 px-4 border-b">
-                          <?php if ($has_hotel): ?>
+                          <?php if ($has_booking): ?>
                             <span class="px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-                              <i class="fas fa-check-circle mr-1"></i> Assigned
+                              <i class="fas fa-check-circle mr-1"></i> Booked
                             </span>
                           <?php else: ?>
                             <span class="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
-                              <i class="fas fa-times-circle mr-1"></i> Not Assigned
+                              <i class="fas fa-times-circle mr-1"></i> Not Booked
                             </span>
                           <?php endif; ?>
                         </td>
                         <td class="py-2 px-4 border-b">
                           <a href="hotel-assign.php?booking_id=<?php echo $booking['id']; ?>" class="text-purple-600 hover:text-purple-800">
-                            <i class="fas fa-hotel"></i> <?php echo $has_hotel ? 'View' : 'Assign'; ?>
+                            <i class="fas fa-hotel"></i> <?php echo $has_booking ? 'View' : 'Book'; ?>
                           </a>
                         </td>
                       </tr>
@@ -570,20 +653,13 @@ if (isset($_GET['booking_id'])) {
   <script>
     // Tab switching
     function switchTab(tabName) {
-      // Hide all tabs
       document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
       });
-
-      // Remove active class from all buttons
       document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
       });
-
-      // Show selected tab
       document.getElementById(tabName + '-tab').classList.add('active');
-
-      // Add active class to the correct button
       document.querySelector(`.tab-btn[onclick="switchTab('${tabName}')"]`).classList.add('active');
     }
 
@@ -593,19 +669,14 @@ if (isset($_GET['booking_id'])) {
       const roomSelect = document.getElementById(`${location}_room`);
 
       if (!hotelSelect.value) {
-        // If no hotel is selected, clear room dropdown
         roomSelect.innerHTML = '<option value="">Select Room</option>';
         return;
       }
 
-      // Fetch available rooms for the selected hotel
       fetch(`get-hotel-rooms.php?hotel_id=${hotelSelect.value}`)
         .then(response => response.json())
         .then(data => {
-          // Clear existing options
           roomSelect.innerHTML = '<option value="">Select Room</option>';
-
-          // Add new options based on available rooms
           if (data.rooms && data.rooms.length > 0) {
             data.rooms.forEach(room => {
               const option = document.createElement('option');
