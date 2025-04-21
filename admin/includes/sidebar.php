@@ -158,7 +158,7 @@
         <i class="fas fa-chevron-down text-sm transition-transform duration-200"></i>
       </button>
       <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="assign-dropdown">
-        <a href="assign-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Assign Transportation</a>
+        <a href="transportation-assign.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Assign Transportation</a>
         <a href="assign-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Assign Flight</a>
       </div>
     </div>
