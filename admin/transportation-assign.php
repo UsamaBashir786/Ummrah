@@ -27,12 +27,18 @@ function getPackageBookings()
 }
 
 // Get existing transportation assignments
-function getTransportationAssignments($booking_id)
+function getTransportationAssignments($booking_id, $user_id = null)
 {
   global $conn;
   $sql = "SELECT * FROM transportation_assignments WHERE package_booking_id = ?";
-  $stmt = $conn->prepare($sql);
-  $stmt->bind_param("i", $booking_id);
+  if ($user_id) {
+    $sql .= " AND user_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ii", $booking_id, $user_id);
+  } else {
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $booking_id);
+  }
   $stmt->execute();
   $result = $stmt->get_result();
   return $result->fetch_all(MYSQLI_ASSOC);
@@ -62,33 +68,42 @@ $error_message = '';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['assign_transportation'])) {
   $booking_id = $_POST['booking_id'];
+  $user_id = $_POST['user_id'];
   $service_type = $_POST['service_type'];
-  $route_id = $_POST['route_id'];
+  $route_id = intval($_POST['route_id']);
   $route_name = $_POST['route_name'];
   $vehicle_type = $_POST['vehicle_type'];
   $vehicle_name = $_POST['vehicle_name'];
   $price = $_POST['price'];
 
-  // Validate inputs
-  if (
-    empty($booking_id) || empty($service_type) || empty($route_id) || empty($route_name)
-    || empty($vehicle_type) || empty($vehicle_name) || empty($price)
-  ) {
-    $error_message = "All fields are required.";
+  // Check if this user already has a transportation assignment for this booking
+  $existing_assignments = getTransportationAssignments($booking_id, $user_id);
+
+  if (count($existing_assignments) > 0) {
+    $error_message = "Transportation has already been assigned to this user for booking #$booking_id";
   } else {
-    // Insert assignment
-    $sql = "INSERT INTO transportation_assignments 
-            (package_booking_id, service_type, route_id, route_name, vehicle_type, vehicle_name, price) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)";
-
-    $stmt = $conn->prepare($sql);
-    // Fix: Changed "д" to "d" in the parameter types
-    $stmt->bind_param("isisssд", $booking_id, $service_type, $route_id, $route_name, $vehicle_type, $vehicle_name, $price);
-
-    if ($stmt->execute()) {
-      $success_message = "Transportation successfully assigned to booking #$booking_id";
+    // No existing assignment, proceed with insert
+    // Validate inputs
+    if (
+      empty($booking_id) || empty($user_id) || empty($service_type) || empty($route_id) || empty($route_name)
+      || empty($vehicle_type) || empty($vehicle_name) || empty($price)
+    ) {
+      $error_message = "All fields are required.";
     } else {
-      $error_message = "Error assigning transportation: " . $conn->error;
+      // Insert assignment with user_id included
+      $sql = "INSERT INTO transportation_assignments 
+              (package_booking_id, user_id, service_type, route_id, route_name, vehicle_type, vehicle_name, price) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+      $stmt = $conn->prepare($sql);
+      // Fix: Changed "д" to "d" for the price parameter
+      $stmt->bind_param("iisisssd", $booking_id, $user_id, $service_type, $route_id, $route_name, $vehicle_type, $vehicle_name, $price);
+
+      if ($stmt->execute()) {
+        $success_message = "Transportation successfully assigned to booking #$booking_id";
+      } else {
+        $error_message = "Error assigning transportation: " . $conn->error;
+      }
     }
   }
 }
@@ -318,125 +333,147 @@ if (isset($_GET['booking_id'])) {
                 <?php endif; ?>
               </div>
 
-              <!-- Add New Assignment -->
-              <div class="mt-6">
-                <h3 class="font-semibold text-lg mb-2">Add New Transportation Assignment</h3>
+              <!-- Check if user already has transportation assigned -->
+              <?php
+              $user_has_assignment = false;
+              foreach ($current_assignments as $assignment) {
+                if ($assignment['user_id'] == $current_booking['user_id']) {
+                  $user_has_assignment = true;
+                  break;
+                }
+              }
+              ?>
 
-                <div class="tab-buttons flex">
-                  <button class="tab-btn active" onclick="switchTab('taxi')">Taxi Service</button>
-                  <button class="tab-btn" onclick="switchTab('rentacar')">Rent A Car Service</button>
+              <!-- Add New Assignment only if user doesn't have one already -->
+              <?php if (!$user_has_assignment): ?>
+                <div class="mt-6">
+                  <h3 class="font-semibold text-lg mb-2">Add New Transportation Assignment</h3>
+
+                  <div class="tab-buttons flex">
+                    <button class="tab-btn active" onclick="switchTab('taxi')">Taxi Service</button>
+                    <button class="tab-btn" onclick="switchTab('rentacar')">Rent A Car Service</button>
+                  </div>
+
+                  <!-- Taxi Assignment Form -->
+                  <div id="taxi-tab" class="tab-content active">
+                    <form method="POST" action="" class="space-y-4">
+                      <input type="hidden" name="assign_transportation" value="1">
+                      <input type="hidden" name="booking_id" value="<?php echo $current_booking['id']; ?>">
+                      <input type="hidden" name="user_id" value="<?php echo $current_booking['user_id']; ?>">
+                      <input type="hidden" name="service_type" value="taxi">
+
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi_route">
+                            Route
+                          </label>
+                          <select id="taxi_route" name="route_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required onchange="updateTaxiRouteInfo(this.value)">
+                            <option value="">Select Route</option>
+                            <?php foreach ($taxi_routes as $route): ?>
+                              <option value="<?php echo $route['id']; ?>"
+                                data-name="<?php echo htmlspecialchars($route['route_name']); ?>"
+                                data-camry="<?php echo $route['camry_sonata_price']; ?>"
+                                data-starex="<?php echo $route['starex_staria_price']; ?>"
+                                data-hiace="<?php echo $route['hiace_price']; ?>">
+                                <?php echo $route['route_number'] . '. ' . htmlspecialchars($route['route_name']); ?>
+                              </option>
+                            <?php endforeach; ?>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi_vehicle">
+                            Vehicle Type
+                          </label>
+                          <select id="taxi_vehicle" name="vehicle_type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required onchange="updateTaxiPrice()">
+                            <option value="">Select Vehicle</option>
+                            <option value="camry" data-name="Camry/Sonata">Camry/Sonata</option>
+                            <option value="starex" data-name="Starex/Staria">Starex/Staria</option>
+                            <option value="hiace" data-name="Hiace">Hiace</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <input type="hidden" id="taxi_route_name" name="route_name" value="">
+                      <input type="hidden" id="taxi_vehicle_name" name="vehicle_name" value="">
+
+                      <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi_price">
+                          Price (PKR)
+                        </label>
+                        <input type="number" id="taxi_price" name="price" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required readonly>
+                      </div>
+
+                      <button type="submit" class="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700">
+                        <i class="fas fa-plus-circle mr-2"></i>Assign Taxi Service
+                      </button>
+                    </form>
+                  </div>
+
+                  <!-- Rent A Car Assignment Form -->
+                  <div id="rentacar-tab" class="tab-content">
+                    <form method="POST" action="" class="space-y-4">
+                      <input type="hidden" name="assign_transportation" value="1">
+                      <input type="hidden" name="booking_id" value="<?php echo $current_booking['id']; ?>">
+                      <input type="hidden" name="user_id" value="<?php echo $current_booking['user_id']; ?>">
+                      <input type="hidden" name="service_type" value="rentacar">
+
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar_route">
+                            Route
+                          </label>
+                          <select id="rentacar_route" name="route_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required onchange="updateRentacarRouteInfo(this.value)">
+                            <option value="">Select Route</option>
+                            <?php foreach ($rentacar_routes as $route): ?>
+                              <option value="<?php echo $route['id']; ?>"
+                                data-name="<?php echo htmlspecialchars($route['route_name']); ?>"
+                                data-gmc16="<?php echo $route['gmc_16_19_price']; ?>"
+                                data-gmc22="<?php echo $route['gmc_22_23_price']; ?>"
+                                data-coaster="<?php echo $route['coaster_price']; ?>">
+                                <?php echo $route['route_number'] . '. ' . htmlspecialchars($route['route_name']); ?>
+                              </option>
+                            <?php endforeach; ?>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar_vehicle">
+                            Vehicle Type
+                          </label>
+                          <select id="rentacar_vehicle" name="vehicle_type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required onchange="updateRentacarPrice()">
+                            <option value="">Select Vehicle</option>
+                            <option value="gmc16" data-name="GMC 16-19 Seater">GMC 16-19 Seater</option>
+                            <option value="gmc22" data-name="GMC 22-23 Seater">GMC 22-23 Seater</option>
+                            <option value="coaster" data-name="Coaster">Coaster</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <input type="hidden" id="rentacar_route_name" name="route_name" value="">
+                      <input type="hidden" id="rentacar_vehicle_name" name="vehicle_name" value="">
+
+                      <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar_price">
+                          Price (PKR)
+                        </label>
+                        <input type="number" id="rentacar_price" name="price" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required readonly>
+                      </div>
+
+                      <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                        <i class="fas fa-plus-circle mr-2"></i>Assign Rent A Car Service
+                      </button>
+                    </form>
+                  </div>
                 </div>
-
-                <!-- Taxi Assignment Form -->
-                <div id="taxi-tab" class="tab-content active">
-                  <form method="POST" action="" class="space-y-4">
-                    <input type="hidden" name="assign_transportation" value="1">
-                    <input type="hidden" name="booking_id" value="<?php echo $current_booking['id']; ?>">
-                    <input type="hidden" name="service_type" value="taxi">
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi_route">
-                          Route
-                        </label>
-                        <select id="taxi_route" name="route_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required onchange="updateTaxiRouteInfo(this.value)">
-                          <option value="">Select Route</option>
-                          <?php foreach ($taxi_routes as $route): ?>
-                            <option value="<?php echo $route['id']; ?>"
-                              data-name="<?php echo htmlspecialchars($route['route_name']); ?>"
-                              data-camry="<?php echo $route['camry_sonata_price']; ?>"
-                              data-starex="<?php echo $route['starex_staria_price']; ?>"
-                              data-hiace="<?php echo $route['hiace_price']; ?>">
-                              <?php echo $route['route_number'] . '. ' . htmlspecialchars($route['route_name']); ?>
-                            </option>
-                          <?php endforeach; ?>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi_vehicle">
-                          Vehicle Type
-                        </label>
-                        <select id="taxi_vehicle" name="vehicle_type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required onchange="updateTaxiPrice()">
-                          <option value="">Select Vehicle</option>
-                          <option value="camry" data-name="Camry/Sonata">Camry/Sonata</option>
-                          <option value="starex" data-name="Starex/Staria">Starex/Staria</option>
-                          <option value="hiace" data-name="Hiace">Hiace</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <input type="hidden" id="taxi_route_name" name="route_name" value="">
-                    <input type="hidden" id="taxi_vehicle_name" name="vehicle_name" value="">
-
-                    <div>
-                      <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi_price">
-                        Price (PKR)
-                      </label>
-                      <input type="number" id="taxi_price" name="price" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required readonly>
-                    </div>
-
-                    <button type="submit" class="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700">
-                      <i class="fas fa-plus-circle mr-2"></i>Assign Taxi Service
-                    </button>
-                  </form>
+              <?php else: ?>
+                <div class="mt-6 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <p class="text-yellow-700">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    Transportation has already been assigned to this user. You can delete the existing assignment above if you want to assign a different transportation.
+                  </p>
                 </div>
-
-                <!-- Rent A Car Assignment Form -->
-                <div id="rentacar-tab" class="tab-content">
-                  <form method="POST" action="" class="space-y-4">
-                    <input type="hidden" name="assign_transportation" value="1">
-                    <input type="hidden" name="booking_id" value="<?php echo $current_booking['id']; ?>">
-                    <input type="hidden" name="service_type" value="rentacar">
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar_route">
-                          Route
-                        </label>
-                        <select id="rentacar_route" name="route_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required onchange="updateRentacarRouteInfo(this.value)">
-                          <option value="">Select Route</option>
-                          <?php foreach ($rentacar_routes as $route): ?>
-                            <option value="<?php echo $route['id']; ?>"
-                              data-name="<?php echo htmlspecialchars($route['route_name']); ?>"
-                              data-gmc16="<?php echo $route['gmc_16_19_price']; ?>"
-                              data-gmc22="<?php echo $route['gmc_22_23_price']; ?>"
-                              data-coaster="<?php echo $route['coaster_price']; ?>">
-                              <?php echo $route['route_number'] . '. ' . htmlspecialchars($route['route_name']); ?>
-                            </option>
-                          <?php endforeach; ?>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar_vehicle">
-                          Vehicle Type
-                        </label>
-                        <select id="rentacar_vehicle" name="vehicle_type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required onchange="updateRentacarPrice()">
-                          <option value="">Select Vehicle</option>
-                          <option value="gmc16" data-name="GMC 16-19 Seater">GMC 16-19 Seater</option>
-                          <option value="gmc22" data-name="GMC 22-23 Seater">GMC 22-23 Seater</option>
-                          <option value="coaster" data-name="Coaster">Coaster</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <input type="hidden" id="rentacar_route_name" name="route_name" value="">
-                    <input type="hidden" id="rentacar_vehicle_name" name="vehicle_name" value="">
-
-                    <div>
-                      <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar_price">
-                        Price (PKR)
-                      </label>
-                      <input type="number" id="rentacar_price" name="price" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required readonly>
-                    </div>
-
-                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
-                      <i class="fas fa-plus-circle mr-2"></i>Assign Rent A Car Service
-                    </button>
-                  </form>
-                </div>
-              </div>
+              <?php endif; ?>
             </div>
           <?php else: ?>
             <!-- Bookings List View -->
@@ -456,11 +493,17 @@ if (isset($_GET['booking_id'])) {
                       <th class="py-2 px-4 border-b">Price</th>
                       <th class="py-2 px-4 border-b">Date</th>
                       <th class="py-2 px-4 border-b">Status</th>
+                      <th class="py-2 px-4 border-b">Transportation</th>
                       <th class="py-2 px-4 border-b">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     <?php foreach ($bookings as $booking): ?>
+                      <?php
+                      // Check if this booking already has transportation assigned
+                      $user_assignments = getTransportationAssignments($booking['id'], $booking['user_id']);
+                      $has_transportation = count($user_assignments) > 0;
+                      ?>
                       <tr>
                         <td class="py-2 px-4 border-b">#<?php echo $booking['id']; ?></td>
                         <td class="py-2 px-4 border-b"><?php echo htmlspecialchars($booking['user_name']); ?></td>
@@ -473,8 +516,19 @@ if (isset($_GET['booking_id'])) {
                           </span>
                         </td>
                         <td class="py-2 px-4 border-b">
+                          <?php if ($has_transportation): ?>
+                            <span class="px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                              <i class="fas fa-check-circle mr-1"></i> Assigned
+                            </span>
+                          <?php else: ?>
+                            <span class="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
+                              <i class="fas fa-times-circle mr-1"></i> Not Assigned
+                            </span>
+                          <?php endif; ?>
+                        </td>
+                        <td class="py-2 px-4 border-b">
                           <a href="transportation-assign.php?booking_id=<?php echo $booking['id']; ?>" class="text-teal-600 hover:text-teal-800">
-                            <i class="fas fa-car"></i> Assign
+                            <i class="fas fa-car"></i> <?php echo $has_transportation ? 'View' : 'Assign'; ?>
                           </a>
                         </td>
                       </tr>
