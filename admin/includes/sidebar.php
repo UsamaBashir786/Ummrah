@@ -160,6 +160,7 @@
       <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="assign-dropdown">
         <a href="transportation-assign.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Assign Transportation</a>
         <a href="assign-flight.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Assign Flight</a>
+        <a href="hotel-assign.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Assign Hotel</a>
       </div>
     </div>
 
