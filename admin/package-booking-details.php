@@ -101,7 +101,7 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
 }
 
 // Format status class
-$status = strtolower($booking['status']);
+$status = strtolower($booking['status'] ?? 'pending');
 $status_class = 'bg-yellow-100 text-yellow-800';
 $status_icon = 'fa-clock';
 
@@ -311,9 +311,9 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
           <button onclick="printBookingDetails()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg flex items-center">
             <i class="fas fa-print mr-2"></i> Print
           </button>
-          <button onclick="updateBookingStatus(<?php echo $booking_id; ?>)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center">
+          <!-- <button onclick="updateBookingStatus(<?php echo $booking_id; ?>)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center">
             <i class="fas fa-edit mr-2"></i> Update Status
-          </button>
+          </button> -->
           <button onclick="window.history.back()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center">
             <i class="fas fa-arrow-left mr-2"></i> Back
           </button>
@@ -330,12 +330,12 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                   <i class="fas fa-box text-2xl"></i>
                 </div>
                 <div>
-                  <h1 class="text-2xl font-bold"><?php echo htmlspecialchars($booking['package_name']); ?></h1>
-                  <p class="text-white/80"><?php echo htmlspecialchars($booking['destination']); ?></p>
+                  <h1 class="text-2xl font-bold"><?php echo htmlspecialchars($booking['package_name'] ?? 'Package'); ?></h1>
+                  <!-- <p class="text-white/80"><?php echo htmlspecialchars($booking['destination'] ?? 'Not specified'); ?></p> -->
                 </div>
               </div>
               <div class="mt-4 flex flex-wrap gap-3">
-                <div class="bg-white/20 rounded-lg px-3 py-2 flex items-center">
+                <!-- <div class="bg-white/20 rounded-lg px-3 py-2 flex items-center">
                   <i class="fas fa-calendar-alt mr-2"></i>
                   <div>
                     <p class="text-xs text-white/80">Travel Date</p>
@@ -355,18 +355,18 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                     <p class="text-xs text-white/80">Travelers</p>
                     <p class="font-medium"><?php echo intval($booking['number_of_travelers'] ?? 1); ?> persons</p>
                   </div>
-                </div>
+                </div> -->
               </div>
             </div>
             <div class="mt-4 md:mt-0 md:text-right">
               <div class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium <?php echo $status_class; ?>">
                 <i class="fas <?php echo $status_icon; ?> mr-1"></i>
-                <?php echo ucfirst($booking['status']); ?>
+                <?php echo ucfirst($booking['status'] ?? 'Pending'); ?>
               </div>
-              <div class="mt-2">
+              <!-- <div class="mt-2">
                 <p class="text-white/80">Booking Reference</p>
                 <p class="text-xl font-bold"><?php echo $booking['booking_reference'] ?? 'N/A'; ?></p>
-              </div>
+              </div> -->
               <div class="mt-2">
                 <p class="text-white/80">Total Amount</p>
                 <p class="text-2xl font-bold">$<?php echo number_format((float)($booking['total_price'] ?? 0), 2); ?></p>
@@ -386,13 +386,13 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
 
               <?php if (!empty($package_image)): ?>
                 <div class="mb-4">
-                  <img src="../<?php echo htmlspecialchars($package_image); ?>" alt="<?php echo htmlspecialchars($booking['package_name']); ?>"
+                  <img src="../<?php echo htmlspecialchars($package_image); ?>" alt="<?php echo htmlspecialchars($booking['package_name'] ?? 'Package'); ?>"
                     class="w-full h-64 object-cover rounded-lg">
                 </div>
               <?php endif; ?>
 
               <div class="mt-4">
-                <h3 class="font-medium text-lg text-gray-800"><?php echo htmlspecialchars($booking['package_name']); ?></h3>
+                <h3 class="font-medium text-lg text-gray-800"><?php echo htmlspecialchars($booking['package_name'] ?? 'Package'); ?></h3>
                 <p class="text-gray-600 mt-2"><?php echo htmlspecialchars($booking['description'] ?? 'No description available.'); ?></p>
               </div>
 
@@ -401,17 +401,17 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                   <p class="text-sm text-gray-500">Package Type</p>
                   <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($booking['package_type'] ?? 'Standard'); ?></p>
                 </div>
-                <div>
+                <!-- <div>
                   <p class="text-sm text-gray-500">Destination</p>
                   <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($booking['destination'] ?? 'Not specified'); ?></p>
-                </div>
+                </div> -->
                 <div>
                   <p class="text-sm text-gray-500">Duration</p>
                   <p class="text-gray-800 font-medium"><?php echo intval($booking['duration'] ?? 0); ?> days</p>
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">Base Price</p>
-                  <p class="text-gray-800 font-medium">$<?php echo number_format((float)($booking['base_price'] ?? 0), 2); ?></p>
+                  <p class="text-gray-800 font-medium">$PKR<?php echo number_format((float)($booking['base_price'] ?? 0), 2); ?></p>
                 </div>
               </div>
 
@@ -459,10 +459,10 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                   <p class="text-sm text-gray-500">Booking ID</p>
                   <p class="text-gray-800 font-medium">#<?php echo $booking['id']; ?></p>
                 </div>
-                <div>
+                <!-- <div>
                   <p class="text-sm text-gray-500">Booking Reference</p>
                   <p class="text-gray-800 font-medium"><?php echo $booking['booking_reference'] ?? 'N/A'; ?></p>
-                </div>
+                </div> -->
                 <div>
                   <p class="text-sm text-gray-500">Booking Date</p>
                   <p class="text-gray-800 font-medium"><?php echo $formatted_booking_date; ?></p>
@@ -471,7 +471,7 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                   <p class="text-sm text-gray-500">Status</p>
                   <p class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $status_class; ?>">
                     <i class="fas <?php echo $status_icon; ?> mr-1"></i>
-                    <?php echo ucfirst($booking['status']); ?>
+                    <?php echo ucfirst($booking['status'] ?? 'Pending'); ?>
                   </p>
                 </div>
                 <div>
@@ -481,12 +481,12 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                     <?php echo ucfirst($payment_status); ?>
                   </p>
                 </div>
-                <div>
+                <!-- <div>
                   <p class="text-sm text-gray-500">Payment Method</p>
                   <p class="text-gray-800 font-medium">
                     <?php echo ucfirst($booking['payment_method'] ?? 'Not specified'); ?>
                   </p>
-                </div>
+                </div> -->
               </div>
 
               <!-- Price breakdown -->
@@ -496,7 +496,7 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                   <div class="space-y-2">
                     <div class="flex justify-between">
                       <span class="text-gray-600">Base Price</span>
-                      <span class="text-gray-800">$<?php echo number_format((float)($booking['base_price'] ?? 0), 2); ?></span>
+                      <span class="text-gray-800">PKR<?php echo number_format((float)($booking['base_price'] ?? 0), 2); ?></span>
                     </div>
                     <div class="flex justify-between">
                       <span class="text-gray-600">Number of Travelers</span>
@@ -521,7 +521,7 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                     <?php endif; ?>
                     <div class="border-t border-gray-200 my-2 pt-2 flex justify-between font-bold">
                       <span>Total Amount</span>
-                      <span>$<?php echo number_format((float)($booking['total_price'] ?? 0), 2); ?></span>
+                      <span>PKR<?php echo number_format((float)($booking['total_price'] ?? 0), 2); ?></span>
                     </div>
                   </div>
                 </div>
@@ -613,7 +613,7 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">Transaction ID</p>
-                    <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($payment_info['transaction_id']); ?></p>
+                    <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($payment_info['transaction_id'] ?? 'N/A'); ?></p>
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">Payment Date</p>
@@ -626,17 +626,18 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">Amount</p>
-                    <p class="text-gray-800 font-medium">$<?php echo number_format((float)$payment_info['amount'], 2); ?></p>
+
+                    <p class="text-gray-800 font-medium">$<?php echo number_format((float)($payment_info['amount'] ?? 0), 2); ?></p>
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">Payment Method</p>
-                    <p class="text-gray-800 font-medium"><?php echo ucfirst($payment_info['payment_method']); ?></p>
+                    <p class="text-gray-800 font-medium"><?php echo ucfirst($payment_info['payment_method'] ?? 'Not specified'); ?></p>
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">Status</p>
                     <p class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $payment_class; ?>">
                       <i class="fas <?php echo $payment_icon; ?> mr-1"></i>
-                      <?php echo ucfirst($payment_info['status']); ?>
+                      <?php echo ucfirst($payment_info['status'] ?? 'Pending'); ?>
                     </p>
                   </div>
                 </div>
@@ -683,10 +684,10 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
 
               <div class="flex items-center mb-4">
                 <img class="h-14 w-14 object-cover rounded-full border border-gray-200 mr-4"
-                  src="../<?php echo isset($booking['profile_image']) ? htmlspecialchars($booking['profile_image']) : 'user/uploads/default.png'; ?>"
-                  alt="<?php echo htmlspecialchars($booking['full_name']); ?>'s profile" />
+                  src="../<?php echo isset($booking['profile_image']) && !empty($booking['profile_image']) ? htmlspecialchars($booking['profile_image']) : 'user/uploads/default.png'; ?>"
+                  alt="<?php echo htmlspecialchars($booking['full_name'] ?? 'Customer'); ?>'s profile" />
                 <div>
-                  <h3 class="font-medium text-gray-800"><?php echo htmlspecialchars($booking['full_name']); ?></h3>
+                  <h3 class="font-medium text-gray-800"><?php echo htmlspecialchars($booking['full_name'] ?? 'Customer'); ?></h3>
                   <a href="user-details.php?id=<?php echo $booking['user_id']; ?>" class="text-sm text-teal-600 hover:text-teal-800">
                     View User Profile
                   </a>
@@ -698,13 +699,13 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                   <div class="w-6 text-center text-gray-400 mr-2">
                     <i class="fas fa-envelope"></i>
                   </div>
-                  <span class="text-gray-800"><?php echo htmlspecialchars($booking['email']); ?></span>
+                  <span class="text-gray-800"><?php echo htmlspecialchars($booking['email'] ?? 'Not provided'); ?></span>
                 </div>
                 <div class="flex items-center">
                   <div class="w-6 text-center text-gray-400 mr-2">
                     <i class="fas fa-phone"></i>
                   </div>
-                  <span class="text-gray-800"><?php echo htmlspecialchars($booking['phone_number']); ?></span>
+                  <span class="text-gray-800"><?php echo htmlspecialchars($booking['phone_number'] ?? 'Not provided'); ?></span>
                 </div>
               </div>
             </div>
@@ -718,7 +719,7 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
               <div class="flex items-center mb-4">
                 <span class="status-pill <?php echo $status_class; ?> flex items-center">
                   <i class="fas <?php echo $status_icon; ?> mr-1"></i>
-                  <?php echo ucfirst($booking['status']); ?>
+                  <?php echo ucfirst($booking['status'] ?? 'Pending'); ?>
                 </span>
               </div>
 
@@ -740,53 +741,55 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                 if (!empty($payment_info)) {
                   $timeline[] = [
                     'date' => $payment_info['payment_date'],
-                    'event' => 'Payment ' . ucfirst($payment_info['status']),
-                    'description' => 'Payment of $' . number_format((float)$payment_info['amount'], 2) . ' via ' . ucfirst($payment_info['payment_method']),
+                    'event' => 'Payment ' . ucfirst($payment_info['status'] ?? 'Processed'),
+                    'description' => 'Payment of $' . number_format((float)($payment_info['amount'] ?? 0), 2) . ' via ' . ucfirst($payment_info['payment_method'] ?? 'Not specified'),
                     'icon' => 'fa-money-bill-wave',
-                    'color' => $payment_info['status'] === 'paid' ? 'bg-green-500' : 'bg-red-500'
+                    'color' => ($payment_info['status'] ?? '') === 'paid' ? 'bg-green-500' : 'bg-red-500'
                   ];
                 }
 
                 // Add status change events if available from booking_status_history table
-                $status_sql = "SELECT * FROM booking_status_history 
-                              WHERE booking_id = ? AND booking_type = 'package' 
-                              ORDER BY created_at ASC";
-                $stmt = $conn->prepare($status_sql);
-                $stmt->bind_param("i", $booking_id);
-                $stmt->execute();
-                $status_result = $stmt->get_result();
+                if ($has_status_history_table) {
+                  $status_sql = "SELECT * FROM booking_status_history 
+                                WHERE booking_id = ? AND booking_type = 'package' 
+                                ORDER BY created_at ASC";
+                  $stmt = $conn->prepare($status_sql);
+                  $stmt->bind_param("i", $booking_id);
+                  $stmt->execute();
+                  $status_result = $stmt->get_result();
 
-                if ($status_result && $status_result->num_rows > 0) {
-                  while ($status_row = $status_result->fetch_assoc()) {
-                    $icon = 'fa-info-circle';
-                    $color = 'bg-blue-500';
+                  if ($status_result && $status_result->num_rows > 0) {
+                    while ($status_row = $status_result->fetch_assoc()) {
+                      $icon = 'fa-info-circle';
+                      $color = 'bg-blue-500';
 
-                    switch (strtolower($status_row['status'])) {
-                      case 'confirmed':
-                        $icon = 'fa-check-circle';
-                        $color = 'bg-green-500';
-                        break;
-                      case 'cancelled':
-                      case 'canceled':
-                        $icon = 'fa-times-circle';
-                        $color = 'bg-red-500';
-                        break;
-                      case 'completed':
-                        $icon = 'fa-flag-checkered';
-                        $color = 'bg-purple-500';
-                        break;
+                      switch (strtolower($status_row['status'])) {
+                        case 'confirmed':
+                          $icon = 'fa-check-circle';
+                          $color = 'bg-green-500';
+                          break;
+                        case 'cancelled':
+                        case 'canceled':
+                          $icon = 'fa-times-circle';
+                          $color = 'bg-red-500';
+                          break;
+                        case 'completed':
+                          $icon = 'fa-flag-checkered';
+                          $color = 'bg-purple-500';
+                          break;
+                      }
+
+                      $timeline[] = [
+                        'date' => $status_row['created_at'],
+                        'event' => 'Status Changed to ' . ucfirst($status_row['status']),
+                        'description' => !empty($status_row['notes']) ? $status_row['notes'] : 'Booking status was updated',
+                        'icon' => $icon,
+                        'color' => $color
+                      ];
                     }
-
-                    $timeline[] = [
-                      'date' => $status_row['created_at'],
-                      'event' => 'Status Changed to ' . ucfirst($status_row['status']),
-                      'description' => !empty($status_row['notes']) ? $status_row['notes'] : 'Booking status was updated',
-                      'icon' => $icon,
-                      'color' => $color
-                    ];
                   }
+                  $stmt->close();
                 }
-                $stmt->close();
 
                 // Sort timeline by date (oldest first)
                 usort($timeline, function ($a, $b) {
@@ -811,7 +814,7 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
             </div>
 
             <!-- Actions -->
-            <div class="info-card bg-white rounded-xl shadow-md p-5 mb-6 no-print">
+            <!-- <div class="info-card bg-white rounded-xl shadow-md p-5 mb-6 no-print">
               <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                 <i class="fas fa-cog text-teal-600 mr-2"></i> Actions
               </h2>
@@ -821,7 +824,7 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                   <i class="fas fa-edit mr-2"></i> Update Status
                 </button>
 
-                <?php if ($booking['status'] !== 'cancelled' && $booking['status'] !== 'completed'): ?>
+                <?php if (($booking['status'] ?? '') !== 'cancelled' && ($booking['status'] ?? '') !== 'completed'): ?>
                   <button onclick="cancelBooking(<?php echo $booking_id; ?>)" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center justify-center">
                     <i class="fas fa-times-circle mr-2"></i> Cancel Booking
                   </button>
@@ -841,61 +844,63 @@ if ($table_check_result && $table_check_result->num_rows > 0) {
                   <i class="fas fa-file-alt mr-2"></i> Print Voucher
                 </button>
               </div>
-            </div>
+            </div> -->
 
             <!-- Admin Notes -->
-            <div class="info-card bg-white rounded-xl shadow-md p-5 mb-6 no-print">
-              <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                <i class="fas fa-sticky-note text-teal-600 mr-2"></i> Admin Notes
-              </h2>
+            <?php if ($has_notes_table): ?>
+              <div class="info-card bg-white rounded-xl shadow-md p-5 mb-6 no-print">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                  <i class="fas fa-sticky-note text-teal-600 mr-2"></i> Admin Notes
+                </h2>
 
-              <?php
-              // Fetch admin notes
-              $notes_sql = "SELECT * FROM booking_notes 
-                           WHERE booking_id = ? AND booking_type = 'package' 
-                           ORDER BY created_at DESC";
-              $stmt = $conn->prepare($notes_sql);
-              $stmt->bind_param("i", $booking_id);
-              $stmt->execute();
-              $notes_result = $stmt->get_result();
-              ?>
+                <?php
+                // Fetch admin notes
+                $notes_sql = "SELECT * FROM booking_notes 
+                             WHERE booking_id = ? AND booking_type = 'package' 
+                             ORDER BY created_at DESC";
+                $stmt = $conn->prepare($notes_sql);
+                $stmt->bind_param("i", $booking_id);
+                $stmt->execute();
+                $notes_result = $stmt->get_result();
+                ?>
 
-              <?php if ($notes_result && $notes_result->num_rows > 0): ?>
-                <div class="space-y-4 mb-4">
-                  <?php while ($note = $notes_result->fetch_assoc()): ?>
-                    <div class="bg-gray-50 rounded-lg p-3 border-l-4 border-teal-500">
-                      <p class="text-sm text-gray-700"><?php echo nl2br(htmlspecialchars($note['note'])); ?></p>
-                      <div class="flex justify-between items-center mt-2 text-xs text-gray-500">
-                        <span>
-                          By: <?php echo htmlspecialchars($note['added_by']); ?>
-                        </span>
-                        <span>
-                          <?php
-                          $note_date = new DateTime($note['created_at']);
-                          echo $note_date->format('M d, Y h:i A');
-                          ?>
-                        </span>
+                <?php if ($notes_result && $notes_result->num_rows > 0): ?>
+                  <div class="space-y-4 mb-4">
+                    <?php while ($note = $notes_result->fetch_assoc()): ?>
+                      <div class="bg-gray-50 rounded-lg p-3 border-l-4 border-teal-500">
+                        <p class="text-sm text-gray-700"><?php echo nl2br(htmlspecialchars($note['note'])); ?></p>
+                        <div class="flex justify-between items-center mt-2 text-xs text-gray-500">
+                          <span>
+                            By: <?php echo htmlspecialchars($note['added_by'] ?? 'Admin'); ?>
+                          </span>
+                          <span>
+                            <?php
+                            $note_date = new DateTime($note['created_at']);
+                            echo $note_date->format('M d, Y h:i A');
+                            ?>
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  <?php endwhile; ?>
-                </div>
-              <?php else: ?>
-                <p class="text-gray-500 italic mb-4">No notes have been added yet.</p>
-              <?php endif; ?>
-              <?php $stmt->close(); ?>
+                    <?php endwhile; ?>
+                  </div>
+                <?php else: ?>
+                  <p class="text-gray-500 italic mb-4">No notes have been added yet.</p>
+                <?php endif; ?>
+                <?php $stmt->close(); ?>
 
-              <!-- Add Note Form -->
-              <form id="addNoteForm" class="mt-3">
-                <input type="hidden" name="booking_id" value="<?php echo $booking_id; ?>">
-                <input type="hidden" name="booking_type" value="package">
-                <div class="mb-3">
-                  <textarea name="note" id="admin_note" rows="3" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent" placeholder="Add a note..."></textarea>
-                </div>
-                <button type="button" onclick="addNote()" class="w-full bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center justify-center">
-                  <i class="fas fa-plus mr-2"></i> Add Note
-                </button>
-              </form>
-            </div>
+                <!-- Add Note Form -->
+                <form id="addNoteForm" class="mt-3">
+                  <input type="hidden" name="booking_id" value="<?php echo $booking_id; ?>">
+                  <input type="hidden" name="booking_type" value="package">
+                  <div class="mb-3">
+                    <textarea name="note" id="admin_note" rows="3" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent" placeholder="Add a note..."></textarea>
+                  </div>
+                  <button type="button" onclick="addNote()" class="w-full bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-plus mr-2"></i> Add Note
+                  </button>
+                </form>
+              </div>
+            <?php endif; ?>
           </div>
         </div>
       </div>
