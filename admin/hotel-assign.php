@@ -94,61 +94,68 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['assign_hotel'])) {
 
 // Delete hotel booking
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_booking'])) {
-  $hotel_booking_id = $_POST['booking_id'];
+  error_log("Delete booking request received");
+  $hotel_booking_id = $_POST['booking_id'] ?? 0;
 
-  // Debug: Log POST data
-  error_log("Delete attempt: hotel_booking_id = " . $hotel_booking_id);
+  // Debug: Log all POST data
   error_log("POST data: " . print_r($_POST, true));
 
   // Validate input
   if (empty($hotel_booking_id) || !is_numeric($hotel_booking_id)) {
-    $_SESSION['error_message'] = "Invalid booking ID.";
-    error_log("Error: Invalid booking ID");
+    $_SESSION['error_message'] = "Invalid booking ID provided.";
+    error_log("Invalid booking ID: " . $hotel_booking_id);
     header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
-    exit;
-  } else {
-    // Check if booking exists
-    $check_sql = "SELECT id FROM hotel_bookings WHERE id = ?";
-    $check_stmt = $conn->prepare($check_sql);
-    $check_stmt->bind_param("i", $hotel_booking_id);
-    $check_stmt->execute();
-    $check_result = $check_stmt->get_result();
-
-    if ($check_result->num_rows === 0) {
-      $_SESSION['error_message'] = "No hotel booking found with ID #$hotel_booking_id";
-      error_log("Error: No booking found with ID #$hotel_booking_id");
-      header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
-      exit;
-    } else {
-      // Delete booking
-      $sql = "DELETE FROM hotel_bookings WHERE id = ?";
-      $stmt = $conn->prepare($sql);
-      if (!$stmt) {
-        $_SESSION['error_message'] = "Prepare failed: " . $conn->error;
-        error_log("Prepare failed: " . $conn->error);
-        header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
-        exit;
-      } else {
-        $stmt->bind_param("i", $hotel_booking_id);
-        if ($stmt->execute()) {
-          if ($stmt->affected_rows > 0) {
-            $_SESSION['success_message'] = "Hotel booking successfully deleted";
-            error_log("Success: Deleted hotel booking ID #$hotel_booking_id");
-          } else {
-            $_SESSION['error_message'] = "No hotel booking found with ID #$hotel_booking_id";
-            error_log("Error: No booking found with ID #$hotel_booking_id");
-          }
-        } else {
-          $_SESSION['error_message'] = "Error deleting booking: " . $conn->error;
-          error_log("Error: " . $conn->error);
-        }
-        $stmt->close();
-        header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
-        exit;
-      }
-    }
-    $check_stmt->close();
+    exit();
   }
+
+  // Check if booking exists
+  $check_sql = "SELECT id FROM hotel_bookings WHERE id = ?";
+  $check_stmt = $conn->prepare($check_sql);
+
+  if (!$check_stmt) {
+    $_SESSION['error_message'] = "Database error: " . $conn->error;
+    error_log("Prepare failed: " . $conn->error);
+    header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
+    exit();
+  }
+
+  $check_stmt->bind_param("i", $hotel_booking_id);
+  $check_stmt->execute();
+  $check_result = $check_stmt->get_result();
+
+  if ($check_result->num_rows === 0) {
+    $_SESSION['error_message'] = "No hotel booking found with ID #$hotel_booking_id";
+    error_log("No booking found with ID: " . $hotel_booking_id);
+    header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
+    exit();
+  }
+
+  // Delete booking
+  $sql = "DELETE FROM hotel_bookings WHERE id = ?";
+  $stmt = $conn->prepare($sql);
+
+  if (!$stmt) {
+    $_SESSION['error_message'] = "Database error: " . $conn->error;
+    error_log("Prepare failed: " . $conn->error);
+    header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
+    exit();
+  }
+
+  $stmt->bind_param("i", $hotel_booking_id);
+
+  if ($stmt->execute()) {
+    $_SESSION['success_message'] = "Hotel booking #$hotel_booking_id successfully deleted";
+    error_log("Successfully deleted booking ID: " . $hotel_booking_id);
+  } else {
+    $_SESSION['error_message'] = "Error deleting booking: " . $conn->error;
+    error_log("Delete failed: " . $conn->error);
+  }
+
+  $stmt->close();
+  $check_stmt->close();
+
+  header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
+  exit();
 }
 
 // Fetch Data
@@ -372,6 +379,7 @@ if (isset($_GET['booking_id']) && is_numeric($_GET['booking_id'])) {
                             <input type="hidden" name="delete_booking" value="1">
                             <button type="submit" class="text-red-500 hover:text-red-700" title="Delete Booking #<?php echo $booking['id']; ?>">
                               <i class="fas fa-trash"></i>
+                              Delete
                             </button>
                           </form>
                         </div>
@@ -652,26 +660,29 @@ if (isset($_GET['booking_id']) && is_numeric($_GET['booking_id'])) {
           roomSelect.innerHTML = '<option value="">Error loading rooms</option>';
         });
     }
+    document.addEventListener('DOMContentLoaded', function() {
+      // Attach event listeners to all delete forms
+      document.querySelectorAll('form[onsubmit^="return handleDelete"]').forEach(form => {
+        form.addEventListener('submit', function(e) {
+          e.preventDefault();
+          const bookingId = this.querySelector('input[name="booking_id"]').value;
 
-    // Delete confirmation with SweetAlert2
-    function handleDelete(event, bookingId) {
-      event.preventDefault();
-      Swal.fire({
-        title: 'Are you sure?',
-        text: `You are about to delete booking #${bookingId}. This action cannot be undone.`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, delete it!'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          event.target.submit();
-        }
+          Swal.fire({
+            title: 'Are you sure?',
+            text: `You are about to delete booking #${bookingId}. This action cannot be undone.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete it!'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              this.submit();
+            }
+          });
+        });
       });
-      return false;
-    }
-
+    });
     // Mobile menu toggle
     const menuBtn = document.getElementById('menu-btn');
     const sidebar = document.querySelector('.sidebar');
