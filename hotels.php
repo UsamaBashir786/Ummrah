@@ -15,50 +15,17 @@ if (!isset($_SESSION['user_id'])) {
   $user_id = $_SESSION['user_id'];
 }
 
-
 // Fetch filter values from GET parameters
 $location = isset($_GET['location']) ? $_GET['location'] : '';
 $min_price = isset($_GET['min_price']) ? (float)$_GET['min_price'] : 0;
-$max_price = isset($_GET['max_price']) ? (float)$_GET['max_price'] : 10000;
-$amenities = isset($_GET['amenities']) ? $_GET['amenities'] : [];
+$max_price = isset($_GET['max_price']) ? (float)$_GET['max_price'] : 50000; // Increased max price to match hotel data
 $sort_by = isset($_GET['sort_by']) ? $_GET['sort_by'] : 'price_asc';
 
-// SQL query to fetch hotels with one image per hotel
-$query = "
-    SELECT h.*, 
-           (SELECT hi.image_path FROM hotel_images hi WHERE hi.hotel_id = h.id LIMIT 1) AS image_path
-    FROM hotels h
-    WHERE h.price_per_night BETWEEN ? AND ?
-";
-
-// Parameters array
-$params = [$min_price, $max_price];
-
-if (!empty($location)) {
-  $query .= " AND h.location LIKE ?";
-  $params[] = "%$location%";
+// Process amenities array
+$amenities = isset($_GET['amenities']) ? $_GET['amenities'] : [];
+if (!is_array($amenities)) {
+  $amenities = [$amenities]; // Convert single value to array
 }
-
-// Apply sorting
-switch ($sort_by) {
-  case 'price_asc':
-    $query .= " ORDER BY h.price_per_night ASC";
-    break;
-  case 'price_desc':
-    $query .= " ORDER BY h.price_per_night DESC";
-    break;
-  case 'name_asc':
-    $query .= " ORDER BY h.hotel_name ASC";
-    break;
-  default:
-    $query .= " ORDER BY h.price_per_night ASC";
-}
-
-$stmt = $conn->prepare($query);
-$stmt->bind_param(str_repeat('s', count($params)), ...$params);
-$stmt->execute();
-$result = $stmt->get_result();
-$hotels = $result->fetch_all(MYSQLI_ASSOC);
 
 // Get all unique locations for the filter dropdown
 $location_query = "SELECT DISTINCT location FROM hotels ORDER BY location";
@@ -73,7 +40,7 @@ $price_query = "SELECT MIN(price_per_night) as min_price, MAX(price_per_night) a
 $price_result = $conn->query($price_query);
 $price_range = $price_result->fetch_assoc();
 $db_min_price = $price_range['min_price'] ?? 0;
-$db_max_price = $price_range['max_price'] ?? 1000;
+$db_max_price = $price_range['max_price'] ?? 50000;
 
 // Common amenities list
 $common_amenities = [
@@ -87,12 +54,6 @@ $common_amenities = [
   'breakfast' => 'Free Breakfast'
 ];
 
-// Process amenities array
-$amenities = isset($_GET['amenities']) ? $_GET['amenities'] : [];
-if (!is_array($amenities)) {
-  $amenities = [$amenities]; // Convert single value to array
-}
-
 // SQL query to fetch hotels with one image per hotel
 $query = "
     SELECT h.*, 
@@ -105,8 +66,8 @@ $query = "
 $params = [$min_price, $max_price];
 
 if (!empty($location)) {
-  $query .= " AND h.location LIKE ?";
-  $params[] = "%$location%";
+  $query .= " AND h.location = ?"; // Changed from LIKE to exact match
+  $params[] = $location;
 }
 
 // Add amenities filter to query
@@ -118,9 +79,6 @@ if (!empty($amenities)) {
     $params[] = "%\"$amenity\"%"; // Match JSON-encoded values
   }
 }
-
-// Print query for debugging (you can remove this in production)
-// echo "<pre>Query: $query\nParams: " . print_r($params, true) . "</pre>";
 
 // Apply sorting
 switch ($sort_by) {
@@ -137,6 +95,10 @@ switch ($sort_by) {
     $query .= " ORDER BY h.price_per_night ASC";
 }
 
+// Debug the query (uncomment if needed)
+// echo "<pre>Query: $query\nParams: " . print_r($params, true) . "</pre>";
+
+// Execute the query
 $stmt = $conn->prepare($query);
 if (!empty($params)) {
   $types = str_repeat('s', count($params));
@@ -154,14 +116,11 @@ $hotels = $result->fetch_all(MYSQLI_ASSOC);
   <?php include 'includes/css-links.php'; ?>
   <link href="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
-  <link href="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.css" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/hotels.css">
 </head>
 
 <body class="bg-gray-50">
   <?php include 'includes/navbar.php'; ?>
-
-  <!-- <div class="my-16">&nbsp;</div> -->
 
   <!-- Hero Section -->
   <section class="hero-section mb-12 animate__animated animate__fadeIn" style="background: url('assets/images/hero/hero.jpg') no-repeat center center/cover; height: 400px;">
@@ -219,20 +178,6 @@ $hotels = $result->fetch_all(MYSQLI_ASSOC);
         </div>
 
         <!-- Amenities Filter -->
-        <!-- Desktop form -->
-        <div class="mb-6">
-          <label class="block text-gray-700 font-semibold mb-2">Amenities</label>
-          <div class="space-y-2">
-            <?php foreach ($common_amenities as $key => $label): ?>
-              <label class="flex items-center space-x-2">
-                <input type="checkbox" name="amenities[]" value="<?php echo $key; ?>" class="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500" <?php if (in_array($key, $amenities)) echo 'checked'; ?>>
-                <span><?php echo $label; ?></span>
-              </label>
-            <?php endforeach; ?>
-          </div>
-        </div>
-
-        <!-- Mobile form -->
         <div>
           <label class="block text-gray-700 font-semibold mb-2">Amenities</label>
           <div class="grid grid-cols-2 gap-2">
@@ -420,7 +365,13 @@ $hotels = $result->fetch_all(MYSQLI_ASSOC);
                 <!-- Card for Grid View -->
                 <div class="grid-card">
                   <div class="relative hotel-image-container overflow-hidden">
-                    <img src="admin/<?php echo htmlspecialchars($hotel['image_path'] ?? 'assets/images/hotel-placeholder.jpg'); ?>"
+                    <?php
+                    // Check if image path exists, use placeholder if not
+                    $imagePath = !empty($hotel['image_path']) ?
+                      $hotel['image_path'] :
+                      'assets/images/hotel-placeholder.jpg';
+                    ?>
+                    <img src="admin/<?php echo htmlspecialchars($imagePath); ?>"
                       alt="<?php echo htmlspecialchars($hotel['hotel_name']); ?>"
                       class="hotel-image object-cover w-full">
                     <div class="price-badge">
@@ -574,234 +525,6 @@ $hotels = $result->fetch_all(MYSQLI_ASSOC);
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Initialize loading state
-      let isLoading = false;
-
-      // Initialize view state (grid or list)
-      let viewMode = 'grid';
-
-      // Function to initialize the price slider
-      function initPriceSlider(sliderId, minPriceId, maxPriceId, minPriceDisplayId, maxPriceDisplayId) {
-        const slider = document.getElementById(sliderId);
-
-        if (!slider) return;
-
-        const minPriceInput = document.getElementById(minPriceId);
-        const maxPriceInput = document.getElementById(maxPriceId);
-        const minPriceDisplay = document.getElementById(minPriceDisplayId);
-        const maxPriceDisplay = document.getElementById(maxPriceDisplayId);
-
-        noUiSlider.create(slider, {
-          start: [
-            parseInt(minPriceInput.value) || <?php echo $db_min_price; ?>,
-            parseInt(maxPriceInput.value) || <?php echo $db_max_price; ?>
-          ],
-          connect: true,
-          step: 10,
-          range: {
-            'min': <?php echo $db_min_price; ?>,
-            'max': <?php echo $db_max_price; ?>
-          },
-          format: {
-            to: value => Math.round(value),
-            from: value => Math.round(value)
-          }
-        });
-
-        slider.noUiSlider.on('update', function(values, handle) {
-          const min = values[0];
-          const max = values[1];
-
-          minPriceInput.value = min;
-          maxPriceInput.value = max;
-          minPriceDisplay.textContent = '$' + min;
-          maxPriceDisplay.textContent = '$' + max;
-        });
-      }
-
-      // Initialize both price sliders (desktop and mobile)
-      initPriceSlider('price-slider', 'min-price', 'max-price', 'min-price-display', 'max-price-display');
-      initPriceSlider('mobile-price-slider', 'mobile-min-price', 'mobile-max-price', 'mobile-min-price-display', 'mobile-max-price-display');
-
-      // Mobile filter panel toggle
-      const mobileFilterToggle = document.getElementById('mobile-filter-toggle');
-      const mobileFilterPanel = document.getElementById('mobile-filter-panel');
-      const closeFilterBtn = document.getElementById('close-filter');
-      const filterOverlay = document.getElementById('filter-overlay');
-
-      if (mobileFilterToggle && mobileFilterPanel) {
-        mobileFilterToggle.addEventListener('click', function() {
-          mobileFilterPanel.classList.add('open');
-          filterOverlay.classList.add('show');
-          document.body.style.overflow = 'hidden';
-        });
-      }
-
-      if (closeFilterBtn) {
-        closeFilterBtn.addEventListener('click', function() {
-          mobileFilterPanel.classList.remove('open');
-          filterOverlay.classList.remove('show');
-          document.body.style.overflow = '';
-        });
-      }
-
-      if (filterOverlay) {
-        filterOverlay.addEventListener('click', function() {
-          mobileFilterPanel.classList.remove('open');
-          filterOverlay.classList.remove('show');
-          document.body.style.overflow = '';
-        });
-      }
-
-      // Sort select handler
-      const sortSelect = document.getElementById('sort-select');
-      const sortByInput = document.getElementById('sort-by-input');
-
-      if (sortSelect && sortByInput) {
-        sortSelect.addEventListener('change', function() {
-          sortByInput.value = this.value;
-          document.getElementById('filter-form').submit();
-        });
-      }
-
-      // View toggle functionality
-      const gridViewBtn = document.getElementById('grid-view-btn');
-      const listViewBtn = document.getElementById('list-view-btn');
-      const hotelContainer = document.getElementById('hotel-container');
-
-      if (gridViewBtn && listViewBtn && hotelContainer) {
-        gridViewBtn.addEventListener('click', function() {
-          if (viewMode === 'grid') return;
-
-          viewMode = 'grid';
-          hotelContainer.classList.remove('list-view');
-          hotelContainer.classList.add('grid-view');
-
-          // Update active state
-          listViewBtn.classList.remove('active');
-          gridViewBtn.classList.add('active');
-
-          // Store preference in localStorage
-          localStorage.setItem('hotelViewMode', 'grid');
-        });
-
-        listViewBtn.addEventListener('click', function() {
-          if (viewMode === 'list') return;
-
-          viewMode = 'list';
-          hotelContainer.classList.remove('grid-view');
-          hotelContainer.classList.add('list-view');
-
-          // Update active state
-          gridViewBtn.classList.remove('active');
-          listViewBtn.classList.add('active');
-
-          // Store preference in localStorage
-          localStorage.setItem('hotelViewMode', 'list');
-        });
-
-        // Load saved preference
-        const savedViewMode = localStorage.getItem('hotelViewMode');
-        if (savedViewMode === 'list') {
-          listViewBtn.click();
-        }
-      }
-
-      // Favorite button functionality
-      const heartButtons = document.querySelectorAll('.heart-button');
-
-      heartButtons.forEach(button => {
-        button.addEventListener('click', function() {
-          const icon = this.querySelector('i');
-
-          if (icon.classList.contains('far')) {
-            icon.classList.remove('far');
-            icon.classList.add('fas');
-            this.classList.add('active');
-          } else {
-            icon.classList.remove('fas');
-            icon.classList.add('far');
-            this.classList.remove('active');
-          }
-
-          // You would typically send an AJAX request here to update favorites
-        });
-      });
-
-      // AOS initialization if available
-      if (typeof AOS !== 'undefined') {
-        AOS.init({
-          duration: 800,
-          once: true
-        });
-      }
-    });
-  </script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Initialize view state (grid or list)
-      let viewMode = localStorage.getItem('hotelViewMode') || 'grid';
-
-      // View toggle functionality
-      const gridViewBtn = document.getElementById('grid-view-btn');
-      const listViewBtn = document.getElementById('list-view-btn');
-      const hotelContainer = document.getElementById('hotel-container');
-
-      if (gridViewBtn && listViewBtn && hotelContainer) {
-        // Set initial view based on saved preference
-        if (viewMode === 'grid') {
-          hotelContainer.className = 'grid-view';
-          gridViewBtn.classList.add('active');
-          listViewBtn.classList.remove('active');
-        } else {
-          hotelContainer.className = 'list-view';
-          listViewBtn.classList.add('active');
-          gridViewBtn.classList.remove('active');
-        }
-
-        // Grid view button click handler
-        gridViewBtn.addEventListener('click', function() {
-          if (viewMode === 'grid') return;
-
-          viewMode = 'grid';
-          hotelContainer.className = 'grid-view';
-
-          // Update active state
-          listViewBtn.classList.remove('active');
-          gridViewBtn.classList.add('active');
-
-          // Store preference in localStorage
-          localStorage.setItem('hotelViewMode', 'grid');
-        });
-
-        // List view button click handler
-        listViewBtn.addEventListener('click', function() {
-          if (viewMode === 'list') return;
-
-          viewMode = 'list';
-          hotelContainer.className = 'list-view';
-
-          // Update active state
-          gridViewBtn.classList.remove('active');
-          listViewBtn.classList.add('active');
-
-          // Store preference in localStorage
-          localStorage.setItem('hotelViewMode', 'list');
-        });
-
-        console.log('View toggle initialized. Current mode:', viewMode);
-      } else {
-        console.error('View toggle elements not found:', {
-          gridViewBtn: !!gridViewBtn,
-          listViewBtn: !!listViewBtn,
-          hotelContainer: !!hotelContainer
-        });
-      }
-    });
-  </script>
-  <!-- Add this JavaScript for initializing the sliders properly -->
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
       // Function to initialize the price slider
       function initPriceSlider(sliderId, minPriceId, maxPriceId, minPriceDisplayId, maxPriceDisplayId) {
         const slider = document.getElementById(sliderId);
@@ -829,7 +552,7 @@ $hotels = $result->fetch_all(MYSQLI_ASSOC);
 
         // Get initial values
         const minValue = parseInt(minPriceInput.value) || 0;
-        const maxValue = parseInt(maxPriceInput.value) || 10000;
+        const maxValue = parseInt(maxPriceInput.value) || 50000; // Increased to match hotel price
 
         // Ensure noUiSlider is available
         if (typeof noUiSlider === 'undefined') {
@@ -842,10 +565,10 @@ $hotels = $result->fetch_all(MYSQLI_ASSOC);
           noUiSlider.create(slider, {
             start: [minValue, maxValue],
             connect: true,
-            step: 10,
+            step: 1000,
             range: {
               'min': 0, // Minimum price
-              'max': 10000 // Maximum price
+              'max': 50000 // Maximum price - increased to match hotel data
             },
             format: {
               to: value => Math.round(value),
@@ -875,6 +598,85 @@ $hotels = $result->fetch_all(MYSQLI_ASSOC);
         initPriceSlider('price-slider', 'min-price', 'max-price', 'min-price-display', 'max-price-display');
         initPriceSlider('mobile-price-slider', 'mobile-min-price', 'mobile-max-price', 'mobile-min-price-display', 'mobile-max-price-display');
       }, 100);
+
+      // View toggle functionality
+      // View toggle functionality
+      const gridViewBtn = document.getElementById('grid-view-btn');
+      const listViewBtn = document.getElementById('list-view-btn');
+      const hotelContainer = document.getElementById('hotel-container');
+
+      if (gridViewBtn && listViewBtn && hotelContainer) {
+        // Set initial view based on saved preference
+        const viewMode = localStorage.getItem('hotelViewMode') || 'grid';
+
+        if (viewMode === 'grid') {
+          hotelContainer.className = 'grid-view';
+          gridViewBtn.classList.add('active');
+          listViewBtn.classList.remove('active');
+        } else {
+          hotelContainer.className = 'list-view';
+          gridViewBtn.classList.remove('active');
+          listViewBtn.classList.add('active');
+        }
+
+        // Grid view button click handler
+        gridViewBtn.addEventListener('click', function() {
+          // Check the current view by inspecting hotelContainer's class
+          if (hotelContainer.className === 'grid-view') return; // Already in grid view, do nothing
+
+          localStorage.setItem('hotelViewMode', 'grid');
+          hotelContainer.className = 'grid-view';
+
+          // Update active state
+          listViewBtn.classList.remove('active');
+          gridViewBtn.classList.add('active');
+        });
+
+        // List view button click handler
+        listViewBtn.addEventListener('click', function() {
+          // Check the current view by inspecting hotelContainer's class
+          if (hotelContainer.className === 'list-view') return; // Already in list view, do nothing
+
+          localStorage.setItem('hotelViewMode', 'list');
+          hotelContainer.className = 'list-view';
+
+          // Update active state
+          gridViewBtn.classList.remove('active');
+          listViewBtn.classList.add('active');
+        });
+      }
+
+      // Sort select handler
+      const sortSelect = document.getElementById('sort-select');
+      const sortByInput = document.getElementById('sort-by-input');
+
+      if (sortSelect && sortByInput) {
+        sortSelect.addEventListener('change', function() {
+          sortByInput.value = this.value;
+          document.getElementById('filter-form').submit();
+        });
+      }
+
+      // Favorite button functionality
+      const heartButtons = document.querySelectorAll('.heart-button');
+
+      heartButtons.forEach(button => {
+        button.addEventListener('click', function() {
+          const icon = this.querySelector('i');
+
+          if (icon.classList.contains('far')) {
+            icon.classList.remove('far');
+            icon.classList.add('fas');
+            this.classList.add('active');
+          } else {
+            icon.classList.remove('fas');
+            icon.classList.add('far');
+            this.classList.remove('active');
+          }
+
+          // You would typically send an AJAX request here to update favorites
+        });
+      });
     });
   </script>
 </body>
