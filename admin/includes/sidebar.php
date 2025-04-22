@@ -1,49 +1,3 @@
-<style>
-  #sidebar {
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: #4fd1c5 #1a202c;
-  }
-
-  /* For Webkit browsers (Chrome, Safari) */
-  #sidebar::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  #sidebar::-webkit-scrollbar-track {
-    background: #1a202c;
-    border-radius: 10px;
-  }
-
-  #sidebar::-webkit-scrollbar-thumb {
-    background: #4fd1c5;
-    border-radius: 10px;
-  }
-
-  #sidebar::-webkit-scrollbar-thumb:hover {
-    background: #38b2ac;
-  }
-
-  #sidebar-dropdown {
-    transition: all 0.3s ease;
-  }
-
-  @media screen and (max-width: 425px) {
-    #sidebar {
-      position: fixed;
-      width: 100% !important;
-      height: 100vh;
-      z-index: 50;
-      transform: translateX(-100%);
-      transition: transform 0.3s ease-in-out;
-    }
-
-    #sidebar.active {
-      transform: translateX(0);
-    }
-  }
-</style>
-
 <div class="bg-gray-900 text-white w-64 space-y-6 py-7 px-2 hidden md:block relative" id="sidebar">
   <div class="flex items-center justify-between px-4 mb-6">
     <h2 class="text-2xl font-bold text-teal-400">Admin Panel</h2>
@@ -104,7 +58,7 @@
       <div class="hidden sidebar-dropdown pl-12 mt-2 space-y-2" id="transportation-dropdown">
         <a href="view-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Manage Transportation</a>
         <!-- <a href="add-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Add Transportation</a> -->
-        <a href="booked-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">booked transportation</a>
+        <a href="booked-transportation.php" class="block py-2 text-gray-400 hover:text-teal-400 transition-colors">Booked Transportation</a>
       </div>
     </div>
 
@@ -171,7 +125,7 @@
     </a>
 
     <!-- Logout -->
-    <a href="logout.php" onclick="confirmLogout(event)"
+    <a href="logout.php" onclick="confirmLogout(even8t)"
       class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors group mt-4">
       <i class="fas fa-sign-out-alt text-gray-400 group-hover:text-red-400"></i>
       <span class="group-hover:text-red-400">Logout</span>
@@ -248,3 +202,53 @@
     dropdown.classList.toggle('hidden');
   }
 </script>
+
+
+
+
+
+<style>
+  #sidebar {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #4fd1c5 #1a202c;
+  }
+
+  /* For Webkit browsers (Chrome, Safari) */
+  #sidebar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  #sidebar::-webkit-scrollbar-track {
+    background: #1a202c;
+    border-radius: 10px;
+  }
+
+  #sidebar::-webkit-scrollbar-thumb {
+    background: #4fd1c5;
+    border-radius: 10px;
+  }
+
+  #sidebar::-webkit-scrollbar-thumb:hover {
+    background: #38b2ac;
+  }
+
+  #sidebar-dropdown {
+    transition: all 0.3s ease;
+  }
+
+  @media screen and (max-width: 425px) {
+    #sidebar {
+      position: fixed;
+      width: 100% !important;
+      height: 100vh;
+      z-index: 50;
+      transform: translateX(-100%);
+      transition: transform 0.3s ease-in-out;
+    }
+
+    #sidebar.active {
+      transform: translateX(0);
+    }
+  }
+</style>

@@ -8,152 +8,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   error_log("POST request received: " . print_r($_POST, true));
 }
 
-// Include database connection
+// Include database connection and shared functions
 require_once 'connection/connection.php';
+require_once 'includes/functions.php';
 
 // Check if admin is logged in
 if (!isset($_SESSION['admin_id'])) {
   error_log("Session check failed: Redirecting to admin-login.php");
   header("Location: admin-login.php");
   exit();
-}
-
-// Database Functions
-/**
- * Get package bookings that need hotel assignment
- * @return array List of package bookings
- */
-function getPackageBookings()
-{
-  global $conn;
-  $sql = "SELECT pb.id, pb.user_id, pb.package_id, pb.booking_date, pb.status, pb.total_price, 
-                   p.title as package_title, u.full_name as user_name, u.email as user_email, 
-                   u.phone_number as user_phone
-            FROM package_booking pb
-            LEFT JOIN packages p ON pb.package_id = p.id
-            LEFT JOIN users u ON pb.user_id = u.id
-            WHERE pb.status = 'pending' OR pb.status = 'confirmed'
-            ORDER BY pb.booking_date DESC";
-
-  $result = $conn->query($sql);
-  return $result->fetch_all(MYSQLI_ASSOC);
-}
-
-/**
- * Get hotels from database
- * @param string|null $location Optional location filter (e.g., 'makkah', 'madinah')
- * @return array List of hotels
- */
-function getHotels($location = null)
-{
-  global $conn;
-  $sql = "SELECT * FROM hotels";
-  if ($location) {
-    $sql .= " WHERE location = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $location);
-    $stmt->execute();
-    $result = $stmt->get_result();
-  } else {
-    $result = $conn->query($sql);
-  }
-  return $result->fetch_all(MYSQLI_ASSOC);
-}
-
-/**
- * Get hotel bookings for a specific package booking
- * @param int $package_booking_id Package booking ID
- * @return array List of hotel bookings
- */
-function getHotelBookings($package_booking_id)
-{
-  global $conn;
-  $sql = "SELECT hb.*, h.hotel_name, h.location 
-            FROM hotel_bookings hb
-            LEFT JOIN hotels h ON hb.hotel_id = h.id
-            WHERE hb.package_booking_id = ?";
-  $stmt = $conn->prepare($sql);
-  $stmt->bind_param("i", $package_booking_id);
-  $stmt->execute();
-  $result = $stmt->get_result();
-  return $result->fetch_all(MYSQLI_ASSOC);
-}
-
-/**
- * Get booked rooms for a hotel
- * @param int $hotel_id Hotel ID
- * @return array List of booked room IDs
- */
-function getBookedRooms($hotel_id)
-{
-  global $conn;
-  $sql = "SELECT room_id FROM hotel_bookings WHERE hotel_id = ? AND status IN ('pending', 'confirmed')";
-  $stmt = $conn->prepare($sql);
-  $stmt->bind_param("i", $hotel_id);
-  $stmt->execute();
-  $result = $stmt->get_result();
-  $booked_rooms = [];
-  while ($row = $result->fetch_assoc()) {
-    $booked_rooms[] = $row['room_id'];
-  }
-  return $booked_rooms;
-}
-
-/**
- * Get available rooms for a hotel
- * @param int $hotel_id Hotel ID
- * @return array List of available room IDs
- */
-function getAvailableRooms($hotel_id) {
-  global $conn; // Your database connection
-
-  // Fetch hotel details
-  $sql = "SELECT room_ids FROM hotels WHERE id = ?";
-  $stmt = $conn->prepare($sql);
-  $stmt->bind_param("i", $hotel_id);
-  $stmt->execute();
-  $result = $stmt->get_result();
-  $hotel = $result->fetch_assoc();
-
-  if (!$hotel || empty($hotel['room_ids'])) {
-      return [];
-  }
-
-  // Decode the JSON array of room IDs
-  $all_rooms = json_decode($hotel['room_ids'], true);
-  if (!is_array($all_rooms)) {
-      return [];
-  }
-
-  // Optionally, fetch booked rooms to exclude them
-  $booked_rooms = []; // Replace with actual logic if needed
-  $sql = "SELECT room_id FROM hotel_bookings WHERE hotel_id = ? AND status IN ('pending', 'confirmed')";
-  $stmt = $conn->prepare($sql);
-  $stmt->bind_param("i", $hotel_id);
-  $stmt->execute();
-  $result = $stmt->get_result();
-  while ($row = $result->fetch_assoc()) {
-      $booked_rooms[] = $row['room_id'];
-  }
-
-  // Return available rooms (exclude booked ones)
-  return array_diff($all_rooms, $booked_rooms);
-}
-
-/**
- * Get hotel details by ID
- * @param int $hotel_id Hotel ID
- * @return array|null Hotel details or null if not found
- */
-function getHotelById($hotel_id)
-{
-  global $conn;
-  $sql = "SELECT * FROM hotels WHERE id = ?";
-  $stmt = $conn->prepare($sql);
-  $stmt->bind_param("i", $hotel_id);
-  $stmt->execute();
-  $result = $stmt->get_result();
-  return $result->fetch_assoc();
 }
 
 // Handle Form Submissions
@@ -165,13 +28,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['assign_hotel'])) {
   $booking_id = $_POST['booking_id'];
   $user_id = $_POST['user_id'];
   $hotel_id = $_POST['hotel_id'];
-  $room_id = $_POST['room_id'];
+  $room_id = $_POST['room_id']; // This should be a string like "r1"
   $guest_name = $_POST['guest_name'];
   $guest_email = $_POST['guest_email'];
   $guest_phone = $_POST['guest_phone'];
   $check_in_date = $_POST['check_in_date'];
   $check_out_date = $_POST['check_out_date'];
   $status = 'pending';
+
+  // Debug: Log the received room_id
+  error_log("Received room_id: " . $room_id);
 
   // Validate inputs
   if (
@@ -183,37 +49,45 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['assign_hotel'])) {
   } elseif (strtotime($check_in_date) >= strtotime($check_out_date)) {
     $error_message = "Check-out date must be after check-in date.";
   } else {
-    // Check for existing hotel bookings
-    $existing_bookings = getHotelBookings($booking_id);
-    if (count($existing_bookings) > 0) {
-      $error_message = "Hotel booking already exists for booking #$booking_id";
+    // Validate room_id
+    $available_rooms = getAvailableRooms($hotel_id);
+    if (!in_array($room_id, $available_rooms)) {
+      $error_message = "Invalid room ID selected: " . htmlspecialchars($room_id);
+      error_log("Invalid room ID: " . $room_id . " not in " . print_r($available_rooms, true));
     } else {
-      // Insert new hotel booking
-      $sql = "INSERT INTO hotel_bookings 
-                    (hotel_id, room_id, user_id, package_booking_id, guest_name, guest_email, guest_phone, 
-                     check_in_date, check_out_date, status) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-      $stmt = $conn->prepare($sql);
-      $stmt->bind_param(
-        "iisissssss",
-        $hotel_id,
-        $room_id,
-        $user_id,
-        $booking_id,
-        $guest_name,
-        $guest_email,
-        $guest_phone,
-        $check_in_date,
-        $check_out_date,
-        $status
-      );
-
-      if ($stmt->execute()) {
-        $success_message = "Hotel booking successfully created for booking #$booking_id";
+      // Check for existing hotel bookings
+      $existing_bookings = getHotelBookings($booking_id);
+      if (count($existing_bookings) > 0) {
+        $error_message = "Hotel booking already exists for booking #$booking_id";
       } else {
-        $error_message = "Error creating hotel booking: " . $conn->error;
+        // Insert new hotel booking
+        $sql = "INSERT INTO hotel_bookings 
+                (hotel_id, room_id, user_id, package_booking_id, guest_name, guest_email, guest_phone, 
+                 check_in_date, check_out_date, status) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param(
+          "isisssssss", // Ensure room_id is treated as a string
+          $hotel_id,
+          $room_id,
+          $user_id,
+          $booking_id,
+          $guest_name,
+          $guest_email,
+          $guest_phone,
+          $check_in_date,
+          $check_out_date,
+          $status
+        );
+
+        if ($stmt->execute()) {
+          $success_message = "Hotel booking successfully created for booking #$booking_id with Room ID: $room_id";
+        } else {
+          $error_message = "Error creating hotel booking: " . $conn->error;
+          error_log("SQL Error: " . $conn->error);
+        }
+        $stmt->close();
       }
-      $stmt->close();
     }
   }
 }
@@ -228,8 +102,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_booking'])) {
 
   // Validate input
   if (empty($hotel_booking_id) || !is_numeric($hotel_booking_id)) {
-    $error_message = "Invalid booking ID.";
+    $_SESSION['error_message'] = "Invalid booking ID.";
     error_log("Error: Invalid booking ID");
+    header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
+    exit;
   } else {
     // Check if booking exists
     $check_sql = "SELECT id FROM hotel_bookings WHERE id = ?";
@@ -239,32 +115,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_booking'])) {
     $check_result = $check_stmt->get_result();
 
     if ($check_result->num_rows === 0) {
-      $error_message = "No hotel booking found with ID #$hotel_booking_id";
+      $_SESSION['error_message'] = "No hotel booking found with ID #$hotel_booking_id";
       error_log("Error: No booking found with ID #$hotel_booking_id");
+      header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
+      exit;
     } else {
       // Delete booking
       $sql = "DELETE FROM hotel_bookings WHERE id = ?";
       $stmt = $conn->prepare($sql);
       if (!$stmt) {
-        $error_message = "Prepare failed: " . $conn->error;
+        $_SESSION['error_message'] = "Prepare failed: " . $conn->error;
         error_log("Prepare failed: " . $conn->error);
+        header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
+        exit;
       } else {
         $stmt->bind_param("i", $hotel_booking_id);
         if ($stmt->execute()) {
           if ($stmt->affected_rows > 0) {
-            $success_message = "Hotel booking successfully deleted";
+            $_SESSION['success_message'] = "Hotel booking successfully deleted";
             error_log("Success: Deleted hotel booking ID #$hotel_booking_id");
-            echo "<script>window.location.href='hotel-assign.php?booking_id=" . urlencode($_GET['booking_id']) . "';</script>";
-            exit;
           } else {
-            $error_message = "No hotel booking found with ID #$hotel_booking_id";
+            $_SESSION['error_message'] = "No hotel booking found with ID #$hotel_booking_id";
             error_log("Error: No booking found with ID #$hotel_booking_id");
           }
         } else {
-          $error_message = "Error deleting booking: " . $conn->error;
+          $_SESSION['error_message'] = "Error deleting booking: " . $conn->error;
           error_log("Error: " . $conn->error);
         }
         $stmt->close();
+        header("Location: hotel-assign.php" . (isset($_GET['booking_id']) ? "?booking_id=" . urlencode($_GET['booking_id']) : ""));
+        exit;
       }
     }
     $check_stmt->close();
@@ -401,10 +281,11 @@ if (isset($_GET['booking_id']) && is_numeric($_GET['booking_id'])) {
 
       <div class="container mx-auto px-4 py-8">
         <!-- Success Message -->
-        <?php if ($success_message): ?>
+        <?php if (isset($_SESSION['success_message'])): ?>
           <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" id="success-alert">
-            <p><?php echo htmlspecialchars($success_message); ?></p>
+            <p><?php echo htmlspecialchars($_SESSION['success_message']); ?></p>
           </div>
+          <?php unset($_SESSION['success_message']); ?>
           <script>
             setTimeout(() => {
               document.getElementById('success-alert').style.display = 'none';
@@ -413,13 +294,37 @@ if (isset($_GET['booking_id']) && is_numeric($_GET['booking_id'])) {
         <?php endif; ?>
 
         <!-- Error Message -->
-        <?php if ($error_message): ?>
+        <?php if (isset($_SESSION['error_message'])): ?>
           <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" id="error-alert">
+            <p><?php echo htmlspecialchars($_SESSION['error_message']); ?></p>
+          </div>
+          <?php unset($_SESSION['error_message']); ?>
+          <script>
+            setTimeout(() => {
+              document.getElementById('error-alert').style.display = 'none';
+            }, 5000);
+          </script>
+        <?php endif; ?>
+
+        <!-- Local Messages (for assignment) -->
+        <?php if ($success_message): ?>
+          <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" id="success-alert-local">
+            <p><?php echo htmlspecialchars($success_message); ?></p>
+          </div>
+          <script>
+            setTimeout(() => {
+              document.getElementById('success-alert-local').style.display = 'none';
+            }, 5000);
+          </script>
+        <?php endif; ?>
+
+        <?php if ($error_message): ?>
+          <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" id="error-alert-local">
             <p><?php echo htmlspecialchars($error_message); ?></p>
           </div>
           <script>
             setTimeout(() => {
-              document.getElementById('error-alert').style.display = 'none';
+              document.getElementById('error-alert-local').style.display = 'none';
             }, 5000);
           </script>
         <?php endif; ?>
@@ -509,7 +414,7 @@ if (isset($_GET['booking_id']) && is_numeric($_GET['booking_id'])) {
                       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label class="block text-gray-700 text-sm font-bold mb-2" for="makkah_hotel">Makkah Hotel</label>
-                          <select id="makkah_hotel" name="hotel_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" required onchange="updateRooms('makkah')">
+                          <select id="makkah_hotel" name="hotel_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" required onchange="updateRooms('makkah', 'makkah_room')">
                             <option value="">Select Hotel</option>
                             <?php foreach ($makkah_hotels as $hotel): ?>
                               <option value="<?php echo $hotel['id']; ?>">
@@ -568,7 +473,7 @@ if (isset($_GET['booking_id']) && is_numeric($_GET['booking_id'])) {
                       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label class="block text-gray-700 text-sm font-bold mb-2" for="madinah_hotel">Madinah Hotel</label>
-                          <select id="madinah_hotel" name="hotel_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required onchange="updateRooms('madinah')">
+                          <select id="madinah_hotel" name="hotel_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required onchange="updateRooms('madinah', 'madinah_room')">
                             <option value="">Select Hotel</option>
                             <?php foreach ($madinah_hotels as $hotel): ?>
                               <option value="<?php echo $hotel['id']; ?>">
@@ -712,17 +617,23 @@ if (isset($_GET['booking_id']) && is_numeric($_GET['booking_id'])) {
     }
 
     // Update room dropdowns when hotel is selected
-    function updateRooms(location) {
+    function updateRooms(location, roomSelectId) {
       const hotelSelect = document.getElementById(`${location}_hotel`);
-      const roomSelect = document.getElementById(`${location}_room`);
+      const roomSelect = document.getElementById(roomSelectId);
+      const hotelId = hotelSelect.value;
 
-      if (!hotelSelect.value) {
+      if (!hotelId) {
         roomSelect.innerHTML = '<option value="">Select Room</option>';
         return;
       }
 
-      fetch(`get-hotel-rooms.php?hotel_id=${hotelSelect.value}`)
-        .then(response => response.json())
+      fetch(`get-hotel-rooms.php?hotel_id=${hotelId}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return response.json();
+        })
         .then(data => {
           roomSelect.innerHTML = '<option value="">Select Room</option>';
           if (data.rooms && data.rooms.length > 0) {
@@ -733,10 +644,7 @@ if (isset($_GET['booking_id']) && is_numeric($_GET['booking_id'])) {
               roomSelect.appendChild(option);
             });
           } else {
-            const option = document.createElement('option');
-            option.value = "";
-            option.textContent = "No rooms available";
-            roomSelect.appendChild(option);
+            roomSelect.innerHTML = '<option value="">No rooms available</option>';
           }
         })
         .catch(error => {
@@ -781,7 +689,9 @@ if (isset($_GET['booking_id']) && is_numeric($_GET['booking_id'])) {
         const forms = document.querySelectorAll('form');
         forms.forEach(form => {
           form.querySelectorAll('input, select, button').forEach(element => {
-            element.disabled = true;
+            if (element.type !== 'hidden') { // Allow hidden inputs to remain enabled
+              element.disabled = true;
+            }
           });
         });
       }
