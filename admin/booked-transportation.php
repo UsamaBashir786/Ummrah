@@ -130,14 +130,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_status'])) {
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_booking'])) {
   $booking_id = $_POST['booking_id'];
 
-  // Check for any related transportation assignments
-  $check_sql = "SELECT id FROM transportation_assign WHERE booking_id = " . intval($booking_id);
-  $check_result = $conn->query($check_sql);
+  // Check if transportation_assign table exists in the database
+  $table_exists = false;
+  $check_table_sql = "SHOW TABLES LIKE 'transportation_assign'";
+  $check_table_result = $conn->query($check_table_sql);
+  if ($check_table_result && $check_table_result->num_rows > 0) {
+    $table_exists = true;
+  }
 
-  if ($check_result->num_rows > 0) {
-    // Delete related assignments first
-    $delete_assignments_sql = "DELETE FROM transportation_assign WHERE booking_id = " . intval($booking_id);
-    $conn->query($delete_assignments_sql);
+  // Only check for related assignments if the table exists
+  if ($table_exists) {
+    // Check for any related transportation assignments
+    $check_sql = "SELECT id FROM transportation_assign WHERE booking_id = " . intval($booking_id);
+    $check_result = $conn->query($check_sql);
+
+    if ($check_result->num_rows > 0) {
+      // Delete related assignments first
+      $delete_assignments_sql = "DELETE FROM transportation_assign WHERE booking_id = " . intval($booking_id);
+      $conn->query($delete_assignments_sql);
+    }
   }
 
   // Now delete the booking

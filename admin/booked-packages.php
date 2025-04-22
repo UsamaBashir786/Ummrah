@@ -36,6 +36,40 @@ if (isset($_GET['cancel_id'])) {
   }
 }
 
+// Handle booking deletion
+if (isset($_GET['delete_id'])) {
+  try {
+    $booking_id = $_GET['delete_id'];
+    $sql = "DELETE FROM package_booking WHERE id = :booking_id";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':booking_id' => $booking_id]);
+
+    echo "<script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: 'Booking deleted successfully.',
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        window.location.href = 'booked-packages.php';
+                    });
+                });
+              </script>";
+  } catch (PDOException $e) {
+    echo "<script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error!',
+                        text: 'An error occurred: " . addslashes($e->getMessage()) . "',
+                        confirmButtonText: 'OK'
+                    });
+                });
+              </script>";
+  }
+}
+
 // Handle status or payment status update
 if (isset($_GET['update_id']) && isset($_GET['field']) && isset($_GET['value'])) {
   try {
@@ -380,13 +414,16 @@ try {
                       </td>
                       <td class="py-2 px-4 border"><?php echo htmlspecialchars(number_format($booking['total_price'], 2)); ?> PKR</td>
                       <td class="py-2 px-4 border">
-                        <a href="booking-details.php?id=<?php echo $booking['booking_id']; ?>" class="text-teal-600 hover:text-teal-800 mr-2" title="View Details">
+                        <a href="booking-details.php?id=<?php echo htmlspecialchars($booking['booking_id']); ?>" class="text-teal-600 hover:text-teal-800 mr-2" title="View Booking Details">
                           <i class="fas fa-eye"></i>
                         </a>
                         <?php if ($booking['status'] === 'pending' || $booking['status'] === 'confirmed'): ?>
-                          <a href="#" class="text-red-600 hover:text-red-800 cancel-booking" data-id="<?php echo $booking['booking_id']; ?>" title="Cancel Booking">
+                          <button class="text-red-600 hover:text-red-800 cancel-booking mr-2" data-id="<?php echo htmlspecialchars($booking['booking_id']); ?>" title="Cancel This Booking">
+                            <i class="fas fa-ban"></i>
+                          </button>
+                          <button class="text-red-600 hover:text-red-800 delete-booking" data-id="<?php echo htmlspecialchars($booking['booking_id']); ?>" title="Permanently Delete This Booking">
                             <i class="fas fa-trash"></i>
-                          </a>
+                          </button>
                         <?php endif; ?>
                       </td>
                     </tr>
@@ -397,7 +434,66 @@ try {
           <?php endif; ?>
         </div>
       </div>
+      <script>
+        // Ensure SweetAlert is loaded
+        if (typeof Swal === 'undefined') {
+          console.error('SweetAlert2 is not loaded. Please check the script inclusion.');
+        }
 
+        // Handle cancel booking with SweetAlert confirmation
+        document.querySelectorAll('.cancel-booking').forEach(button => {
+          button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const bookingId = this.getAttribute('data-id');
+            if (!bookingId) {
+              console.error('Booking ID is missing for cancel-booking button');
+              return;
+            }
+            Swal.fire({
+              title: 'Are you sure?',
+              text: 'Do you want to cancel this booking?',
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: '#d33',
+              cancelButtonColor: '#3085d6',
+              confirmButtonText: 'Yes, cancel it!'
+            }).then((result) => {
+              if (result.isConfirmed) {
+                window.location.href = `booked-packages.php?cancel_id=${bookingId}`;
+              }
+            }).catch(err => {
+              console.error('SweetAlert error:', err);
+            });
+          });
+        });
+
+        // Handle delete booking with SweetAlert confirmation
+        document.querySelectorAll('.delete-booking').forEach(button => {
+          button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const bookingId = this.getAttribute('data-id');
+            if (!bookingId) {
+              console.error('Booking ID is missing for delete-booking button');
+              return;
+            }
+            Swal.fire({
+              title: 'Are you sure?',
+              text: 'Do you want to permanently delete this booking? This action cannot be undone.',
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: '#d33',
+              cancelButtonColor: '#3085d6',
+              confirmButtonText: 'Yes, delete it!'
+            }).then((result) => {
+              if (result.isConfirmed) {
+                window.location.href = `booked-packages.php?delete_id=${bookingId}`;
+              }
+            }).catch(err => {
+              console.error('SweetAlert error:', err);
+            });
+          });
+        });
+      </script>
       <?php include 'includes/js-links.php'; ?>
       <script>
         // Handle cancel booking with SweetAlert confirmation
