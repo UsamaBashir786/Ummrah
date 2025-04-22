@@ -1,198 +1,148 @@
 <?php
 session_name("admin_session");
 session_start();
-if (!isset($_SESSION['admin_email'])) {
-    header("Location: login.php");
-    exit();
-}
-
-// Database connection
 include 'connection/connection.php';
 
-// Fetch package bookings with user, package, destination, and duration details
-$bookings_query = "
-    SELECT pb.id, pb.user_id, pb.package_id, pb.booking_date, pb.status, pb.payment_status,
-           u.full_name, u.email, p.title as package_title, p.destination, p.duration,
-           hb.id as hotel_booking_id, hb.room_id, h.hotel_name
-    FROM package_booking pb
-    JOIN users u ON pb.user_id = u.id
-    JOIN packages p ON pb.package_id = p.id
-    LEFT JOIN hotel_bookings hb ON hb.package_booking_id = pb.id
-    LEFT JOIN hotels h ON hb.hotel_id = h.id
-    ORDER BY pb.booking_date DESC";
-$bookings_result = $conn->query($bookings_query);
-$bookings = [];
-while ($row = $bookings_result->fetch_assoc()) {
-    $bookings[] = $row;
+// Check if admin is logged in
+if (!isset($_SESSION['admin_id'])) {
+  header("Location: admin-login.php");
+  exit();
 }
 
-// Variables for modal
-$package_booking_id = isset($_POST['package_booking_id']) ? (int)$_POST['package_booking_id'] : 0;
-$hotel_id = isset($_POST['hotel_id']) ? (int)$_POST['hotel_id'] : 0;
-$check_in = isset($_POST['check_in']) ? $_POST['check_in'] : date('Y-m-d');
-$check_out = isset($_POST['check_out']) ? $_POST['check_out'] : date('Y-m-d', strtotime('+1 day'));
-$package_destination = '';
-$package_duration = 0;
-$has_searched = false;
-$available_rooms = [];
-$room_details = [];
-$error_message = '';
+// Get package bookings that need transportation assignment
+function getPackageBookings()
+{
+  global $conn;
+  $sql = "SELECT pb.id, pb.user_id, pb.package_id, pb.booking_date, pb.status, pb.total_price, 
+                 p.title as package_title, u.full_name as user_name, u.email as user_email, 
+                 u.phone_number as user_phone
+          FROM package_booking pb
+          LEFT JOIN packages p ON pb.package_id = p.id
+          LEFT JOIN users u ON pb.user_id = u.id
+          WHERE pb.status = 'pending' OR pb.status = 'confirmed'
+          ORDER BY pb.booking_date DESC";
+
+  $result = $conn->query($sql);
+  return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+// Get existing transportation assignments
+function getTransportationAssignments($booking_id, $user_id = null)
+{
+  global $conn;
+  $sql = "SELECT * FROM transportation_assignments WHERE package_booking_id = ?";
+  if ($user_id) {
+    $sql .= " AND user_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ii", $booking_id, $user_id);
+  } else {
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $booking_id);
+  }
+  $stmt->execute();
+  $result = $stmt->get_result();
+  return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+// Get taxi routes
+function getTaxiRoutes()
+{
+  global $conn;
+  $sql = "SELECT * FROM taxi_routes ORDER BY route_number";
+  $result = $conn->query($sql);
+  return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+// Get rentacar routes
+function getRentacarRoutes()
+{
+  global $conn;
+  $sql = "SELECT * FROM rentacar_routes ORDER BY route_number";
+  $result = $conn->query($sql);
+  return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+// Handle form submission
 $success_message = '';
+$error_message = '';
 
-// Fetch hotels matching the package destination when checking availability
-$hotels = [];
-if ($package_booking_id > 0 && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $stmt = $conn->prepare("SELECT destination, duration FROM packages p JOIN package_booking pb ON pb.package_id = p.id WHERE pb.id = ?");
-    $stmt->bind_param("i", $package_booking_id);
-    $stmt->execute();
-    $result = $stmt->get_result()->fetch_assoc();
-    $package_destination = $result['destination'] ?? '';
-    $package_duration = $result['duration'] ?? 0;
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['assign_transportation'])) {
+  $booking_id = $_POST['booking_id'];
+  $user_id = $_POST['user_id'];
+  $service_type = $_POST['service_type'];
+  $route_id = intval($_POST['route_id']);
+  $route_name = $_POST['route_name'];
+  $vehicle_type = $_POST['vehicle_type'];
+  $vehicle_name = $_POST['vehicle_name'];
+  $price = $_POST['price'];
 
-    if ($package_destination) {
-        $hotels_query = "SELECT id, hotel_name, location FROM hotels WHERE location = ? ORDER BY hotel_name";
-        $stmt = $conn->prepare($hotels_query);
-        $stmt->bind_param("s", $package_destination);
-        $stmt->execute();
-        $hotels_result = $stmt->get_result();
-        while ($row = $hotels_result->fetch_assoc()) {
-            $hotels[] = $row;
-        }
-    }
+  // Check if this user already has a transportation assignment for this booking
+  $existing_assignments = getTransportationAssignments($booking_id, $user_id);
 
-    // Set default check-out date based on duration
-    if ($package_duration > 0 && !isset($_POST['check_out'])) {
-        $check_out = date('Y-m-d', strtotime($check_in . " + $package_duration days"));
-    }
-}
-
-// Handle room assignment
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['assign_room'])) {
-    $room_id = $_POST['room_id'];
-    $user_id = (int)$_POST['user_id'];
-
-    // Fetch user details
-    $stmt = $conn->prepare("SELECT full_name, email, phone_number FROM users WHERE id = ?");
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    $user = $stmt->get_result()->fetch_assoc();
-
-    if (!$user) {
-        $error_message = "User not found.";
+  if (count($existing_assignments) > 0) {
+    $error_message = "Transportation has already been assigned to this user for booking #$booking_id";
+  } else {
+    // No existing assignment, proceed with insert
+    // Validate inputs
+    if (
+      empty($booking_id) || empty($user_id) || empty($service_type) || empty($route_id) || empty($route_name)
+      || empty($vehicle_type) || empty($vehicle_name) || empty($price)
+    ) {
+      $error_message = "All fields are required.";
     } else {
-        // Fetch hotel details
-        $stmt = $conn->prepare("SELECT * FROM hotels WHERE id = ?");
-        $stmt->bind_param("i", $hotel_id);
-        $stmt->execute();
-        $hotel = $stmt->get_result()->fetch_assoc();
+      // Insert assignment with user_id included
+      $sql = "INSERT INTO transportation_assignments 
+              (package_booking_id, user_id, service_type, route_id, route_name, vehicle_type, vehicle_name, price) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
-        if (!$hotel) {
-            $error_message = "Hotel not found.";
-        } else {
-            $hotel['room_ids'] = json_decode($hotel['room_ids'], true) ?: [];
+      $stmt = $conn->prepare($sql);
+      // Fix: Changed "д" to "d" for the price parameter
+      $stmt->bind_param("iisisssd", $booking_id, $user_id, $service_type, $route_id, $route_name, $vehicle_type, $vehicle_name, $price);
 
-            // Check room availability
-            $stmt = $conn->prepare("
-                SELECT room_id FROM hotel_bookings 
-                WHERE hotel_id = ? 
-                AND (
-                    (check_in_date < ? AND check_out_date > ?)
-                    OR (check_in_date = ?)
-                    OR (check_out_date = ?)
-                )
-                AND check_out_date >= CURDATE()
-                AND status != 'cancelled'
-            ");
-            $stmt->bind_param("issss", $hotel_id, $check_out, $check_in, $check_in, $check_out);
-            $stmt->execute();
-            $booked_rooms = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-            $booked_room_ids = array_column($booked_rooms, 'room_id');
-
-            $available_rooms = array_diff($hotel['room_ids'], $booked_room_ids);
-
-            if (!in_array($room_id, $available_rooms)) {
-                $error_message = "Selected room is not available for the chosen dates.";
-            } else {
-                try {
-                    // Insert hotel booking
-                    $stmt = $conn->prepare("
-                        INSERT INTO hotel_bookings (
-                            hotel_id, room_id, user_id, guest_name, guest_email, guest_phone, 
-                            check_in_date, check_out_date, status, package_booking_id
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?)
-                    ");
-                    $stmt->bind_param(
-                        "iissssssi",
-                        $hotel_id,
-                        $room_id,
-                        $user_id,
-                        $user['full_name'],
-                        $user['email'],
-                        $user['phone_number'],
-                        $check_in,
-                        $check_out,
-                        $package_booking_id
-                    );
-                    $stmt->execute();
-
-                    $success_message = "Room successfully assigned for package booking ID $package_booking_id.";
-                    header("Location: admin-view-package-bookings.php?success=" . urlencode($success_message));
-                    exit();
-                } catch (Exception $e) {
-                    $error_message = "Assignment failed: " . $e->getMessage();
-                }
-            }
-        }
+      if ($stmt->execute()) {
+        $success_message = "Transportation successfully assigned to booking #$booking_id";
+      } else {
+        $error_message = "Error assigning transportation: " . $conn->error;
+      }
     }
+  }
 }
 
-// Check for room availability in modal
-if (isset($_POST['check_availability']) && $hotel_id > 0) {
-    $has_searched = true;
+// Delete assignment
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_assignment'])) {
+  $assignment_id = $_POST['assignment_id'];
 
-    $stmt = $conn->prepare("SELECT * FROM hotels WHERE id = ?");
-    $stmt->bind_param("i", $hotel_id);
-    $stmt->execute();
-    $hotel = $stmt->get_result()->fetch_assoc();
+  $sql = "DELETE FROM transportation_assignments WHERE id = ?";
+  $stmt = $conn->prepare($sql);
+  $stmt->bind_param("i", $assignment_id);
 
-    if ($hotel) {
-        $hotel['room_ids'] = json_decode($hotel['room_ids'], true) ?: [];
+  if ($stmt->execute()) {
+    $success_message = "Transportation assignment successfully deleted";
+  } else {
+    $error_message = "Error deleting assignment: " . $conn->error;
+  }
+}
 
-        $stmt = $conn->prepare("
-            SELECT room_id FROM hotel_bookings 
-            WHERE hotel_id = ? 
-            AND (
-                (check_in_date < ? AND check_out_date > ?)
-                OR (check_in_date = ?)
-                OR (check_out_date = ?)
-            )
-            AND check_out_date >= CURDATE()
-            AND status != 'cancelled'
-        ");
-        $stmt->bind_param("issss", $hotel_id, $check_out, $check_in, $check_in, $check_out);
-        $stmt->execute();
-        $booked_rooms = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $booked_room_ids = array_column($booked_rooms, 'room_id');
+// Get data
+$bookings = getPackageBookings();
+$taxi_routes = getTaxiRoutes();
+$rentacar_routes = getRentacarRoutes();
 
-        $available_rooms = array_diff($hotel['room_ids'], $booked_room_ids);
-
-        $room_types = [
-            'standard' => ['description' => 'Comfortable room with basic amenities', 'capacity' => '2 guests'],
-            'deluxe' => ['description' => 'Spacious room with premium amenities', 'capacity' => '2-3 guests'],
-            'suite' => ['description' => 'Luxury suite with separate living area', 'capacity' => '4 guests'],
-        ];
-
-        foreach ($available_rooms as $room) {
-            $type_keys = array_keys($room_types);
-            $random_type = $type_keys[array_rand($type_keys)];
-            $room_details[$room] = [
-                'type' => $random_type,
-                'description' => $room_types[$random_type]['description'],
-                'capacity' => $room_types[$random_type]['capacity'],
-            ];
-        }
+// Handle special case for viewing a specific booking
+$current_booking = null;
+$current_assignments = [];
+if (isset($_GET['booking_id'])) {
+  $booking_id = $_GET['booking_id'];
+  foreach ($bookings as $booking) {
+    if ($booking['id'] == $booking_id) {
+      $current_booking = $booking;
+      break;
     }
+  }
+
+  if ($current_booking) {
+    $current_assignments = getTransportationAssignments($booking_id);
+  }
 }
 ?>
 
@@ -200,343 +150,515 @@ if (isset($_POST['check_availability']) && $hotel_id > 0) {
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>View Package Bookings - Umrah & Hajj Travel Admin</title>
-    <link rel="stylesheet" href="../assets/css/output.css">
-    <link rel="stylesheet" href="assets/css/output.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transportation Assignment | Admin Panel</title>
+  <link rel="stylesheet" href="../assets/css/output.css">
+  <link rel="stylesheet" href="assets/css/output.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    .assignment-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      background-color: white;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    }
+
+    .assignment-card:hover {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    .taxi-card {
+      border-left: 4px solid #0d9488;
+    }
+
+    .rentacar-card {
+      border-left: 4px solid #1d4ed8;
+    }
+
+    .tab-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .tab-btn {
+      padding: A10px 20px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
+    }
+
+    .tab-btn.active {
+      background-color: #0d9488;
+      color: white;
+    }
+
+    .tab-btn:not(.active) {
+      background-color: #e2e8f0;
+      color: #1e293b;
+    }
+
+    .tab-btn:hover:not(.active) {
+      background-color: #cbd5e1;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.5s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
 </head>
 
-<body class="bg-gray-50 font-sans text-gray-800">
-    <?php include 'notifications.php'; ?>
-    <div class="flex h-screen overflow-hidden">
-        <!-- Sidebar -->
-        <?php include 'includes/sidebar.php'; ?>
-        <?php include 'includes/preloader.php'; ?>
+<body class="bg-gray-50">
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <?php include 'includes/sidebar.php'; ?>
 
-        <!-- Main Content -->
-        <div class="flex-1 flex flex-col overflow-hidden">
-            <!-- Navbar -->
-            <header class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
-                <div class="px-6 py-3 flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <button class="lg:hidden text-gray-600 hover:text-gray-900 transition-colors" id="menu-btn">
-                            <i class="fas fa-bars text-lg"></i>
-                        </button>
-                        <h1 class="text-xl font-bold text-emerald-700">Umrah & Hajj Admin</h1>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <div class="relative">
-                            <button id="notif-bell" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-all relative">
-                                <i class="fas fa-bell text-lg"></i>
-                                <span id="notif-count" class="absolute top-0 right-0 h-4 w-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center hidden">0</span>
-                            </button>
-                            <div id="notif-dropdown" class="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto z-40">
-                                <div class="p-4 border-b border-gray-200">
-                                    <h3 class="text-sm font-semibold text-gray-700">Notifications</h3>
-                                </div>
-                                <div id="notif-list" class="divide-y divide-gray-200"></div>
-                                <div class="p-2 text-center">
-                                    <a href="notifications_page.php" class="text-sm text-emerald-600 hover:underline">View All Notifications</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </header>
-
-            <!-- Content Area -->
-            <main class="flex-1 overflow-y-auto p-6">
-                <div class="max-w-7xl mx-auto">
-                    <!-- Header -->
-                    <div class="mb-8">
-                        <h2 class="text-2xl font-bold text-gray-800">Package Bookings</h2>
-                        <p class="text-gray-600">View and manage hotel room assignments for package bookings.</p>
-                    </div>
-
-                    <!-- Success/Error Messages -->
-                    <?php if (isset($_GET['success'])): ?>
-                        <div class="bg-green-50 text-green-800 p-4 rounded-lg mb-6 flex items-center shadow-sm">
-                            <i class="fas fa-check-circle mr-2 text-xl"></i>
-                            <p><?php echo htmlspecialchars($_GET['success']); ?></p>
-                        </div>
-                    <?php endif; ?>
-                    <?php if ($error_message): ?>
-                        <div class="bg-red-50 text-red-800 p-4 rounded-lg mb-6 flex items-center shadow-sm">
-                            <i class="fas fa-exclamation-circle mr-2 text-xl"></i>
-                            <p><?php echo $error_message; ?></p>
-                        </div>
-                    <?php endif; ?>
-
-                    <!-- Package Bookings Table -->
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left">
-                                <thead>
-                                    <tr class="border-b border-gray-200">
-                                        <th class="py-3 px-4 text-sm font-semibold text-gray-700">Booking ID</th>
-                                        <th class="py-3 px-4 text-sm font-semibold text-gray-700">User</th>
-                                        <th class="py-3 px-4 text-sm font-semibold text-gray-700">Package</th>
-                                        <th class="py-3 px-4 text-sm font-semibold text-gray-700">Destination</th>
-                                        <th class="py-3 px-4 text-sm font-semibold text-gray-700">Booking Date</th>
-                                        <th class="py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
-                                        <th class="py-3 px-4 text-sm font-semibold text-gray-700">Hotel Assignment</th>
-                                        <th class="py-3 px-4 text-sm font-semibold text-gray-700">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($bookings as $booking): ?>
-                                        <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                            <td class="py-3 px-4 text-sm"><?php echo $booking['id']; ?></td>
-                                            <td class="py-3 px-4 text-sm">
-                                                <?php echo htmlspecialchars($booking['full_name']); ?><br>
-                                                <span class="text-xs text-gray-500"><?php echo htmlspecialchars($booking['email']); ?></span>
-                                            </td>
-                                            <td class="py-3 px-4 text-sm"><?php echo htmlspecialchars($booking['package_title']); ?></td>
-                                            <td class="py-3 px-4 text-sm"><?php echo htmlspecialchars($booking['destination'] ?? 'Not Set'); ?></td>
-                                            <td class="py-3 px-4 text-sm"><?php echo date('M d, Y', strtotime($booking['booking_date'])); ?></td>
-                                            <td class="py-3 px-4 text-sm">
-                                                <span class="inline-block px-2 py-1 rounded-full text-xs font-medium
-                                                    <?php echo $booking['status'] === 'confirmed' ? 'bg-green-100 text-green-800' : ($booking['status'] === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'); ?>">
-                                                    <?php echo htmlspecialchars($booking['status']); ?>
-                                                </span>
-                                            </td>
-                                            <td class="py-3 px-4 text-sm">
-                                                <?php if ($booking['hotel_booking_id']): ?>
-                                                    <span class="text-emerald-600">
-                                                        Assigned: <?php echo htmlspecialchars($booking['hotel_name']); ?> (Room <?php echo htmlspecialchars(str_replace('r', '', $booking['room_id'])); ?>)
-                                                    </span>
-                                                <?php else: ?>
-                                                    <span class="text-gray-500">Not Assigned</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td class="py-3 px-4 text-sm">
-                                                <?php if (!$booking['hotel_booking_id']): ?>
-                                                    <button onclick="showAssignmentForm(<?php echo $booking['id']; ?>, <?php echo $booking['user_id']; ?>)"
-                                                        class="bg-emerald-600 text-white px-3 py-1 rounded-lg hover:bg-emerald-700 transition duration-200 flex items-center text-xs">
-                                                        <i class="fas fa-hotel mr-1"></i> Assign Room
-                                                    </button>
-                                                <?php else: ?>
-                                                    <span class="text-gray-400 text-xs">Room Assigned</span>
-                                                <?php endif; ?>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                    <?php if (empty($bookings)): ?>
-                                        <tr>
-                                            <td colspan="8" class="py-3 px-4 text-center text-gray-500">No package bookings found.</td>
-                                        </tr>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </main>
+    <!-- Main Content -->
+    <div class="overflow-y-auto flex-1 flex flex-col">
+      <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center">
+        <h1 class="text-xl font-semibold">
+          <i class="text-teal-600 fas fa-car mx-2"></i> Transportation Assignment
+        </h1>
+        <div class="flex items-center space-x-4">
+          <button class="md:hidden text-gray-800" id="menu-btn">
+            <i class="fas fa-bars"></i>
+          </button>
         </div>
-    </div>
+      </div>
 
-    <!-- Assignment Modal -->
-    <div id="assignmentModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg shadow-lg max-w-md w-full p-6 max-h-screen overflow-y-auto mx-4">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-semibold text-gray-800">Assign Hotel Room</h3>
-                <button type="button" onclick="hideAssignmentForm()" class="text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-times"></i>
-                </button>
+      <div class="container mx-auto px-4 py-8">
+        <?php if ($success_message): ?>
+          <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" id="success-alert">
+            <p><?php echo $success_message; ?></p>
+          </div>
+          <script>
+            setTimeout(() => {
+              document.getElementById('success-alert').style.display = 'none';
+            }, 5000);
+          </script>
+        <?php endif; ?>
+
+        <?php if ($error_message): ?>
+          <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" id="error-alert">
+            <p><?php echo $error_message; ?></p>
+          </div>
+          <script>
+            setTimeout(() => {
+              document.getElementById('error-alert').style.display = 'none';
+            }, 5000);
+          </script>
+        <?php endif; ?>
+
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+          <?php if ($current_booking): ?>
+            <!-- Single Booking View -->
+            <div class="mb-6">
+              <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold">Booking #<?php echo $current_booking['id']; ?> Details</h2>
+                <a href="transportation-assign.php" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600">
+                  <i class="fas fa-arrow-left mr-2"></i> Back to List
+                </a>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div class="bg-gray-50 p-4 rounded-lg">
+                  <h3 class="font-semibold text-lg mb-2">Package Details</h3>
+                  <p><span class="font-medium">Package:</span> <?php echo htmlspecialchars($current_booking['package_title']); ?></p>
+                  <p><span class="font-medium">Booking Date:</span> <?php echo date('d M Y', strtotime($current_booking['booking_date'])); ?></p>
+                  <p><span class="font-medium">Status:</span> <span class="px-2 py-1 rounded-full text-xs <?php echo $current_booking['status'] == 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'; ?>"><?php echo ucfirst($current_booking['status']); ?></span></p>
+                  <p><span class="font-medium">Price:</span> <?php echo $current_booking['total_price']; ?> PKR</p>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded-lg">
+                  <h3 class="font-semibold text-lg mb-2">Customer Information</h3>
+                  <p><span class="font-medium">Name:</span> <?php echo htmlspecialchars($current_booking['user_name']); ?></p>
+                  <p><span class="font-medium">Email:</span> <?php echo htmlspecialchars($current_booking['user_email']); ?></p>
+                  <p><span class="font-medium">Phone:</span> <?php echo htmlspecialchars($current_booking['user_phone']); ?></p>
+                </div>
+              </div>
+
+              <!-- Current Assignments -->
+              <div class="mt-6">
+                <h3 class="font-semibold text-lg mb-2">Current Transportation Assignments</h3>
+
+                <?php if (count($current_assignments) > 0): ?>
+                  <div class="space-y-4">
+                    <?php foreach ($current_assignments as $assignment): ?>
+                      <div class="assignment-card <?php echo $assignment['service_type'] == 'taxi' ? 'taxi-card' : 'rentacar-card'; ?>">
+                        <div class="flex justify-between">
+                          <h4 class="font-medium text-md"><?php echo ucfirst($assignment['service_type']); ?> Service - <?php echo htmlspecialchars($assignment['route_name']); ?></h4>
+                          <form method="POST" action="" onsubmit="return confirm('Are you sure you want to delete this assignment?');">
+                            <input type="hidden" name="assignment_id" value="<?php echo $assignment['id']; ?>">
+                            <input type="hidden" name="delete_assignment" value="1">
+                            <button type="submit" class="text-red-500 hover:text-red-700">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </form>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                          <p><span class="text-gray-600">Vehicle:</span> <?php echo htmlspecialchars($assignment['vehicle_name']); ?></p>
+                          <p><span class="text-gray-600">Type:</span> <?php echo htmlspecialchars($assignment['vehicle_type']); ?></p>
+                          <p><span class="text-gray-600">Price:</span> <?php echo $assignment['price']; ?> PKR</p>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Assigned: <?php echo date('d M Y H:i', strtotime($assignment['assigned_at'])); ?></p>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php else: ?>
+                  <p class="text-gray-500 italic">No transportation assignments yet.</p>
+                <?php endif; ?>
+              </div>
+
+              <!-- Check if user already has transportation assigned -->
+              <?php
+              $user_has_assignment = false;
+              foreach ($current_assignments as $assignment) {
+                if ($assignment['user_id'] == $current_booking['user_id']) {
+                  $user_has_assignment = true;
+                  break;
+                }
+              }
+              ?>
+
+              <!-- Add New Assignment only if user doesn't have one already -->
+              <?php if (!$user_has_assignment): ?>
+                <div class="mt-6">
+                  <h3 class="font-semibold text-lg mb-2">Add New Transportation Assignment</h3>
+
+                  <div class="tab-buttons flex">
+                    <button class="tab-btn active" onclick="switchTab('taxi')">Taxi Service</button>
+                    <button class="tab-btn" onclick="switchTab('rentacar')">Rent A Car Service</button>
+                  </div>
+
+                  <!-- Taxi Assignment Form -->
+                  <div id="taxi-tab" class="tab-content active">
+                    <form method="POST" action="" class="space-y-4">
+                      <input type="hidden" name="assign_transportation" value="1">
+                      <input type="hidden" name="booking_id" value="<?php echo $current_booking['id']; ?>">
+                      <input type="hidden" name="user_id" value="<?php echo $current_booking['user_id']; ?>">
+                      <input type="hidden" name="service_type" value="taxi">
+
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi_route">
+                            Route
+                          </label>
+                          <select id="taxi_route" name="route_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required onchange="updateTaxiRouteInfo(this.value)">
+                            <option value="">Select Route</option>
+                            <?php foreach ($taxi_routes as $route): ?>
+                              <option value="<?php echo $route['id']; ?>"
+                                data-name="<?php echo htmlspecialchars($route['route_name']); ?>"
+                                data-camry="<?php echo $route['camry_sonata_price']; ?>"
+                                data-starex="<?php echo $route['starex_staria_price']; ?>"
+                                data-hiace="<?php echo $route['hiace_price']; ?>">
+                                <?php echo $route['route_number'] . '. ' . htmlspecialchars($route['route_name']); ?>
+                              </option>
+                            <?php endforeach; ?>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi_vehicle">
+                            Vehicle Type
+                          </label>
+                          <select id="taxi_vehicle" name="vehicle_type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required onchange="updateTaxiPrice()">
+                            <option value="">Select Vehicle</option>
+                            <option value="camry" data-name="Camry/Sonata">Camry/Sonata</option>
+                            <option value="starex" data-name="Starex/Staria">Starex/Staria</option>
+                            <option value="hiace" data-name="Hiace">Hiace</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <input type="hidden" id="taxi_route_name" name="route_name" value="">
+                      <input type="hidden" id="taxi_vehicle_name" name="vehicle_name" value="">
+
+                      <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="taxi_price">
+                          Price (PKR)
+                        </label>
+                        <input type="number" id="taxi_price" name="price" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required readonly>
+                      </div>
+
+                      <button type="submit" class="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700">
+                        <i class="fas fa-plus-circle mr-2"></i>Assign Taxi Service
+                      </button>
+                    </form>
+                  </div>
+
+                  <!-- Rent A Car Assignment Form -->
+                  <div id="rentacar-tab" class="tab-content">
+                    <form method="POST" action="" class="space-y-4">
+                      <input type="hidden" name="assign_transportation" value="1">
+                      <input type="hidden" name="booking_id" value="<?php echo $current_booking['id']; ?>">
+                      <input type="hidden" name="user_id" value="<?php echo $current_booking['user_id']; ?>">
+                      <input type="hidden" name="service_type" value="rentacar">
+
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar_route">
+                            Route
+                          </label>
+                          <select id="rentacar_route" name="route_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required onchange="updateRentacarRouteInfo(this.value)">
+                            <option value="">Select Route</option>
+                            <?php foreach ($rentacar_routes as $route): ?>
+                              <option value="<?php echo $route['id']; ?>"
+                                data-name="<?php echo htmlspecialchars($route['route_name']); ?>"
+                                data-gmc16="<?php echo $route['gmc_16_19_price']; ?>"
+                                data-gmc22="<?php echo $route['gmc_22_23_price']; ?>"
+                                data-coaster="<?php echo $route['coaster_price']; ?>">
+                                <?php echo $route['route_number'] . '. ' . htmlspecialchars($route['route_name']); ?>
+                              </option>
+                            <?php endforeach; ?>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar_vehicle">
+                            Vehicle Type
+                          </label>
+                          <select id="rentacar_vehicle" name="vehicle_type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required onchange="updateRentacarPrice()">
+                            <option value="">Select Vehicle</option>
+                            <option value="gmc16" data-name="GMC 16-19 Seater">GMC 16-19 Seater</option>
+                            <option value="gmc22" data-name="GMC 22-23 Seater">GMC 22-23 Seater</option>
+                            <option value="coaster" data-name="Coaster">Coaster</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <input type="hidden" id="rentacar_route_name" name="route_name" value="">
+                      <input type="hidden" id="rentacar_vehicle_name" name="vehicle_name" value="">
+
+                      <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="rentacar_price">
+                          Price (PKR)
+                        </label>
+                        <input type="number" id="rentacar_price" name="price" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required readonly>
+                      </div>
+
+                      <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                        <i class="fas fa-plus-circle mr-2"></i>Assign Rent A Car Service
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              <?php else: ?>
+                <div class="mt-6 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <p class="text-yellow-700">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    Transportation has already been assigned to this user. You can delete the existing assignment above if you want to assign a different transportation.
+                  </p>
+                </div>
+              <?php endif; ?>
+            </div>
+          <?php else: ?>
+            <!-- Bookings List View -->
+            <div class="mb-6">
+              <h2 class="text-2xl font-bold">Package Bookings</h2>
+              <p class="text-gray-600 mt-2">Assign transportation to package bookings</p>
             </div>
 
-            <form action="" method="POST" id="assignmentForm">
-                <input type="hidden" name="package_booking_id" id="packageBookingId">
-                <input type="hidden" name="user_id" id="userId">
-
-                <!-- Package Destination Info -->
-                <div class="mb-4">
-                    <p class="text-sm text-gray-700">
-                        <strong>Package Destination:</strong>
-                        <span id="packageDestination"><?php echo htmlspecialchars($package_destination ?: 'Not Set'); ?></span>
-                    </p>
-                </div>
-
-                <!-- Hotel Selection -->
-                <div class="mb-4">
-                    <label for="hotel_id" class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-hotel mr-2"></i>Select Hotel
-                    </label>
-                    <select name="hotel_id" id="hotel_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required>
-                        <option value="">-- Select a Hotel --</option>
-                        <?php foreach ($hotels as $hotel): ?>
-                            <option value="<?php echo $hotel['id']; ?>" <?php echo $hotel_id == $hotel['id'] ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($hotel['hotel_name']) . " (" . htmlspecialchars($hotel['location']) . ")"; ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <?php if (empty($hotels) && $package_destination): ?>
-                        <p class="text-sm text-red-600 mt-2">No hotels available in <?php echo htmlspecialchars($package_destination); ?>.</p>
-                    <?php endif; ?>
-                </div>
-
-                <!-- Date Selection -->
-                <div class="md:flex md:space-x-4 mb-4">
-                    <div class="flex-1">
-                        <label for="check_in" class="block text-sm font-medium text-gray-700 mb-2">
-                            <i class="far fa-calendar-alt mr-2"></i>Check-in Date
-                        </label>
-                        <input type="date" name="check_in" id550
-                        id="check_in" value="<?php echo htmlspecialchars($check_in); ?>" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" min="<?php echo date('Y-m-d'); ?>" required>
-                    </div>
-                    <div class="flex-1">
-                        <label for="check_out" class="block text-sm font-medium text-gray-700 mb-2">
-                            <i class="far fa-calendar-alt mr-2"></i>Check-out Date
-                        </label>
-                        <input type="date" name="check_out" id="check_out" value="<?php echo htmlspecialchars($check_out); ?>" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>" required>
-                    </div>
-                </div>
-
-                <!-- Check Availability Button -->
-                <button type="submit" name="check_availability" class="w-full bg-emerald-600 text-white py-3 rounded-lg hover:bg-emerald-700 transition duration-200 flex items-center justify-center mb-4">
-                    <i class="fas fa-search mr-2"></i>Check Room Availability
-                </button>
-
-                <!-- Available Rooms -->
-                <?php if ($has_searched && $hotel_id > 0): ?>
-                    <div class="mb-4">
-                        <h4 class="text-sm font-semibold text-gray-700 mb-2">Available Rooms (<?php echo count($available_rooms); ?>)</h4>
-                        <?php if (!empty($available_rooms)): ?>
-                            <select name="room_id" id="room_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required>
-                                <option value="">-- Select a Room --</option>
-                                <?php foreach ($available_rooms as $room): ?>
-                                    <option value="<?php echo htmlspecialchars($room); ?>">
-                                        Room <?php echo htmlspecialchars(str_replace('r', '', $room)); ?> (<?php echo isset($room_details[$room]) ? $room_details[$room]['type'] : 'Standard'; ?>, <?php echo isset($room_details[$room]) ? $room_details[$room]['capacity'] : '2 guests'; ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        <?php else: ?>
-                            <p class="text-sm text-red-600">No rooms available for the selected dates.</p>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
-
-                <!-- Submit Assignment -->
-                <?php if ($has_searched && !empty($available_rooms)): ?>
-                    <button type="submit" name="assign_room" class="w-full bg-emerald-600 text-white py-3 rounded-lg hover:bg-emerald-700 transition duration-200 flex items-center justify-center">
-                        <i class="fas fa-check-circle mr-2"></i>Confirm Assignment
-                    </button>
-                <?php endif; ?>
-            </form>
+            <?php if (count($bookings) > 0): ?>
+              <div class="overflow-x-auto">
+                <table class="min-w-full bg-white border border-gray-300">
+                  <thead>
+                    <tr class="bg-gray-100">
+                      <th class="py-2 px-4 border-b">Booking ID</th>
+                      <th class="py-2 px-4 border-b">Customer</th>
+                      <th class="py-2 px-4 border-b">Package</th>
+                      <th class="py-2 px-4 border-b">Price</th>
+                      <th class="py-2 px-4 border-b">Date</th>
+                      <th class="py-2 px-4 border-b">Status</th>
+                      <th class="py-2 px-4 border-b">Transportation</th>
+                      <th class="py-2 px-4 border-b">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($bookings as $booking): ?>
+                      <?php
+                      // Check if this booking already has transportation assigned
+                      $user_assignments = getTransportationAssignments($booking['id'], $booking['user_id']);
+                      $has_transportation = count($user_assignments) > 0;
+                      ?>
+                      <tr>
+                        <td class="py-2 px-4 border-b">#<?php echo $booking['id']; ?></td>
+                        <td class="py-2 px-4 border-b"><?php echo htmlspecialchars($booking['user_name']); ?></td>
+                        <td class="py-2 px-4 border-b"><?php echo htmlspecialchars($booking['package_title']); ?></td>
+                        <td class="py-2 px-4 border-b"><?php echo $booking['total_price']; ?> PKR</td>
+                        <td class="py-2 px-4 border-b"><?php echo date('d M Y', strtotime($booking['booking_date'])); ?></td>
+                        <td class="py-2 px-4 border-b">
+                          <span class="px-2 py-1 rounded-full text-xs <?php echo $booking['status'] == 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'; ?>">
+                            <?php echo ucfirst($booking['status']); ?>
+                          </span>
+                        </td>
+                        <td class="py-2 px-4 border-b">
+                          <?php if ($has_transportation): ?>
+                            <span class="px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                              <i class="fas fa-check-circle mr-1"></i> Assigned
+                            </span>
+                          <?php else: ?>
+                            <span class="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
+                              <i class="fas fa-times-circle mr-1"></i> Not Assigned
+                            </span>
+                          <?php endif; ?>
+                        </td>
+                        <td class="py-2 px-4 border-b">
+                          <a href="transportation-assign.php?booking_id=<?php echo $booking['id']; ?>" class="text-teal-600 hover:text-teal-800">
+                            <i class="fas fa-car"></i> <?php echo $has_transportation ? 'View' : 'Assign'; ?>
+                          </a>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            <?php else: ?>
+              <div class="bg-gray-50 p-4 rounded-lg text-center">
+                <p class="text-gray-500">No pending or confirmed bookings found.</p>
+              </div>
+            <?php endif; ?>
+          <?php endif; ?>
         </div>
+      </div>
     </div>
+  </div>
 
-    <script>
-        // Date picker initialization
-        flatpickr("#check_in", {
-            minDate: "today",
-            onChange: function(selectedDates, dateStr, instance) {
-                const duration = <?php echo $package_duration ?: 1; ?>;
-                const minCheckOut = new Date(selectedDates[0].getTime() + duration * 86400000).toISOString().split('T')[0];
-                document.getElementById("check_out").setAttribute("min", minCheckOut);
-                const checkOutDate = new Date(document.getElementById("check_out").value);
-                if (checkOutDate <= selectedDates[0]) {
-                    document.getElementById("check_out").value = minCheckOut;
-                }
-            }
-        });
+  <!-- Scripts -->
+  <script>
+    // Tab switching
+    function switchTab(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
 
-        flatpickr("#check_out", {
-            minDate: new Date().fp_incr(<?php echo $package_duration ?: 1; ?>),
-        });
+      // Remove active class from all buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
 
-        // Assignment modal functionality
-        function showAssignmentForm(packageBookingId, userId) {
-            document.getElementById('packageBookingId').value = packageBookingId;
-            document.getElementById('userId').value = userId;
-            document.getElementById('assignmentModal').classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
+      // Show selected tab
+      document.getElementById(tabName + '-tab').classList.add('active');
+
+      // Add active class to the correct button
+      document.querySelector(`.tab-btn[onclick="switchTab('${tabName}')"]`).classList.add('active');
+    }
+
+    // Taxi price calculation
+    function updateTaxiRouteInfo(routeId) {
+      const routeSelect = document.getElementById('taxi_route');
+      const selectedOption = routeSelect.options[routeSelect.selectedIndex];
+
+      if (selectedOption && selectedOption.value) {
+        document.getElementById('taxi_route_name').value = selectedOption.getAttribute('data-name');
+        updateTaxiPrice();
+      }
+    }
+
+    function updateTaxiPrice() {
+      const routeSelect = document.getElementById('taxi_route');
+      const vehicleSelect = document.getElementById('taxi_vehicle');
+      const priceInput = document.getElementById('taxi_price');
+
+      if (routeSelect.value && vehicleSelect.value) {
+        const selectedRoute = routeSelect.options[routeSelect.selectedIndex];
+        const vehicleType = vehicleSelect.value;
+
+        // Update vehicle name hidden input
+        document.getElementById('taxi_vehicle_name').value = vehicleSelect.options[vehicleSelect.selectedIndex].getAttribute('data-name');
+
+        // Get price based on vehicle type
+        let price = 0;
+        if (vehicleType === 'camry') {
+          price = selectedRoute.getAttribute('data-camry');
+        } else if (vehicleType === 'starex') {
+          price = selectedRoute.getAttribute('data-starex');
+        } else if (vehicleType === 'hiace') {
+          price = selectedRoute.getAttribute('data-hiace');
         }
 
-        function hideAssignmentForm() {
-            document.getElementById('assignmentModal').classList.add('hidden');
-            document.body.style.overflow = 'auto';
-            // Reset form
-            document.getElementById('assignmentForm').reset();
-            document.getElementById('check_in').value = '<?php echo date('Y-m-d'); ?>';
-            document.getElementById('check_out').value = '<?php echo $check_out; ?>';
+        priceInput.value = price;
+      } else {
+        priceInput.value = '';
+      }
+    }
+
+    // Rentacar price calculation
+    function updateRentacarRouteInfo(routeId) {
+      const routeSelect = document.getElementById('rentacar_route');
+      const selectedOption = routeSelect.options[routeSelect.selectedIndex];
+
+      if (selectedOption && selectedOption.value) {
+        document.getElementById('rentacar_route_name').value = selectedOption.getAttribute('data-name');
+        updateRentacarPrice();
+      }
+    }
+
+    function updateRentacarPrice() {
+      const routeSelect = document.getElementById('rentacar_route');
+      const vehicleSelect = document.getElementById('rentacar_vehicle');
+      const priceInput = document.getElementById('rentacar_price');
+
+      if (routeSelect.value && vehicleSelect.value) {
+        const selectedRoute = routeSelect.options[routeSelect.selectedIndex];
+        const vehicleType = vehicleSelect.value;
+
+        // Update vehicle name hidden input
+        document.getElementById('rentacar_vehicle_name').value = vehicleSelect.options[vehicleSelect.selectedIndex].getAttribute('data-name');
+
+        // Get price based on vehicle type
+        let price = 0;
+        if (vehicleType === 'gmc16') {
+          price = selectedRoute.getAttribute('data-gmc16');
+        } else if (vehicleType === 'gmc22') {
+          price = selectedRoute.getAttribute('data-gmc22');
+        } else if (vehicleType === 'coaster') {
+          price = selectedRoute.getAttribute('data-coaster');
         }
 
-        // Close modal when clicking outside
-        document.getElementById('assignmentModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                hideAssignmentForm();
-            }
-        });
+        priceInput.value = price;
+      } else {
+        priceInput.value = '';
+      }
+    }
 
-        // Mobile menu toggle
-        document.getElementById('menu-btn').addEventListener('click', function() {
-            document.querySelector('.sidebar').classList.toggle('-translate-x-full');
-        });
+    // Mobile menu toggle
+    const menuBtn = document.getElementById('menu-btn');
+    const sidebar = document.querySelector('.sidebar');
 
-        // Notification Bell
-        const bell = document.getElementById('notif-bell');
-        const dropdown = document.getElementById('notif-dropdown');
-        const notifList = document.getElementById('notif-list');
-        const notifCount = document.getElementById('notif-count');
+    if (menuBtn && sidebar) {
+      menuBtn.addEventListener('click', function() {
+        sidebar.classList.toggle('hidden');
+        sidebar.classList.toggle('flex');
+      });
+    }
+  </script>
 
-        bell.addEventListener('click', () => {
-            dropdown.classList.toggle('hidden');
-            if (!dropdown.classList.contains('hidden')) {
-                fetchNotifications();
-            }
-        });
-
-        document.addEventListener('click', (e) => {
-            if (!bell.contains(e.target) && !dropdown.contains(e.target)) {
-                dropdown.classList.add('hidden');
-            }
-        });
-
-        function fetchNotifications() {
-            fetch('notifications.php', {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                notifList.innerHTML = '';
-                const unreadCount = Array.isArray(data) ? data.length : (data.id ? 1 : 0);
-
-                if (unreadCount > 0) {
-                    notifCount.textContent = unreadCount;
-                    notifCount.classList.remove('hidden');
-                } else {
-                    notifCount.classList.add('hidden');
-                }
-
-                const notifications = Array.isArray(data) ? data : (data.id ? [data] : []);
-                if (notifications.length === 0) {
-                    notifList.innerHTML = '<p class="p-4 text-sm text-gray-500">No new notifications</p>';
-                    return;
-                }
-
-                notifications.forEach(notif => {
-                    const div = document.createElement('div');
-                    div.className = 'p-4 hover:bg-gray-50 transition-colors';
-                    div.innerHTML = `
-                        <p class="text-sm text-gray-700">${notif.message}</p>
-                        <p class="text-xs text-gray-500">${new Date(notif.created_at).toLocaleString()}</p>
-                    `;
-                    notifList.appendChild(div);
-                });
-            })
-            .catch(error => console.error('Error fetching notifications:', error));
-        }
-
-        setInterval(fetchNotifications, 5000);
-        fetchNotifications();
-    </script>
+  <?php include 'includes/js-links.php'; ?>
 </body>
 
 </html>
